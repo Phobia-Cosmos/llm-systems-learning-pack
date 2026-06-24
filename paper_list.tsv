@@ -1,0 +1,136 @@
+category	filename	url	title
+01_transformer_norm_attention	01_attention_is_all_you_need.pdf	https://arxiv.org/pdf/1706.03762	Attention Is All You Need
+01_transformer_norm_attention	02_layer_normalization.pdf	https://arxiv.org/pdf/1607.06450	Layer Normalization
+01_transformer_norm_attention	03_rmsnorm.pdf	https://arxiv.org/pdf/1910.07467	Root Mean Square Layer Normalization
+01_transformer_norm_attention	04_preln_postln_transformer.pdf	https://arxiv.org/pdf/2002.04745	On Layer Normalization in the Transformer Architecture
+01_transformer_norm_attention	05_roformer_rope.pdf	https://arxiv.org/pdf/2104.09864	RoFormer: Enhanced Transformer with Rotary Position Embedding
+01_transformer_norm_attention	06_glu_variants.pdf	https://arxiv.org/pdf/2002.05202	GLU Variants Improve Transformer
+01_transformer_norm_attention	07_formal_algorithms_for_transformers.pdf	https://arxiv.org/pdf/2207.09238	Formal Algorithms for Transformers
+01_transformer_norm_attention	08_gpt3_few_shot.pdf	https://arxiv.org/pdf/2005.14165	Language Models are Few-Shot Learners
+01_transformer_norm_attention	09_llama_open_efficient.pdf	https://arxiv.org/pdf/2302.13971	LLaMA: Open and Efficient Foundation Language Models
+01_transformer_norm_attention	10_llama2.pdf	https://arxiv.org/pdf/2307.09288	Llama 2: Open Foundation and Fine-Tuned Chat Models
+01_transformer_norm_attention	11_llama3_herd.pdf	https://arxiv.org/pdf/2407.21783	The Llama 3 Herd of Models
+01_transformer_norm_attention	12_palm_pathways.pdf	https://arxiv.org/pdf/2204.02311	PaLM: Scaling Language Modeling with Pathways
+01_transformer_norm_attention	13_gpt2_unsupervised_multitask.pdf	https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf	Language Models are Unsupervised Multitask Learners
+02_pretrain_sft_alignment	01_scaling_laws.pdf	https://arxiv.org/pdf/2001.08361	Scaling Laws for Neural Language Models
+02_pretrain_sft_alignment	02_chinchilla_compute_optimal.pdf	https://arxiv.org/pdf/2203.15556	Training Compute-Optimal Large Language Models
+02_pretrain_sft_alignment	03_the_pile.pdf	https://arxiv.org/pdf/2101.00027	The Pile: An 800GB Dataset of Diverse Text for Language Modeling
+02_pretrain_sft_alignment	04_instructgpt_rlhf.pdf	https://arxiv.org/pdf/2203.02155	Training Language Models to Follow Instructions with Human Feedback
+02_pretrain_sft_alignment	05_direct_preference_optimization.pdf	https://arxiv.org/pdf/2305.18290	Direct Preference Optimization: Your Language Model is Secretly a Reward Model
+02_pretrain_sft_alignment	06_lora.pdf	https://arxiv.org/pdf/2106.09685	LoRA: Low-Rank Adaptation of Large Language Models
+02_pretrain_sft_alignment	07_qlora.pdf	https://arxiv.org/pdf/2305.14314	QLoRA: Efficient Finetuning of Quantized LLMs
+02_pretrain_sft_alignment	08_flan_instruction_tuning.pdf	https://arxiv.org/pdf/2210.11416	Scaling Instruction-Finetuned Language Models
+02_pretrain_sft_alignment	09_constitutional_ai.pdf	https://arxiv.org/pdf/2212.08073	Constitutional AI: Harmlessness from AI Feedback
+02_pretrain_sft_alignment	10_self_instruct.pdf	https://arxiv.org/pdf/2212.10560	Self-Instruct: Aligning Language Models with Self-Generated Instructions
+02_pretrain_sft_alignment	11_zephyr.pdf	https://arxiv.org/pdf/2310.16944	Zephyr: Direct Distillation of LM Alignment
+02_pretrain_sft_alignment	12_llamafactory.pdf	https://arxiv.org/pdf/2403.13372	LlamaFactory: Unified Efficient Fine-Tuning of 100+ Language Models
+02_pretrain_sft_alignment	13_hybridflow_verl.pdf	https://arxiv.org/pdf/2409.19256	HybridFlow: A Flexible and Efficient RLHF Framework
+02_pretrain_sft_alignment	14_deepseek_r1.pdf	https://arxiv.org/pdf/2501.12948	DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning
+02_pretrain_sft_alignment	15_kimi_k15.pdf	https://arxiv.org/pdf/2501.12599	Kimi k1.5: Scaling Reinforcement Learning with LLMs
+02_pretrain_sft_alignment	16_s1_simple_test_time_scaling.pdf	https://arxiv.org/pdf/2501.19393	s1: Simple test-time scaling
+02_pretrain_sft_alignment	17_limo_reasoning.pdf	https://arxiv.org/pdf/2502.03387	LIMO: Less is More for Reasoning
+02_pretrain_sft_alignment	18_qwen3_technical_report.pdf	https://arxiv.org/pdf/2505.09388	Qwen3 Technical Report
+03_kv_cache_serving_inference	01_orca_osdi22.pdf	https://www.usenix.org/system/files/osdi22-yu.pdf	Orca: A Distributed Serving System for Transformer-Based Generative Models
+03_kv_cache_serving_inference	02_vllm_pagedattention.pdf	https://arxiv.org/pdf/2309.06180	Efficient Memory Management for Large Language Model Serving with PagedAttention
+03_kv_cache_serving_inference	03_sglang_radixattention.pdf	https://arxiv.org/pdf/2312.07104	SGLang: Efficient Execution of Structured Language Model Programs
+03_kv_cache_serving_inference	04_sarathi_chunked_prefill.pdf	https://arxiv.org/pdf/2308.16369	SARATHI: Efficient LLM Inference by Piggybacking Decodes with Chunked Prefills
+03_kv_cache_serving_inference	05_sarathi_serve.pdf	https://arxiv.org/pdf/2403.02310	Taming Throughput-Latency Tradeoff in LLM Inference with Sarathi-Serve
+03_kv_cache_serving_inference	06_splitwise_phase_splitting.pdf	https://arxiv.org/pdf/2311.18677	Splitwise: Efficient generative LLM inference using phase splitting
+03_kv_cache_serving_inference	07_distserve_pd_disaggregation.pdf	https://arxiv.org/pdf/2401.09670	DistServe: Disaggregating Prefill and Decoding for Goodput-optimized LLM Serving
+03_kv_cache_serving_inference	08_mooncake_kvcache_disaggregated.pdf	https://arxiv.org/pdf/2407.00079	Mooncake: A KVCache-centric Disaggregated Architecture for LLM Serving
+03_kv_cache_serving_inference	09_vattention.pdf	https://arxiv.org/pdf/2405.04437	vAttention: Dynamic Memory Management for Serving LLMs without PagedAttention
+03_kv_cache_serving_inference	10_jenga_memory_management.pdf	https://arxiv.org/pdf/2503.18292	Jenga: Effective Memory Management for Serving LLM with Heterogeneity
+03_kv_cache_serving_inference	11_vtensor_virtual_tensor.pdf	https://arxiv.org/pdf/2407.15309	vTensor: Flexible Virtual Tensor Management for Efficient LLM Serving
+03_kv_cache_serving_inference	12_speculative_decoding.pdf	https://arxiv.org/pdf/2211.17192	Fast Inference from Transformers via Speculative Decoding
+03_kv_cache_serving_inference	13_specinfer.pdf	https://arxiv.org/pdf/2305.09781	SpecInfer: Accelerating Generative LLM Serving with Tree-based Speculative Inference
+03_kv_cache_serving_inference	14_medusa.pdf	https://arxiv.org/pdf/2401.10774	Medusa: Simple LLM Inference Acceleration Framework with Multiple Decoding Heads
+03_kv_cache_serving_inference	15_dynaserve.pdf	https://arxiv.org/pdf/2504.09285	DynaServe: Unified and Elastic Tandem-Style Execution for Dynamic Disaggregated LLM Serving
+03_kv_cache_serving_inference	16_vllm_omni.pdf	https://arxiv.org/pdf/2602.02204	vLLM-Omni: Fully Disaggregated Serving for Any-to-Any Multimodal Models
+03_kv_cache_serving_inference	17_ampd_multiround_disaggregated.pdf	https://arxiv.org/pdf/2602.14516	Efficient Multi-round LLM Inference over Disaggregated Serving
+03_kv_cache_serving_inference	18_kvserve.pdf	https://arxiv.org/pdf/2605.13734	KVServe: Service-Aware KV Cache Compression for Communication-Efficient Disaggregated LLM Serving
+04_parallel_training_systems	01_mesh_tensorflow.pdf	https://arxiv.org/pdf/1811.02084	Mesh-TensorFlow: Deep Learning for Supercomputers
+04_parallel_training_systems	02_gpipe.pdf	https://arxiv.org/pdf/1811.06965	GPipe: Efficient Training of Giant Neural Networks using Pipeline Parallelism
+04_parallel_training_systems	03_megatron_lm.pdf	https://arxiv.org/pdf/1909.08053	Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism
+04_parallel_training_systems	04_zero.pdf	https://arxiv.org/pdf/1910.02054	ZeRO: Memory Optimizations Toward Training Trillion Parameter Models
+04_parallel_training_systems	05_gshard.pdf	https://arxiv.org/pdf/2006.16668	GShard: Scaling Giant Models with Conditional Computation and Automatic Sharding
+04_parallel_training_systems	06_zero_offload.pdf	https://arxiv.org/pdf/2101.06840	ZeRO-Offload: Democratizing Billion-Scale Model Training
+04_parallel_training_systems	07_megatron_gpu_clusters.pdf	https://arxiv.org/pdf/2104.04473	Efficient Large-Scale Language Model Training on GPU Clusters Using Megatron-LM
+04_parallel_training_systems	08_zero_infinity.pdf	https://arxiv.org/pdf/2104.07857	ZeRO-Infinity: Breaking the GPU Memory Wall for Extreme Scale Deep Learning
+04_parallel_training_systems	09_deepspeed_moe.pdf	https://arxiv.org/pdf/2201.05596	DeepSpeed-MoE: Advancing Mixture-of-Experts Inference and Training
+04_parallel_training_systems	10_alpa.pdf	https://arxiv.org/pdf/2201.12023	Alpa: Automating Inter- and Intra-Operator Parallelism for Distributed Deep Learning
+04_parallel_training_systems	11_megascale.pdf	https://arxiv.org/pdf/2402.15627	MegaScale: Scaling Large Language Model Training to More Than 10,000 GPUs
+04_parallel_training_systems	12_flashflex_heterogeneous.pdf	https://arxiv.org/pdf/2409.01143	FlashFlex: Accommodating Large Language Model Training over Heterogeneous Environment
+04_parallel_training_systems	13_muon_scalable.pdf	https://arxiv.org/pdf/2502.16982	Muon is Scalable for LLM Training
+04_parallel_training_systems	14_bytescale_long_context_training.pdf	https://arxiv.org/pdf/2502.21231	ByteScale: Efficient Scaling of LLM Training with a 2048K Context Length
+04_parallel_training_systems	15_megascale_moe.pdf	https://arxiv.org/pdf/2505.11432	MegaScale-MoE: Communication-Efficient Training of MoE Models in Production
+04_parallel_training_systems	16_byterobust.pdf	https://arxiv.org/pdf/2509.16293	Robust LLM Training Infrastructure at ByteDance
+05_moe_mha_variants	01_mqa_one_write_head.pdf	https://arxiv.org/pdf/1911.02150	Fast Transformer Decoding: One Write-Head is All You Need
+05_moe_mha_variants	02_gqa.pdf	https://arxiv.org/pdf/2305.13245	GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints
+05_moe_mha_variants	03_sparsely_gated_moe.pdf	https://arxiv.org/pdf/1701.06538	Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer
+05_moe_mha_variants	04_switch_transformers.pdf	https://arxiv.org/pdf/2101.03961	Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efficient Sparsity
+05_moe_mha_variants	05_glam.pdf	https://arxiv.org/pdf/2112.06905	GLaM: Efficient Scaling of Language Models with Mixture-of-Experts
+05_moe_mha_variants	06_mixtral_of_experts.pdf	https://arxiv.org/pdf/2401.04088	Mixtral of Experts
+05_moe_mha_variants	07_deepseek_moe.pdf	https://arxiv.org/pdf/2401.06066	DeepSeekMoE: Towards Ultimate Expert Specialization in Mixture-of-Experts Language Models
+05_moe_mha_variants	08_deepseek_v2_mla_moe.pdf	https://arxiv.org/pdf/2405.04434	DeepSeek-V2: A Strong, Economical, and Efficient Mixture-of-Experts Language Model
+05_moe_mha_variants	09_deepseek_v3_mla_moe_mtp.pdf	https://arxiv.org/pdf/2412.19437	DeepSeek-V3 Technical Report
+05_moe_mha_variants	10_minimax01_lightning_attention.pdf	https://arxiv.org/pdf/2501.08313	MiniMax-01: Scaling Foundation Models with Lightning Attention
+05_moe_mha_variants	11_native_sparse_attention.pdf	https://arxiv.org/pdf/2502.11089	Native Sparse Attention: Hardware-Aligned and Natively Trainable Sparse Attention
+05_moe_mha_variants	12_mha2mla.pdf	https://arxiv.org/pdf/2502.14837	Towards Economical Inference: Enabling DeepSeek's Multi-Head Latent Attention
+05_moe_mha_variants	13_mla_hardware_analysis.pdf	https://arxiv.org/pdf/2506.02523	Hardware-Centric Analysis of DeepSeek's Multi-Head Latent Attention
+06_cuda_kernels_precision	01_online_softmax.pdf	https://arxiv.org/pdf/1805.02867	Online normalizer calculation for softmax
+06_cuda_kernels_precision	02_tensor_cores.pdf	https://arxiv.org/pdf/1803.04014	NVIDIA Tensor Core Programmability, Performance and Precision
+06_cuda_kernels_precision	03_tensor_comprehensions.pdf	https://arxiv.org/pdf/1802.04730	Tensor Comprehensions: Framework-Agnostic High-Performance ML Abstractions
+06_cuda_kernels_precision	04_tvm.pdf	https://arxiv.org/pdf/1802.04799	TVM: An Automated End-to-End Optimizing Compiler for Deep Learning
+06_cuda_kernels_precision	05_flashattention.pdf	https://arxiv.org/pdf/2205.14135	FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness
+06_cuda_kernels_precision	06_tensorir.pdf	https://arxiv.org/pdf/2207.04296	TensorIR: An Abstraction for Automatic Tensorized Program Optimization
+06_cuda_kernels_precision	07_fp8_formats.pdf	https://arxiv.org/pdf/2209.05433	FP8 Formats for Deep Learning
+06_cuda_kernels_precision	08_smoothquant.pdf	https://arxiv.org/pdf/2211.10438	SmoothQuant: Accurate and Efficient Post-Training Quantization for LLMs
+06_cuda_kernels_precision	09_gptq.pdf	https://arxiv.org/pdf/2210.17323	GPTQ: Accurate Post-Training Quantization for Generative Pre-trained Transformers
+06_cuda_kernels_precision	10_awq.pdf	https://arxiv.org/pdf/2306.00978	AWQ: Activation-aware Weight Quantization for LLM Compression and Acceleration
+06_cuda_kernels_precision	11_flashattention2.pdf	https://arxiv.org/pdf/2307.08691	FlashAttention-2: Faster Attention with Better Parallelism and Work Partitioning
+06_cuda_kernels_precision	12_fp8_lm.pdf	https://arxiv.org/pdf/2310.18313	FP8-LM: Training FP8 Large Language Models
+06_cuda_kernels_precision	13_kivi_kv_quant.pdf	https://arxiv.org/pdf/2402.02750	KIVI: A Tuning-Free Asymmetric 2bit Quantization for KV Cache
+06_cuda_kernels_precision	14_flashattention3.pdf	https://arxiv.org/pdf/2407.08608	FlashAttention-3: Fast and Accurate Attention with Asynchrony and Low-precision
+06_cuda_kernels_precision	15_sageattention2.pdf	https://arxiv.org/pdf/2411.10958	SageAttention2: Efficient Attention with INT4 Quantization
+06_cuda_kernels_precision	16_ml_triton.pdf	https://arxiv.org/pdf/2503.14985	ML-Triton: A Multi-Level Compilation and Language Extension to Triton GPU Programming
+06_cuda_kernels_precision	17_turboquant.pdf	https://arxiv.org/pdf/2504.19874	TurboQuant: Online Vector Quantization with Near-optimal Distortion Rate
+06_cuda_kernels_precision	18_flash_sparse_attention.pdf	https://arxiv.org/pdf/2508.18224	Flash Sparse Attention
+06_cuda_kernels_precision	19_tlx.pdf	https://arxiv.org/pdf/2605.10905	TLX: Hardware-Native, Evolvable MIMW GPU Compiler
+06_cuda_kernels_precision	20_alignment_collapse_kv_quant.pdf	https://arxiv.org/pdf/2606.09864	Alignment Collapse Under KV Cache Quantization
+07_communication_hardware	01_blink_collectives.pdf	https://arxiv.org/pdf/1910.04940	Blink: Fast and Generic Collectives for Distributed ML
+07_communication_hardware	02_synthesizing_collectives.pdf	https://arxiv.org/pdf/2008.08708	Synthesizing Optimal Collective Algorithms
+07_communication_hardware	03_taccl.pdf	https://arxiv.org/pdf/2111.04867	TACCL: Guiding Collective Algorithm Synthesis using Communication Sketches
+07_communication_hardware	04_ampere_a100_whitepaper.pdf	https://www.nvidia.com/content/dam/en-zz/Solutions/Data-Center/nvidia-ampere-architecture-whitepaper.pdf	NVIDIA A100 Tensor Core GPU Architecture Whitepaper
+07_communication_hardware	05_cdna3_whitepaper.pdf	https://www.amd.com/content/dam/amd/en/documents/instinct-tech-docs/white-papers/amd-cdna-3-white-paper.pdf	AMD CDNA 3 Architecture Whitepaper
+07_communication_hardware	06_hopper_microbenchmark.pdf	https://arxiv.org/pdf/2501.12084	Dissecting the NVIDIA Hopper Architecture through Microbenchmarking and Multiple Level Analysis
+07_communication_hardware	07_demystifying_nccl.pdf	https://arxiv.org/pdf/2507.04786	Demystifying NCCL: GPU Communication Protocols and Algorithms
+07_communication_hardware	08_amd_mi300x_analysis.pdf	https://arxiv.org/pdf/2510.27583	AMD MI300X GPU Performance Analysis
+07_communication_hardware	09_shift_rdma_fault_tolerance.pdf	https://arxiv.org/pdf/2512.11094	SHIFT: An RDMA Failure-Resilient Layer for Distributed Training
+07_communication_hardware	10_blackwell_microbenchmark.pdf	https://arxiv.org/pdf/2512.02189	Microbenchmarking NVIDIA's Blackwell Architecture
+07_communication_hardware	11_pccl.pdf	https://arxiv.org/pdf/2606.07019	PCCL: Process Group-Aware Collective Algorithm Synthesizer
+07_communication_hardware	12_demystifying_nvshmem.pdf	https://arxiv.org/pdf/2606.05951	Demystifying NVSHMEM
+08_2025_2026_frontier	01_deepseek_r1.pdf	https://arxiv.org/pdf/2501.12948	DeepSeek-R1
+08_2025_2026_frontier	02_kimi_k15.pdf	https://arxiv.org/pdf/2501.12599	Kimi k1.5
+08_2025_2026_frontier	03_minimax01_lightning_attention.pdf	https://arxiv.org/pdf/2501.08313	MiniMax-01
+08_2025_2026_frontier	04_native_sparse_attention.pdf	https://arxiv.org/pdf/2502.11089	Native Sparse Attention
+08_2025_2026_frontier	05_muon_scalable.pdf	https://arxiv.org/pdf/2502.16982	Muon is Scalable for LLM Training
+08_2025_2026_frontier	06_bytescale.pdf	https://arxiv.org/pdf/2502.21231	ByteScale
+08_2025_2026_frontier	07_limo.pdf	https://arxiv.org/pdf/2502.03387	LIMO
+08_2025_2026_frontier	08_jenga.pdf	https://arxiv.org/pdf/2503.18292	Jenga
+08_2025_2026_frontier	09_qwen3.pdf	https://arxiv.org/pdf/2505.09388	Qwen3 Technical Report
+08_2025_2026_frontier	10_megascale_moe.pdf	https://arxiv.org/pdf/2505.11432	MegaScale-MoE
+08_2025_2026_frontier	11_demystifying_nccl.pdf	https://arxiv.org/pdf/2507.04786	Demystifying NCCL
+08_2025_2026_frontier	12_byterobust.pdf	https://arxiv.org/pdf/2509.16293	Robust LLM Training Infrastructure at ByteDance
+08_2025_2026_frontier	13_blackwell_microbenchmark.pdf	https://arxiv.org/pdf/2512.02189	Microbenchmarking NVIDIA's Blackwell Architecture
+08_2025_2026_frontier	14_vllm_omni.pdf	https://arxiv.org/pdf/2602.02204	vLLM-Omni
+08_2025_2026_frontier	15_ampd.pdf	https://arxiv.org/pdf/2602.14516	Efficient Multi-round LLM Inference over Disaggregated Serving
+08_2025_2026_frontier	16_kvserve.pdf	https://arxiv.org/pdf/2605.13734	KVServe
+08_2025_2026_frontier	17_tlx.pdf	https://arxiv.org/pdf/2605.10905	TLX
+08_2025_2026_frontier	18_demystifying_nvshmem.pdf	https://arxiv.org/pdf/2606.05951	Demystifying NVSHMEM
+08_2025_2026_frontier	19_pccl.pdf	https://arxiv.org/pdf/2606.07019	PCCL
+08_2025_2026_frontier	20_alignment_collapse_kv_quant.pdf	https://arxiv.org/pdf/2606.09864	Alignment Collapse Under KV Cache Quantization
+09_surveys	01_efficient_inference_survey.pdf	https://arxiv.org/pdf/2404.14294	A Survey on Efficient Inference for Large Language Models
+09_surveys	02_model_compression_survey.pdf	https://arxiv.org/pdf/2402.09748	Model Compression and Efficient Inference for Large Language Models: A Survey
+09_surveys	03_llm_inference_serving_survey.pdf	https://arxiv.org/pdf/2407.12391	LLM Inference Serving: Survey of Recent Advances and Opportunities
+09_surveys	04_moe_survey_2025.pdf	https://arxiv.org/pdf/2507.11181	Mixture of Experts in Large Language Models
+09_surveys	05_large_language_models_survey.pdf	https://arxiv.org/pdf/2303.18223	A Survey of Large Language Models
