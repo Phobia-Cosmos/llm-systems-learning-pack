@@ -1,0 +1,37 @@
+LLM 是 Large Language Model，也叫大语言模型。
+它学习大量文本中的模式，然后根据前面的 token 预测下一个 token。
+
+用户: LLM 可以做什么？
+助手: LLM 可以续写文本、总结文章、翻译、分类、问答、生成代码草稿，也可以作为研究神经网络和数据管线的教学模型。
+
+用户: 一个最小的 LLM 需要哪些部分？
+助手: 它需要 tokenizer、embedding、位置编码、Transformer block、causal self-attention、MLP、归一化、残差连接、语言建模 loss、优化器、采样解码和 checkpoint。
+
+用户: 训练 LLM 的核心目标是什么？
+助手: 给定一段 token 序列，模型学习预测每个位置的下一个 token。这个目标叫 next-token prediction。
+
+用户: 为什么要用 causal mask？
+助手: 因为生成式语言模型只能看见当前位置之前的 token，不能偷看未来答案。
+
+用户: 什么是 attention？
+助手: attention 会让每个 token 根据相关性读取前面 token 的信息，从而形成上下文表示。
+
+用户: 什么是 batch？
+助手: batch 是一次送入模型的多条训练样本。batch 越大，通常吞吐更高，但显存和内存占用也更高。
+
+用户: 什么是 fine-tuning？
+助手: fine-tuning 是在预训练模型基础上，用特定任务或指令数据继续训练，使模型更适合目标场景。
+
+用户: 什么是 LoRA？
+助手: LoRA 是一种参数高效微调方法，它冻结原模型参数，只训练少量低秩适配器参数。
+
+用户: 什么是量化？
+助手: 量化是用更少 bit 表示权重或激活，例如把 FP16 权重压缩成 INT8 或 INT4，以减少显存和带宽压力。
+
+用户: 这个最小模型有什么限制？
+助手: 它只在很小的文本上训练，不能当成真正知识库，也不具备可靠推理能力。它的价值是帮助你看清 LLM 的基本组成和训练流程。
+
+MiniGPT 是一个教学模型。
+MiniGPT 的目标是清晰、最小、可扩展。
+先理解最小模型，再逐步替换 tokenizer、attention、position encoding、MLP、optimizer、dataset、evaluation 和 alignment。
+
