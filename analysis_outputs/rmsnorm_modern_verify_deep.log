@@ -1,0 +1,37 @@
+invariance_check
+{
+  "layernorm_rescale_max_abs": 4.76837158203125e-07,
+  "layernorm_shift_mean_abs": 1.2685137562584714e-07,
+  "prmsnorm_rescale_max_abs": 4.76837158203125e-07,
+  "rmsnorm_rescale_max_abs": 7.152557373046875e-07,
+  "rmsnorm_shift_mean_abs": 1.0003459453582764
+}
+
+training_check
+norm        initial_loss  final_loss  final_acc  ms_per_step
+none              2.1174     0.2922     0.9033       27.303
+layernorm         2.2005     0.2441     0.9165       28.927
+rmsnorm           2.2009     0.2649     0.9097       29.476
+prmsnorm          2.2095     0.2346     0.9194       29.737
+
+config
+{
+  "batch_size": 128,
+  "classes": 8,
+  "depth": 24,
+  "device": "cpu",
+  "eps": 1e-08,
+  "hidden_size": 128,
+  "input_size": 64,
+  "lr": 0.003,
+  "norms": [
+    "none",
+    "layernorm",
+    "rmsnorm",
+    "prmsnorm"
+  ],
+  "samples": 2048,
+  "seed": 42,
+  "steps": 160,
+  "threads": 1
+}

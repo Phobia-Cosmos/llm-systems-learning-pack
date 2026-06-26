@@ -1,0 +1,1765 @@
+\documentclass[UTF8,12pt]{ctexart}
+
+\usepackage[a4paper,margin=2.3cm]{geometry}
+\usepackage{amsmath,amssymb,mathtools,bm}
+\usepackage{booktabs,longtable,array}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  citecolor=blue,
+  urlcolor=blue
+}
+
+\setlist[itemize]{leftmargin=2em}
+\setlist[enumerate]{leftmargin=2em}
+
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\1}{\mathbf{1}}
+\newcommand{\softmax}{\operatorname{softmax}}
+\newcommand{\argmax}{\operatorname*{arg\,max}}
+\newcommand{\TopK}{\operatorname{TopK}}
+\newcommand{\LN}{\operatorname{LN}}
+\newcommand{\RMSNorm}{\operatorname{RMSNorm}}
+\newcommand{\Attn}{\operatorname{Attention}}
+\newcommand{\MHA}{\operatorname{MHA}}
+\newcommand{\FFN}{\operatorname{FFN}}
+\newcommand{\GELU}{\operatorname{GELU}}
+\newcommand{\SiLU}{\operatorname{SiLU}}
+\newcommand{\SwiGLU}{\operatorname{SwiGLU}}
+\newcommand{\KL}{D_{\mathrm{KL}}}
+\newcommand{\NLL}{\operatorname{NLL}}
+\newcommand{\PPL}{\operatorname{PPL}}
+\newcommand{\diag}{\operatorname{diag}}
+\newcommand{\clip}{\operatorname{clip}}
+\newcommand{\sgn}{\operatorname{sgn}}
+
+\title{LLM 数学公式参考：从 Transformer 到现代大模型推理系统}
+\author{miniLLM 学习笔记}
+\date{\today}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\section{怎么读这份笔记}
+
+这份笔记按 LLM 的真实数据流组织公式：
+
+\[
+\text{文本}
+\rightarrow \text{Tokenizer}
+\rightarrow \text{Token IDs}
+\rightarrow \text{Embedding}
+\rightarrow \text{Transformer Blocks}
+\rightarrow \text{Logits}
+\rightarrow
+\begin{cases}
+\text{训练：Loss + Optimizer}\\
+\text{推理：Sampling + KV Cache}
+\end{cases}
+\]
+
+其中最核心的数学链条是：
+
+\[
+p_\theta(x_{1:T})
+=\prod_{t=1}^{T}p_\theta(x_t\mid x_{<t})
+\quad\Longrightarrow\quad
+\mathcal{L}_{\mathrm{LM}}
+=-\sum_{t=1}^{T}\log p_\theta(x_t\mid x_{<t})
+\quad\Longrightarrow\quad
+\nabla_\theta \mathcal{L}
+\quad\Longrightarrow\quad
+\theta \leftarrow \theta-\eta \cdot \widehat{\nabla_\theta \mathcal{L}}.
+\]
+
+Transformer 只是实现条件概率 $p_\theta(x_t\mid x_{<t})$ 的函数族；vLLM/SGLang 这类推理系统则负责高效执行这个函数族。
+
+\section{符号约定}
+
+\begin{longtable}{lll}
+\toprule
+符号 & 形状/含义 & 说明\\
+\midrule
+$V$ & 词表大小 & vocabulary size\\
+$T$ & 序列长度 & sequence length\\
+$B$ & batch size & 批大小\\
+$d_{\mathrm{model}}$ & hidden size & 模型宽度\\
+$H$ & attention heads & query heads 数\\
+$H_{\mathrm{kv}}$ & KV heads & MHA: $H_{\mathrm{kv}}=H$；MQA: $1$；GQA: $G$\\
+$d_h$ & head dim & 通常 $d_{\mathrm{model}}=H d_h$\\
+$L$ & Transformer 层数 & number of layers\\
+$x_t$ & 第 $t$ 个 token id & $x_t\in\{1,\dots,V\}$\\
+$\bm{h}_t^\ell$ & 第 $\ell$ 层第 $t$ 个 hidden state & $\bm{h}_t^\ell\in\R^{d_{\mathrm{model}}}$\\
+$\theta$ & 模型参数 & all trainable parameters\\
+\bottomrule
+\end{longtable}
+
+\section{语言建模的概率基础}
+
+\subsection{自回归分解}
+
+LLM 的预训练核心是估计 token 序列的联合概率。根据链式法则：
+
+\begin{equation}
+p_\theta(x_{1:T})
+=\prod_{t=1}^{T}p_\theta(x_t\mid x_{1:t-1}).
+\label{eq:ar-factorization}
+\end{equation}
+
+GPT 类模型使用这个自回归分解训练和生成。来源：GPT/GPT-2 系列语言模型目标 \cite{radford2019gpt2,brown2020gpt3}，Transformer decoder 结构来源于 \cite{vaswani2017attention}。
+
+\subsection{最大似然、交叉熵和困惑度}
+
+对数据集 $\mathcal{D}$ 最大化似然：
+
+\begin{equation}
+\theta^\star
+=\argmax_\theta
+\sum_{x_{1:T}\in\mathcal{D}}\log p_\theta(x_{1:T}).
+\end{equation}
+
+等价于最小化 negative log-likelihood：
+
+\begin{equation}
+\mathcal{L}_{\mathrm{NLL}}(\theta)
+=-\sum_{x_{1:T}\in\mathcal{D}}\sum_{t=1}^{T}
+\log p_\theta(x_t\mid x_{<t}).
+\label{eq:nll}
+\end{equation}
+
+若对 token 平均：
+
+\begin{equation}
+\bar{\mathcal{L}}_{\mathrm{NLL}}
+=-\frac{1}{N_{\mathrm{tok}}}
+\sum_{n=1}^{N_{\mathrm{tok}}}
+\log p_\theta(x_n\mid x_{<n}).
+\end{equation}
+
+困惑度：
+
+\begin{equation}
+\PPL=\exp\left(\bar{\mathcal{L}}_{\mathrm{NLL}}\right).
+\end{equation}
+
+解释：
+
+\begin{itemize}
+  \item NLL 越低，模型给真实下一个 token 的概率越高。
+  \item PPL 可理解为模型平均在多少个等概率候选中困惑；越低越好。
+\end{itemize}
+
+\subsection{Masked LM 目标}
+
+BERT 使用 masked language modeling，不是纯自回归：
+
+\begin{equation}
+\mathcal{L}_{\mathrm{MLM}}
+=-\sum_{i\in\mathcal{M}}
+\log p_\theta(x_i\mid x_{\setminus \mathcal{M}}),
+\label{eq:mlm}
+\end{equation}
+
+其中 $\mathcal{M}$ 是被 mask 的 token 位置集合。来源：BERT \cite{devlin2018bert}。
+
+关系：
+
+\begin{itemize}
+  \item GPT/LLM 推理常用公式是式 \eqref{eq:ar-factorization}。
+  \item BERT 更适合理解/编码任务；GPT 更适合逐 token 生成。
+\end{itemize}
+
+\section{Tokenizer 与离散 token}
+
+\subsection{BPE 合并目标}
+
+BPE 每一步选择语料中出现最频繁的相邻 symbol pair 合并：
+
+\begin{equation}
+(a^\star,b^\star)
+=\argmax_{(a,b)}
+\operatorname{count}_{\mathcal{D}}(a,b).
+\end{equation}
+
+来源：subword BPE for NMT \cite{sennrich2015bpe}。
+
+\subsection{Unigram tokenizer}
+
+SentencePiece 的 unigram 模型把一句话 $\bm{x}$ 的分词看成潜变量 $\bm{z}$：
+
+\begin{equation}
+p(\bm{x})
+=\sum_{\bm{z}\in \mathcal{Z}(\bm{x})}
+\prod_{u\in \bm{z}}p(u).
+\end{equation}
+
+训练时最大化语料 likelihood：
+
+\begin{equation}
+\mathcal{L}_{\mathrm{tok}}
+=\sum_{\bm{x}\in\mathcal{D}}\log p(\bm{x}).
+\end{equation}
+
+来源：SentencePiece / subword regularization \cite{kudo2018sentencepiece,kudo2018subword}。
+
+关系：
+
+\[
+\text{Tokenizer}
+\quad\Longrightarrow\quad
+x_t\in\{1,\dots,V\}
+\quad\Longrightarrow\quad
+\text{Embedding lookup}.
+\]
+
+\section{Embedding、输出投影与 tied weights}
+
+\subsection{Token embedding}
+
+设 token embedding 矩阵：
+
+\begin{equation}
+E\in\R^{V\times d_{\mathrm{model}}}.
+\end{equation}
+
+token id $x_t$ 对应 one-hot 向量 $\bm{e}_{x_t}\in\R^V$，embedding 为：
+
+\begin{equation}
+\bm{u}_t=E^\top \bm{e}_{x_t}
+=E[x_t]\in\R^{d_{\mathrm{model}}}.
+\end{equation}
+
+\subsection{输出 logits}
+
+最后一层 hidden state $\bm{h}_t^L$ 投影到词表：
+
+\begin{equation}
+\bm{z}_t=W_U \bm{h}_t^L+\bm{b}_U,
+\quad
+W_U\in\R^{V\times d_{\mathrm{model}}}.
+\end{equation}
+
+概率分布：
+
+\begin{equation}
+p_\theta(x_{t+1}=i\mid x_{\le t})
+=\softmax(\bm{z}_t)_i
+=\frac{\exp(z_{t,i})}{\sum_{j=1}^{V}\exp(z_{t,j})}.
+\label{eq:softmax}
+\end{equation}
+
+\subsection{Weight tying}
+
+很多 LLM 使用输入 embedding 和输出投影共享权重：
+
+\begin{equation}
+W_U = E.
+\end{equation}
+
+这样 logits 可写成：
+
+\begin{equation}
+z_{t,i}=E[i]^\top \bm{h}_t^L+b_i.
+\end{equation}
+
+解释：输出 token $i$ 的 logit 是 hidden state 与 token embedding 的相似度。
+
+\section{Transformer Block 总览}
+
+\subsection{Pre-LN Transformer block}
+
+现代 decoder-only LLM 多采用 Pre-LN 或 RMSNorm 变体：
+
+\begin{align}
+\tilde{\bm{h}}^\ell
+&=\bm{h}^{\ell}
++\MHA(\operatorname{Norm}(\bm{h}^{\ell})),\\
+\bm{h}^{\ell+1}
+&=\tilde{\bm{h}}^\ell
++\FFN(\operatorname{Norm}(\tilde{\bm{h}}^\ell)).
+\label{eq:preln-block}
+\end{align}
+
+Transformer 原始结构来源：\cite{vaswani2017attention}。Pre-LN 是后续稳定训练常见工程选择。
+
+依赖关系：
+
+\[
+\text{Norm}
+\rightarrow
+\text{Attention}
+\rightarrow
+\text{Residual}
+\rightarrow
+\text{Norm}
+\rightarrow
+\text{FFN}
+\rightarrow
+\text{Residual}.
+\]
+
+\section{LayerNorm 与 RMSNorm}
+
+\subsection{LayerNorm}
+
+对向量 $\bm{x}\in\R^d$：
+
+\begin{align}
+\mu &= \frac{1}{d}\sum_{i=1}^{d}x_i,\\
+\sigma^2 &= \frac{1}{d}\sum_{i=1}^{d}(x_i-\mu)^2,\\
+\LN(\bm{x})
+&=\bm{\gamma}\odot
+\frac{\bm{x}-\mu}{\sqrt{\sigma^2+\epsilon}}
++\bm{\beta}.
+\label{eq:layernorm}
+\end{align}
+
+来源：Layer Normalization \cite{ba2016layernorm}。
+
+\subsection{RMSNorm}
+
+RMSNorm 去掉均值中心化，只除以 root mean square：
+
+\begin{align}
+\operatorname{RMS}(\bm{x})
+&=\sqrt{\frac{1}{d}\sum_{i=1}^{d}x_i^2+\epsilon},\\
+\RMSNorm(\bm{x})
+&=\bm{g}\odot \frac{\bm{x}}{\operatorname{RMS}(\bm{x})}.
+\label{eq:rmsnorm}
+\end{align}
+
+来源：RMSNorm \cite{zhang2019rmsnorm}。
+
+关系：
+
+\begin{itemize}
+  \item LayerNorm 控制均值和方差。
+  \item RMSNorm 只控制尺度，计算更少，很多 LLaMA-like 模型使用 RMSNorm。
+\end{itemize}
+
+\section{Attention：从 QK 到 Softmax}
+
+\subsection{Q、K、V 的线性投影}
+
+对输入 hidden states $X\in\R^{T\times d_{\mathrm{model}}}$：
+
+\begin{align}
+Q &= XW_Q,\quad W_Q\in\R^{d_{\mathrm{model}}\times d_k},\\
+K &= XW_K,\quad W_K\in\R^{d_{\mathrm{model}}\times d_k},\\
+V &= XW_V,\quad W_V\in\R^{d_{\mathrm{model}}\times d_v}.
+\end{align}
+
+含义：
+
+\begin{itemize}
+  \item Query：当前位置想找什么信息。
+  \item Key：每个上下文位置提供什么索引。
+  \item Value：真正被聚合的信息。
+\end{itemize}
+
+\subsection{为什么是 $QK^\top$}
+
+第 $i$ 个 query 与第 $j$ 个 key 的相似度：
+
+\begin{equation}
+s_{ij}=\bm{q}_i^\top \bm{k}_j.
+\end{equation}
+
+把所有位置一次性写成矩阵：
+
+\begin{equation}
+S=QK^\top,\quad S\in\R^{T\times T}.
+\end{equation}
+
+缩放点积注意力：
+
+\begin{equation}
+\Attn(Q,K,V)
+=\softmax\left(\frac{QK^\top}{\sqrt{d_k}}\right)V.
+\label{eq:scaled-dot-product-attention}
+\end{equation}
+
+来源：Transformer \cite{vaswani2017attention}。
+
+为什么除以 $\sqrt{d_k}$：
+
+若 $q_i,k_i$ 独立且均值 0、方差 1，则
+
+\begin{equation}
+\operatorname{Var}(\bm{q}^\top\bm{k})
+=\operatorname{Var}\left(\sum_{r=1}^{d_k}q_r k_r\right)
+=d_k.
+\end{equation}
+
+除以 $\sqrt{d_k}$ 后方差约为 1，避免 softmax 输入随维度变大而过大，导致梯度饱和。
+
+\subsection{Causal mask}
+
+Decoder-only LLM 不能看未来 token：
+
+\begin{equation}
+M_{ij}=
+\begin{cases}
+0, & j\le i,\\
+-\infty, & j>i.
+\end{cases}
+\end{equation}
+
+于是：
+
+\begin{equation}
+\Attn_{\mathrm{causal}}(Q,K,V)
+=\softmax\left(\frac{QK^\top}{\sqrt{d_k}}+M\right)V.
+\label{eq:causal-attention}
+\end{equation}
+
+\subsection{Softmax 的数值稳定形式}
+
+直接计算 $\exp(z_i)$ 可能溢出，通常减去最大值：
+
+\begin{equation}
+\softmax(\bm{z})_i
+=\frac{\exp(z_i-m)}{\sum_j \exp(z_j-m)},
+\quad
+m=\max_j z_j.
+\label{eq:stable-softmax}
+\end{equation}
+
+这不改变结果，因为分子分母同除 $\exp(m)$。
+
+\subsection{为什么 softmax/attention 内存受限}
+
+完整 attention score 的元素数：
+
+\begin{equation}
+\#S = B\cdot H\cdot T^2.
+\end{equation}
+
+若用 fp16/bf16，每个元素 2 bytes，仅 score 矩阵显存读写量约为：
+
+\begin{equation}
+M_S \approx 2\cdot BHT^2\ \mathrm{bytes}.
+\end{equation}
+
+实际还会有 softmax 概率矩阵、dropout mask、反向传播缓存等。因此长序列训练中，attention 往往受 HBM 带宽和中间矩阵 materialization 限制。
+
+FlashAttention 的思想是不要显式 materialize 完整 $T\times T$ attention matrix，而是分块做 online softmax。来源：FlashAttention \cite{dao2022flashattention}、FlashAttention-2 \cite{dao2023flashattention2}。
+
+\subsection{FlashAttention 的 online softmax 递推}
+
+对一行 attention score 分块处理。维护：
+
+\begin{align}
+m &= \max_j s_j,\\
+\ell &= \sum_j \exp(s_j-m),\\
+\bm{n} &= \sum_j \exp(s_j-m)\bm{v}_j,\\
+\bm{o} &= \frac{\bm{n}}{\ell}.
+\end{align}
+
+当新块 $B$ 到来：
+
+\begin{align}
+m' &= \max(m,\max_{j\in B}s_j),\\
+\ell' &= e^{m-m'}\ell+\sum_{j\in B}e^{s_j-m'},\\
+\bm{n}' &= e^{m-m'}\bm{n}+\sum_{j\in B}e^{s_j-m'}\bm{v}_j,\\
+\bm{o}' &= \frac{\bm{n}'}{\ell'}.
+\end{align}
+
+这个递推保证结果等价于完整 softmax，但显著减少 HBM 读写。来源：\cite{dao2022flashattention}。
+
+\section{Multi-Head、MQA 与 GQA}
+
+\subsection{Multi-Head Attention}
+
+第 $h$ 个 head：
+
+\begin{equation}
+\operatorname{head}_h
+=\Attn(XW_Q^h,XW_K^h,XW_V^h).
+\end{equation}
+
+拼接所有 heads：
+
+\begin{equation}
+\MHA(X)
+=\operatorname{Concat}(\operatorname{head}_1,\dots,\operatorname{head}_H)W_O.
+\label{eq:mha}
+\end{equation}
+
+来源：\cite{vaswani2017attention}。
+
+\subsection{Multi-Query Attention}
+
+MQA 让多个 query heads 共享同一组 K/V：
+
+\begin{align}
+Q_h &= XW_Q^h,\quad h=1,\dots,H,\\
+K &= XW_K,\quad V=XW_V,\\
+\operatorname{head}_h &= \Attn(Q_h,K,V).
+\end{align}
+
+KV cache 从 $H$ 组变成 1 组，显著降低解码时显存带宽和 KV cache 大小。来源：Multi-Query Attention \cite{shazeer2019mqa}。
+
+\subsection{Grouped-Query Attention}
+
+GQA 是 MHA 和 MQA 的折中。设 $G=H_{\mathrm{kv}}$ 个 KV groups，query head $h$ 使用 group：
+
+\begin{equation}
+g(h)=\left\lfloor \frac{hG}{H}\right\rfloor.
+\end{equation}
+
+则：
+
+\begin{equation}
+\operatorname{head}_h
+=\Attn(Q_h,K_{g(h)},V_{g(h)}).
+\end{equation}
+
+来源：GQA \cite{ainslie2023gqa}。
+
+关系：
+
+\[
+\text{MHA}:H_{\mathrm{kv}}=H,\quad
+\text{GQA}:1<H_{\mathrm{kv}}<H,\quad
+\text{MQA}:H_{\mathrm{kv}}=1.
+\]
+
+\section{位置编码}
+
+\subsection{Sinusoidal positional encoding}
+
+Transformer 原始位置编码：
+
+\begin{align}
+PE(pos,2i)
+&=\sin\left(\frac{pos}{10000^{2i/d_{\mathrm{model}}}}\right),\\
+PE(pos,2i+1)
+&=\cos\left(\frac{pos}{10000^{2i/d_{\mathrm{model}}}}\right).
+\end{align}
+
+输入变为：
+
+\begin{equation}
+\bm{h}_t^0=E[x_t]+PE(t).
+\end{equation}
+
+来源：\cite{vaswani2017attention}。
+
+\subsection{RoPE}
+
+RoPE 对 query/key 做位置相关旋转。对二维子空间：
+
+\begin{equation}
+R_{\theta,m}
+=
+\begin{bmatrix}
+\cos(m\theta)&-\sin(m\theta)\\
+\sin(m\theta)&\cos(m\theta)
+\end{bmatrix}.
+\end{equation}
+
+位置 $m$ 的 query 和位置 $n$ 的 key：
+
+\begin{equation}
+\tilde{\bm{q}}_m=R_m\bm{q}_m,\quad
+\tilde{\bm{k}}_n=R_n\bm{k}_n.
+\end{equation}
+
+注意力分数：
+
+\begin{equation}
+\tilde{\bm{q}}_m^\top \tilde{\bm{k}}_n
+=\bm{q}_m^\top R_m^\top R_n\bm{k}_n
+=\bm{q}_m^\top R_{n-m}\bm{k}_n.
+\label{eq:rope-relative}
+\end{equation}
+
+所以 RoPE 天然把相对位置 $n-m$ 注入 attention score。来源：RoFormer/RoPE \cite{su2021rope}。
+
+\subsection{ALiBi}
+
+ALiBi 直接给 attention score 加线性距离偏置：
+
+\begin{equation}
+s_{h,i,j}
+=\frac{\bm{q}_{h,i}^\top \bm{k}_{h,j}}{\sqrt{d_h}}
+-m_h(i-j),
+\quad j\le i,
+\end{equation}
+
+其中 $m_h$ 是 head-specific slope。来源：ALiBi \cite{press2021alibi}。
+
+关系：
+
+\begin{itemize}
+  \item Sinusoidal：位置向量加到输入 hidden。
+  \item RoPE：位置旋转进 Q/K，使 attention score 依赖相对距离。
+  \item ALiBi：直接对 attention score 加距离惩罚。
+\end{itemize}
+
+\section{FFN、GELU 与 SwiGLU}
+
+\subsection{标准 FFN}
+
+Transformer 每层还有 position-wise FFN：
+
+\begin{equation}
+\FFN(\bm{x})
+=W_2\,\phi(W_1\bm{x}+\bm{b}_1)+\bm{b}_2.
+\end{equation}
+
+原始 Transformer 使用 ReLU。来源：\cite{vaswani2017attention}。
+
+\subsection{GELU}
+
+GELU：
+
+\begin{equation}
+\GELU(x)
+=x\Phi(x),
+\end{equation}
+
+其中 $\Phi$ 是标准正态分布 CDF。常用近似：
+
+\begin{equation}
+\GELU(x)
+\approx
+0.5x\left(1+\tanh\left[\sqrt{\frac{2}{\pi}}\left(x+0.044715x^3\right)\right]\right).
+\end{equation}
+
+\subsection{SwiGLU}
+
+现代 LLaMA-like 模型常用 SwiGLU：
+
+\begin{align}
+\SiLU(x)&=x\sigma(x),\\
+\SwiGLU(\bm{x})
+&=\left(\SiLU(\bm{x}W_1)\odot \bm{x}W_3\right)W_2.
+\label{eq:swiglu}
+\end{align}
+
+来源：GLU variants \cite{shazeer2020glu}。
+
+解释：$W_3$ 分支像 gate，控制 $W_1$ 分支的信息通过量。
+
+\section{Softmax 交叉熵的梯度}
+
+设 logits $\bm{z}\in\R^V$，概率 $\bm{p}=\softmax(\bm{z})$，真实标签 one-hot 为 $\bm{y}$：
+
+\begin{equation}
+\mathcal{L}_{\mathrm{CE}}
+=-\sum_{i=1}^{V}y_i\log p_i.
+\end{equation}
+
+先求：
+
+\begin{equation}
+\log p_k
+=z_k-\log\sum_j e^{z_j}.
+\end{equation}
+
+对 $z_i$ 求导：
+
+\begin{equation}
+\frac{\partial \log p_k}{\partial z_i}
+=\1[i=k]-p_i.
+\end{equation}
+
+因此：
+
+\begin{align}
+\frac{\partial \mathcal{L}_{\mathrm{CE}}}{\partial z_i}
+&=-\sum_k y_k\frac{\partial \log p_k}{\partial z_i}\\
+&=-\sum_k y_k(\1[i=k]-p_i)\\
+&=p_i-y_i.
+\label{eq:ce-gradient}
+\end{align}
+
+这是 LLM 训练中最重要的梯度公式之一：
+
+\[
+\boxed{\nabla_{\bm{z}}\mathcal{L}_{\mathrm{CE}}=\bm{p}-\bm{y}}.
+\]
+
+关系：
+
+\[
+\text{logits}
+\rightarrow
+\softmax
+\rightarrow
+\text{cross entropy}
+\rightarrow
+\bm{p}-\bm{y}
+\rightarrow
+\text{backprop into Transformer}.
+\]
+
+\subsection{Label smoothing}
+
+真实 one-hot $\bm{y}$ 可替换为：
+
+\begin{equation}
+\bm{y}'=(1-\epsilon)\bm{y}+\frac{\epsilon}{V}\bm{1}.
+\end{equation}
+
+则梯度变为：
+
+\begin{equation}
+\nabla_{\bm{z}}\mathcal{L}=\bm{p}-\bm{y}'.
+\end{equation}
+
+\section{优化器和训练动态}
+
+\subsection{SGD}
+
+最基础更新：
+
+\begin{equation}
+\theta_{t+1}=\theta_t-\eta_t\nabla_\theta \mathcal{L}(\theta_t).
+\end{equation}
+
+\subsection{Adam}
+
+Adam 维护一阶、二阶矩估计：
+
+\begin{align}
+\bm{g}_t&=\nabla_\theta \mathcal{L}(\theta_t),\\
+\bm{m}_t&=\beta_1\bm{m}_{t-1}+(1-\beta_1)\bm{g}_t,\\
+\bm{v}_t&=\beta_2\bm{v}_{t-1}+(1-\beta_2)\bm{g}_t^2.
+\end{align}
+
+偏差修正：
+
+\begin{equation}
+\hat{\bm{m}}_t=\frac{\bm{m}_t}{1-\beta_1^t},
+\quad
+\hat{\bm{v}}_t=\frac{\bm{v}_t}{1-\beta_2^t}.
+\end{equation}
+
+更新：
+
+\begin{equation}
+\theta_{t+1}
+=\theta_t-\eta_t\frac{\hat{\bm{m}}_t}{\sqrt{\hat{\bm{v}}_t}+\epsilon}.
+\end{equation}
+
+\subsection{AdamW}
+
+AdamW 把 weight decay 从梯度里解耦：
+
+\begin{equation}
+\theta_{t+1}
+=\theta_t
+-\eta_t\frac{\hat{\bm{m}}_t}{\sqrt{\hat{\bm{v}}_t}+\epsilon}
+-\eta_t\lambda \theta_t.
+\label{eq:adamw}
+\end{equation}
+
+来源：AdamW \cite{loshchilov2017adamw}。
+
+\subsection{Gradient clipping}
+
+若全局梯度范数过大：
+
+\begin{equation}
+\bm{g}\leftarrow
+\bm{g}\cdot
+\min\left(1,\frac{c}{\|\bm{g}\|_2}\right).
+\end{equation}
+
+作用：防止梯度爆炸。
+
+\subsection{Warmup + cosine decay}
+
+常见学习率：
+
+\begin{equation}
+\eta(t)=
+\begin{cases}
+\eta_{\max}\frac{t}{T_{\mathrm{warmup}}}, & t<T_{\mathrm{warmup}},\\
+\eta_{\min}
++\frac{1}{2}(\eta_{\max}-\eta_{\min})
+\left(1+\cos\frac{\pi(t-T_{\mathrm{warmup}})}{T_{\mathrm{total}}-T_{\mathrm{warmup}}}\right),
+& t\ge T_{\mathrm{warmup}}.
+\end{cases}
+\end{equation}
+
+\section{Scaling Laws 与 Chinchilla}
+
+\subsection{经验损失分解}
+
+Scaling laws 常把 loss 写成模型大小 $N$、数据 token 数 $D$ 的函数：
+
+\begin{equation}
+L(N,D)
+\approx L_\infty+\frac{A}{N^\alpha}+\frac{B}{D^\beta}.
+\label{eq:scaling-laws}
+\end{equation}
+
+来源：Kaplan et al. scaling laws \cite{kaplan2020scaling}，Chinchilla \cite{hoffmann2022chinchilla}。
+
+\subsection{训练计算量近似}
+
+Transformer dense LM 的训练 FLOPs 常用近似：
+
+\begin{equation}
+C\approx 6ND,
+\label{eq:training-compute}
+\end{equation}
+
+其中 $N$ 是非 embedding 参数量，$D$ 是训练 token 数。来源：Chinchilla \cite{hoffmann2022chinchilla}。
+
+关系：
+
+\[
+C\ \text{固定}
+\quad\Longrightarrow\quad
+\text{选择 }N,D\text{ 的配比}
+\quad\Longrightarrow\quad
+\text{compute-optimal training}.
+\]
+
+直观结论：
+
+\begin{itemize}
+  \item 模型太大、数据太少：under-trained。
+  \item 数据太多、模型太小：capacity 不足。
+  \item Chinchilla 强调在固定 compute 下需要更多 tokens、更小但训练充分的模型。
+\end{itemize}
+
+\section{SFT、Reward Model、RLHF 和 DPO}
+
+\subsection{Supervised Fine-Tuning}
+
+给定 prompt $x$ 和参考回答 $y_{1:T}$：
+
+\begin{equation}
+\mathcal{L}_{\mathrm{SFT}}
+=-\sum_{t=1}^{T}
+\log \pi_\theta(y_t\mid x,y_{<t}).
+\label{eq:sft}
+\end{equation}
+
+它和预训练 NLL 形式一样，只是数据变成 instruction-response。
+
+\subsection{Reward model}
+
+RLHF 中，人类偏好数据常为 $(x,y_w,y_l)$：$y_w$ 优于 $y_l$。Bradley--Terry 形式：
+
+\begin{equation}
+P(y_w\succ y_l\mid x)
+=\sigma\left(r_\phi(x,y_w)-r_\phi(x,y_l)\right).
+\end{equation}
+
+reward model loss：
+
+\begin{equation}
+\mathcal{L}_{\mathrm{RM}}
+=-\E_{(x,y_w,y_l)}
+\log \sigma\left(r_\phi(x,y_w)-r_\phi(x,y_l)\right).
+\label{eq:reward-model}
+\end{equation}
+
+来源：InstructGPT/RLHF \cite{ouyang2022instructgpt}。
+
+\subsection{PPO for RLHF}
+
+PPO 的 clipped objective：
+
+\begin{align}
+r_t(\theta)
+&=\frac{\pi_\theta(a_t\mid s_t)}{\pi_{\theta_{\mathrm{old}}}(a_t\mid s_t)},\\
+\mathcal{L}_{\mathrm{PPO}}
+&=\E_t\left[
+\min\left(
+r_t(\theta)\hat{A}_t,
+\clip(r_t(\theta),1-\epsilon,1+\epsilon)\hat{A}_t
+\right)
+\right].
+\label{eq:ppo}
+\end{align}
+
+来源：PPO \cite{schulman2017ppo}。
+
+LLM RLHF 通常还加 KL penalty，避免策略偏离 reference model：
+
+\begin{equation}
+\max_\theta
+\E_{y\sim \pi_\theta(\cdot\mid x)}
+\left[
+r_\phi(x,y)
+-\beta \KL\left(\pi_\theta(\cdot\mid x)\|\pi_{\mathrm{ref}}(\cdot\mid x)\right)
+\right].
+\label{eq:rlhf-kl}
+\end{equation}
+
+来源：InstructGPT \cite{ouyang2022instructgpt}。
+
+\subsection{DPO}
+
+DPO 直接从偏好对优化策略，不显式训练 reward model 做 RL rollouts：
+
+\begin{align}
+\mathcal{L}_{\mathrm{DPO}}(\theta)
+=-\E_{(x,y_w,y_l)}
+\log\sigma\Big(
+\beta[
+&\log\pi_\theta(y_w\mid x)-\log\pi_{\mathrm{ref}}(y_w\mid x)\\
+-&\log\pi_\theta(y_l\mid x)+\log\pi_{\mathrm{ref}}(y_l\mid x)]
+\Big).
+\label{eq:dpo}
+\end{align}
+
+来源：DPO \cite{rafailov2023dpo}。
+
+关系：
+
+\[
+\text{Pretrain}
+\rightarrow
+\text{SFT}
+\rightarrow
+\begin{cases}
+\text{Reward Model}+\text{PPO}\\
+\text{DPO}
+\end{cases}
+\rightarrow
+\text{Aligned LLM}.
+\]
+
+\section{LoRA 与参数高效微调}
+
+\subsection{低秩适配}
+
+冻结原始权重 $W_0\in\R^{d_{\mathrm{out}}\times d_{\mathrm{in}}}$，只学习低秩增量：
+
+\begin{equation}
+W'=W_0+\Delta W,
+\quad
+\Delta W=\frac{\alpha}{r}BA,
+\end{equation}
+
+其中：
+
+\begin{equation}
+B\in\R^{d_{\mathrm{out}}\times r},
+\quad
+A\in\R^{r\times d_{\mathrm{in}}},
+\quad
+r\ll \min(d_{\mathrm{in}},d_{\mathrm{out}}).
+\end{equation}
+
+前向：
+
+\begin{equation}
+\bm{y}=W_0\bm{x}+\frac{\alpha}{r}BA\bm{x}.
+\label{eq:lora}
+\end{equation}
+
+来源：LoRA \cite{hu2021lora}。
+
+关系：
+
+\[
+\text{大矩阵全量更新}
+\quad\Longrightarrow\quad
+\text{低秩增量更新}
+\quad\Longrightarrow\quad
+\text{显著减少可训练参数和优化器状态}.
+\]
+
+\section{MoE：Dense 与 Sparse}
+
+\subsection{Dense FFN}
+
+Dense Transformer 每个 token 都经过同一个 FFN：
+
+\begin{equation}
+\bm{y}_t=\FFN(\bm{x}_t).
+\end{equation}
+
+每个 token 激活同一组参数。
+
+\subsection{Sparse MoE}
+
+有 $E$ 个 experts，router 输出：
+
+\begin{equation}
+\bm{p}_t=\softmax(W_r\bm{x}_t).
+\end{equation}
+
+选择 top-$k$ experts：
+
+\begin{equation}
+\mathcal{E}_t=\TopK(\bm{p}_t,k).
+\end{equation}
+
+输出：
+
+\begin{equation}
+\bm{y}_t
+=\sum_{e\in\mathcal{E}_t}
+p_{t,e}\operatorname{Expert}_e(\bm{x}_t).
+\label{eq:moe}
+\end{equation}
+
+来源：GShard \cite{lepikhin2020gshard}、Switch Transformer \cite{fedus2021switch}。
+
+\subsection{Switch Transformer top-1}
+
+Switch Transformer 使用 top-1 routing：
+
+\begin{equation}
+e^\star_t=\argmax_e p_{t,e},
+\quad
+\bm{y}_t=p_{t,e^\star_t}\operatorname{Expert}_{e^\star_t}(\bm{x}_t).
+\end{equation}
+
+\subsection{负载均衡损失}
+
+设 $f_e$ 是分配到 expert $e$ 的 token 比例，$P_e$ 是 router 给 expert $e$ 的平均概率，Switch 的辅助损失：
+
+\begin{equation}
+\mathcal{L}_{\mathrm{aux}}
+=\alpha E\sum_{e=1}^{E} f_e P_e.
+\label{eq:moe-aux}
+\end{equation}
+
+来源：Switch Transformer \cite{fedus2021switch}。
+
+关系：
+
+\begin{itemize}
+  \item Dense：所有 token 都走相同参数，计算稳定但参数利用密集。
+  \item Sparse MoE：每个 token 只激活少数 experts，总参数可很大，单 token 计算可控。
+  \item Expert Parallelism：把 experts 分布到不同 GPU，需要 all-to-all token dispatch/combine。
+\end{itemize}
+
+\section{推理：从 logits 到 token}
+
+\subsection{Temperature}
+
+训练时使用 $\softmax(\bm{z})$，推理时可调 temperature $\tau$：
+
+\begin{equation}
+p_\tau(i)
+=\frac{\exp(z_i/\tau)}{\sum_j \exp(z_j/\tau)}.
+\label{eq:temperature}
+\end{equation}
+
+\begin{itemize}
+  \item $\tau<1$：分布更尖锐，更保守。
+  \item $\tau>1$：分布更平，更随机。
+\end{itemize}
+
+\subsection{Greedy decoding}
+
+\begin{equation}
+x_{t+1}=\argmax_i p_\theta(i\mid x_{\le t}).
+\end{equation}
+
+\subsection{Top-k sampling}
+
+只保留概率最高的 $k$ 个 token：
+
+\begin{equation}
+S_k=\TopK(\bm{p},k),
+\quad
+\tilde{p}_i=
+\begin{cases}
+\frac{p_i}{\sum_{j\in S_k}p_j}, & i\in S_k,\\
+0, & i\notin S_k.
+\end{cases}
+\end{equation}
+
+\subsection{Top-p / nucleus sampling}
+
+选择最小集合 $S_p$，使累计概率超过阈值 $p$：
+
+\begin{equation}
+S_p=\min\left\{S:
+\sum_{i\in S}p_i\ge p
+\right\}.
+\end{equation}
+
+归一化：
+
+\begin{equation}
+\tilde{p}_i=
+\begin{cases}
+\frac{p_i}{\sum_{j\in S_p}p_j}, & i\in S_p,\\
+0, & i\notin S_p.
+\end{cases}
+\end{equation}
+
+\subsection{Beam search}
+
+维护 $K$ 条候选序列，序列分数：
+
+\begin{equation}
+\operatorname{score}(y_{1:T})
+=\sum_{t=1}^{T}\log p_\theta(y_t\mid x,y_{<t}).
+\end{equation}
+
+常加长度惩罚：
+
+\begin{equation}
+\operatorname{score}_{\mathrm{lp}}(y)
+=\frac{1}{T^\alpha}
+\sum_{t=1}^{T}\log p_\theta(y_t\mid x,y_{<t}).
+\end{equation}
+
+\section{KV Cache 与解码复杂度}
+
+\subsection{没有 KV cache 的代价}
+
+生成第 $t$ 个 token 时，如果每一步都重算整个前缀，attention 总成本约为：
+
+\begin{equation}
+\sum_{t=1}^{T}O(t^2d)
+=O(T^3d).
+\end{equation}
+
+实际 decoder 如果每步输入完整 prefix，会重复计算历史 K/V。
+
+\subsection{有 KV cache 的增量解码}
+
+第 $\ell$ 层缓存历史：
+
+\begin{equation}
+K_{\le t}^{\ell}
+=\operatorname{Concat}(K_{\le t-1}^{\ell},K_t^{\ell}),
+\quad
+V_{\le t}^{\ell}
+=\operatorname{Concat}(V_{\le t-1}^{\ell},V_t^{\ell}).
+\end{equation}
+
+新 token 只计算 query：
+
+\begin{equation}
+\bm{o}_t^\ell
+=\softmax\left(
+\frac{\bm{q}_t^\ell (K_{\le t}^{\ell})^\top}{\sqrt{d_h}}
+\right)V_{\le t}^{\ell}.
+\label{eq:kv-cache-attn}
+\end{equation}
+
+每步 attention 约 $O(td)$，整段生成约：
+
+\begin{equation}
+\sum_{t=1}^{T}O(td)=O(T^2d).
+\end{equation}
+
+\subsection{KV cache 显存公式}
+
+假设 dtype bytes 为 $b$，层数 $L$，batch 中总上下文 token 数 $T_{\mathrm{tot}}$：
+
+\begin{equation}
+M_{\mathrm{KV}}
+=2\cdot L\cdot T_{\mathrm{tot}}\cdot H_{\mathrm{kv}}\cdot d_h\cdot b.
+\label{eq:kv-memory}
+\end{equation}
+
+其中 2 表示 K 和 V。对比：
+
+\begin{equation}
+M_{\mathrm{KV}}^{\mathrm{MHA}}:M_{\mathrm{KV}}^{\mathrm{GQA}}:M_{\mathrm{KV}}^{\mathrm{MQA}}
+=H:G:1.
+\end{equation}
+
+\subsection{PagedAttention}
+
+PagedAttention 把 KV cache 分成固定大小 blocks，而不是为每个 request 分配连续大块内存。设 block size 为 $B_{\mathrm{blk}}$，序列 $r$ 的 token 数为 $T_r$，需要 block 数：
+
+\begin{equation}
+n_r=\left\lceil\frac{T_r}{B_{\mathrm{blk}}}\right\rceil.
+\end{equation}
+
+逻辑位置 $t$ 映射到：
+
+\begin{equation}
+\operatorname{block}(t)=\left\lfloor\frac{t}{B_{\mathrm{blk}}}\right\rfloor,
+\quad
+\operatorname{offset}(t)=t\bmod B_{\mathrm{blk}}.
+\end{equation}
+
+这样可以减少 KV cache 碎片，并支持 prefix sharing/copy-on-write 等。来源：vLLM/PagedAttention \cite{kwon2023vllm}。
+
+关系：
+
+\[
+\text{KV cache}
+\rightarrow
+\text{显存成为核心瓶颈}
+\rightarrow
+\text{PagedAttention/Block manager}
+\rightarrow
+\text{continuous batching 和高吞吐服务}.
+\]
+
+\section{Speculative Decoding}
+
+Speculative decoding 使用小 draft model $q$ 先生成候选，再由大 target model $p$ 验证。
+
+对 draft token $x$，接受概率：
+
+\begin{equation}
+\alpha(x)
+=\min\left(1,\frac{p(x)}{q(x)}\right).
+\label{eq:speculative-accept}
+\end{equation}
+
+若拒绝，则从修正分布采样：
+
+\begin{equation}
+p'(x)
+\propto
+\max(0,p(x)-q(x)).
+\end{equation}
+
+来源：Speculative Decoding \cite{leviathan2023speculative}。
+
+直观关系：
+
+\[
+\text{draft model 快速提出 token}
+\rightarrow
+\text{target model 并行验证多个 token}
+\rightarrow
+\text{减少大模型解码步数}.
+\]
+
+\section{量化公式}
+
+\subsection{Affine quantization}
+
+把浮点 $x$ 量化为整数 $q$：
+
+\begin{equation}
+q=\clip\left(\operatorname{round}\left(\frac{x}{s}\right)+z,\ q_{\min},q_{\max}\right).
+\end{equation}
+
+反量化：
+
+\begin{equation}
+\hat{x}=s(q-z).
+\end{equation}
+
+其中 $s$ 是 scale，$z$ 是 zero point。
+
+\subsection{Symmetric quantization}
+
+对称量化常设 $z=0$：
+
+\begin{equation}
+s=\frac{\max |x|}{2^{b-1}-1},
+\quad
+q=\clip\left(\operatorname{round}\left(\frac{x}{s}\right),
+-2^{b-1},2^{b-1}-1\right).
+\end{equation}
+
+来源可参考 LLM.int8 \cite{dettmers2022llmint8}、GPTQ \cite{frantar2022gptq}。
+
+关系：
+
+\[
+\text{低 bit}
+\rightarrow
+\text{显存/带宽下降}
+\rightarrow
+\text{反量化或量化 kernel}
+\rightarrow
+\text{吞吐提升但精度可能下降}.
+\]
+
+\section{分布式训练/推理的核心公式}
+
+\subsection{Data Parallel}
+
+$R$ 个 worker 各算一份梯度：
+
+\begin{equation}
+\bm{g}
+=\frac{1}{R}\sum_{r=1}^{R}\bm{g}^{(r)}.
+\end{equation}
+
+然后每个 worker 使用同一个平均梯度更新参数。
+
+\subsection{Tensor Parallel：列切分}
+
+线性层 $Y=XW$，按列切：
+
+\begin{equation}
+W=[W_1,W_2,\dots,W_R].
+\end{equation}
+
+每张卡计算：
+
+\begin{equation}
+Y_r=XW_r.
+\end{equation}
+
+最后 all-gather：
+
+\begin{equation}
+Y=[Y_1,Y_2,\dots,Y_R].
+\end{equation}
+
+\subsection{Tensor Parallel：行切分}
+
+按行切：
+
+\begin{equation}
+X=[X_1,\dots,X_R],
+\quad
+W=
+\begin{bmatrix}
+W_1\\
+\vdots\\
+W_R
+\end{bmatrix}.
+\end{equation}
+
+每张卡计算局部结果：
+
+\begin{equation}
+Y_r=X_rW_r.
+\end{equation}
+
+最后 all-reduce：
+
+\begin{equation}
+Y=\sum_{r=1}^{R}Y_r.
+\end{equation}
+
+\subsection{Expert Parallel}
+
+MoE 中 expert 分布在不同 GPU。第 $t$ 个 token 被 router 分配到 expert $e_t$：
+
+\begin{equation}
+e_t=\argmax_e p_{t,e}.
+\end{equation}
+
+系统需要执行：
+
+\[
+\text{token dispatch}
+\rightarrow
+\text{expert local compute}
+\rightarrow
+\text{token combine}.
+\]
+
+数学上是式 \eqref{eq:moe}，系统上是 all-to-all communication。
+
+\section{Multimodal 与 Diffusion 相关公式}
+
+这一节不是纯 LLM 必需，但对理解 vLLM-Omni、Any-to-Any multimodal models 很重要。
+
+\subsection{Vision patch embedding}
+
+图像 $I\in\R^{H\times W\times C}$ 切成 $N$ 个 patch，每个 patch 展平为 $\bm{p}_i$：
+
+\begin{equation}
+\bm{v}_i=W_p\bm{p}_i+\bm{b}_p.
+\end{equation}
+
+然后把 image tokens 和 text tokens 拼接：
+
+\begin{equation}
+X=[X_{\mathrm{text}};X_{\mathrm{image}}].
+\end{equation}
+
+\subsection{CLIP 对比学习损失}
+
+图文 embedding：
+
+\begin{equation}
+\bm{u}_i=f_{\mathrm{text}}(t_i),
+\quad
+\bm{v}_i=f_{\mathrm{image}}(I_i).
+\end{equation}
+
+相似度：
+
+\begin{equation}
+s_{ij}=\frac{\bm{u}_i^\top\bm{v}_j}{\tau}.
+\end{equation}
+
+image-to-text loss：
+
+\begin{equation}
+\mathcal{L}_{i2t}
+=-\frac{1}{B}\sum_i
+\log
+\frac{\exp(s_{ii})}{\sum_j\exp(s_{ij})}.
+\end{equation}
+
+text-to-image 同理，最终：
+
+\begin{equation}
+\mathcal{L}_{\mathrm{CLIP}}
+=\frac{1}{2}(\mathcal{L}_{i2t}+\mathcal{L}_{t2i}).
+\end{equation}
+
+来源：CLIP \cite{radford2021clip}。
+
+\subsection{DDPM forward process}
+
+扩散模型前向加噪：
+
+\begin{equation}
+q(\bm{x}_t\mid \bm{x}_{t-1})
+=\mathcal{N}(\sqrt{1-\beta_t}\bm{x}_{t-1},\beta_t I).
+\end{equation}
+
+令 $\alpha_t=1-\beta_t$，$\bar{\alpha}_t=\prod_{s=1}^{t}\alpha_s$，可直接采样：
+
+\begin{equation}
+q(\bm{x}_t\mid \bm{x}_0)
+=\mathcal{N}(\sqrt{\bar{\alpha}_t}\bm{x}_0,(1-\bar{\alpha}_t)I).
+\end{equation}
+
+即：
+
+\begin{equation}
+\bm{x}_t
+=\sqrt{\bar{\alpha}_t}\bm{x}_0
++\sqrt{1-\bar{\alpha}_t}\bm{\epsilon},
+\quad
+\bm{\epsilon}\sim\mathcal{N}(0,I).
+\end{equation}
+
+来源：DDPM \cite{ho2020ddpm}。
+
+\subsection{噪声预测训练目标}
+
+模型预测噪声：
+
+\begin{equation}
+\mathcal{L}_{\mathrm{diff}}
+=\E_{t,\bm{x}_0,\bm{\epsilon}}
+\left[
+\left\|
+\bm{\epsilon}
+-\bm{\epsilon}_\theta(\bm{x}_t,t,c)
+\right\|_2^2
+\right].
+\label{eq:diffusion-loss}
+\end{equation}
+
+DiT 把 Transformer 用作 diffusion backbone。来源：DiT \cite{peebles2022dit}。
+
+\subsection{Classifier-Free Guidance}
+
+有条件预测 $\epsilon_\theta(\bm{x}_t,t,c)$ 和无条件预测 $\epsilon_\theta(\bm{x}_t,t,\varnothing)$：
+
+\begin{equation}
+\hat{\epsilon}
+=\epsilon_\theta(\bm{x}_t,t,\varnothing)
++w\left[
+\epsilon_\theta(\bm{x}_t,t,c)
+-\epsilon_\theta(\bm{x}_t,t,\varnothing)
+\right].
+\label{eq:cfg}
+\end{equation}
+
+来源：Classifier-Free Guidance \cite{hosalimans2022cfg}。
+
+和 vLLM-Omni 的关系：
+
+\begin{itemize}
+  \item AR stage 可产生 text/hidden/KV 条件。
+  \item DiT stage 消费这些条件生成 image/video/audio。
+  \item CFG companion requests 和 KV transfer 是系统实现层面的对应物。
+\end{itemize}
+
+\section{总关联图}
+
+\subsection{训练侧}
+
+\[
+\begin{aligned}
+\text{raw text}
+&\xrightarrow{\text{tokenizer}}
+x_{1:T}
+\xrightarrow{E}
+X\\
+&\xrightarrow{\text{Transformer blocks}}
+\bm{h}_{1:T}^L
+\xrightarrow{W_U}
+\bm{z}_{1:T}
+\xrightarrow{\softmax}
+p_\theta(x_{t+1}\mid x_{\le t})\\
+&\xrightarrow{\mathrm{CE/NLL}}
+\mathcal{L}
+\xrightarrow{\mathrm{backprop}}
+\nabla_\theta\mathcal{L}
+\xrightarrow{\mathrm{AdamW}}
+\theta_{t+1}.
+\end{aligned}
+\]
+
+\subsection{推理侧}
+
+\[
+\begin{aligned}
+\text{prompt}
+&\xrightarrow{\text{prefill}}
+K_{\le T},V_{\le T},\bm{h}_T\\
+&\xrightarrow{\text{decode step}}
+\bm{z}_{T}
+\xrightarrow{\text{temperature/top-k/top-p}}
+x_{T+1}\\
+&\xrightarrow{\text{append KV cache}}
+K_{\le T+1},V_{\le T+1}
+\xrightarrow{\text{repeat}}
+\text{generated text}.
+\end{aligned}
+\]
+
+\subsection{系统侧}
+
+\[
+\begin{aligned}
+\text{请求队列}
+&\rightarrow
+\text{batching/scheduling}
+\rightarrow
+\text{KV cache block allocation}\\
+&\rightarrow
+\text{GPU kernels: attention/FFN/sampling}
+\rightarrow
+\text{streaming output}.
+\end{aligned}
+\]
+
+vLLM/SGLang 主要优化的是这一层，而不是改变语言建模目标本身。
+
+\section{公式学习建议}
+
+建议按下面顺序掌握：
+
+\begin{enumerate}
+  \item 先吃透式 \eqref{eq:ar-factorization}、\eqref{eq:nll}、\eqref{eq:softmax}、\eqref{eq:ce-gradient}。
+  \item 再看 Transformer block：式 \eqref{eq:preln-block}、\eqref{eq:scaled-dot-product-attention}、\eqref{eq:causal-attention}。
+  \item 再看现代模型变化：RoPE 式 \eqref{eq:rope-relative}、RMSNorm 式 \eqref{eq:rmsnorm}、SwiGLU 式 \eqref{eq:swiglu}。
+  \item 然后看训练工程：AdamW 式 \eqref{eq:adamw}、Scaling Laws 式 \eqref{eq:scaling-laws}、计算量式 \eqref{eq:training-compute}。
+  \item 微调对齐：SFT 式 \eqref{eq:sft}、Reward Model 式 \eqref{eq:reward-model}、PPO 式 \eqref{eq:ppo}、DPO 式 \eqref{eq:dpo}。
+  \item 推理系统：KV cache 式 \eqref{eq:kv-cache-attn}、显存式 \eqref{eq:kv-memory}、PagedAttention block mapping。
+  \item vLLM-Omni：再补 MoE 式 \eqref{eq:moe}、diffusion loss 式 \eqref{eq:diffusion-loss}、CFG 式 \eqref{eq:cfg}。
+\end{enumerate}
+
+\newpage
+\begin{thebibliography}{99}
+
+\bibitem{vaswani2017attention}
+Ashish Vaswani et al.
+\newblock Attention Is All You Need.
+\newblock NeurIPS 2017.
+\newblock \url{https://arxiv.org/abs/1706.03762}
+
+\bibitem{devlin2018bert}
+Jacob Devlin et al.
+\newblock BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding.
+\newblock 2018.
+\newblock \url{https://arxiv.org/abs/1810.04805}
+
+\bibitem{radford2019gpt2}
+Alec Radford et al.
+\newblock Language Models are Unsupervised Multitask Learners.
+\newblock OpenAI, 2019.
+\newblock \url{https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf}
+
+\bibitem{brown2020gpt3}
+Tom Brown et al.
+\newblock Language Models are Few-Shot Learners.
+\newblock NeurIPS 2020.
+\newblock \url{https://arxiv.org/abs/2005.14165}
+
+\bibitem{sennrich2015bpe}
+Rico Sennrich, Barry Haddow, Alexandra Birch.
+\newblock Neural Machine Translation of Rare Words with Subword Units.
+\newblock 2015.
+\newblock \url{https://arxiv.org/abs/1508.07909}
+
+\bibitem{kudo2018sentencepiece}
+Taku Kudo, John Richardson.
+\newblock SentencePiece: A simple and language independent subword tokenizer and detokenizer for Neural Text Processing.
+\newblock 2018.
+\newblock \url{https://aclanthology.org/D18-2012/}
+
+\bibitem{kudo2018subword}
+Taku Kudo.
+\newblock Subword Regularization: Improving Neural Network Translation Models with Multiple Subword Candidates.
+\newblock 2018.
+\newblock \url{https://arxiv.org/abs/1804.10959}
+
+\bibitem{ba2016layernorm}
+Jimmy Lei Ba, Jamie Ryan Kiros, Geoffrey E. Hinton.
+\newblock Layer Normalization.
+\newblock 2016.
+\newblock \url{https://arxiv.org/abs/1607.06450}
+
+\bibitem{zhang2019rmsnorm}
+Biao Zhang, Rico Sennrich.
+\newblock Root Mean Square Layer Normalization.
+\newblock 2019.
+\newblock \url{https://arxiv.org/abs/1910.07467}
+
+\bibitem{shazeer2020glu}
+Noam Shazeer.
+\newblock GLU Variants Improve Transformer.
+\newblock 2020.
+\newblock \url{https://arxiv.org/abs/2002.05202}
+
+\bibitem{su2021rope}
+Jianlin Su et al.
+\newblock RoFormer: Enhanced Transformer with Rotary Position Embedding.
+\newblock 2021.
+\newblock \url{https://arxiv.org/abs/2104.09864}
+
+\bibitem{press2021alibi}
+Ofir Press, Noah A. Smith, Mike Lewis.
+\newblock Train Short, Test Long: Attention with Linear Biases Enables Input Length Extrapolation.
+\newblock 2021.
+\newblock \url{https://arxiv.org/abs/2108.12409}
+
+\bibitem{dao2022flashattention}
+Tri Dao et al.
+\newblock FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness.
+\newblock 2022.
+\newblock \url{https://arxiv.org/abs/2205.14135}
+
+\bibitem{dao2023flashattention2}
+Tri Dao.
+\newblock FlashAttention-2: Faster Attention with Better Parallelism and Work Partitioning.
+\newblock 2023.
+\newblock \url{https://arxiv.org/abs/2307.08691}
+
+\bibitem{shazeer2019mqa}
+Noam Shazeer.
+\newblock Fast Transformer Decoding: One Write-Head is All You Need.
+\newblock 2019.
+\newblock \url{https://arxiv.org/abs/1911.02150}
+
+\bibitem{ainslie2023gqa}
+Joshua Ainslie et al.
+\newblock GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints.
+\newblock 2023.
+\newblock \url{https://arxiv.org/abs/2305.13245}
+
+\bibitem{loshchilov2017adamw}
+Ilya Loshchilov, Frank Hutter.
+\newblock Decoupled Weight Decay Regularization.
+\newblock 2017.
+\newblock \url{https://arxiv.org/abs/1711.05101}
+
+\bibitem{kaplan2020scaling}
+Jared Kaplan et al.
+\newblock Scaling Laws for Neural Language Models.
+\newblock 2020.
+\newblock \url{https://arxiv.org/abs/2001.08361}
+
+\bibitem{hoffmann2022chinchilla}
+Jordan Hoffmann et al.
+\newblock Training Compute-Optimal Large Language Models.
+\newblock 2022.
+\newblock \url{https://arxiv.org/abs/2203.15556}
+
+\bibitem{ouyang2022instructgpt}
+Long Ouyang et al.
+\newblock Training language models to follow instructions with human feedback.
+\newblock 2022.
+\newblock \url{https://arxiv.org/abs/2203.02155}
+
+\bibitem{schulman2017ppo}
+John Schulman et al.
+\newblock Proximal Policy Optimization Algorithms.
+\newblock 2017.
+\newblock \url{https://arxiv.org/abs/1707.06347}
+
+\bibitem{rafailov2023dpo}
+Rafael Rafailov et al.
+\newblock Direct Preference Optimization: Your Language Model is Secretly a Reward Model.
+\newblock 2023.
+\newblock \url{https://arxiv.org/abs/2305.18290}
+
+\bibitem{hu2021lora}
+Edward J. Hu et al.
+\newblock LoRA: Low-Rank Adaptation of Large Language Models.
+\newblock 2021.
+\newblock \url{https://arxiv.org/abs/2106.09685}
+
+\bibitem{lepikhin2020gshard}
+Dmitry Lepikhin et al.
+\newblock GShard: Scaling Giant Models with Conditional Computation and Automatic Sharding.
+\newblock 2020.
+\newblock \url{https://arxiv.org/abs/2006.16668}
+
+\bibitem{fedus2021switch}
+William Fedus, Barret Zoph, Noam Shazeer.
+\newblock Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efficient Sparsity.
+\newblock 2021.
+\newblock \url{https://arxiv.org/abs/2101.03961}
+
+\bibitem{kwon2023vllm}
+Woosuk Kwon et al.
+\newblock Efficient Memory Management for Large Language Model Serving with PagedAttention.
+\newblock 2023.
+\newblock \url{https://arxiv.org/abs/2309.06180}
+
+\bibitem{leviathan2023speculative}
+Yaniv Leviathan, Matan Kalman, Yossi Matias.
+\newblock Fast Inference from Transformers via Speculative Decoding.
+\newblock 2023.
+\newblock \url{https://arxiv.org/abs/2211.17192}
+
+\bibitem{dettmers2022llmint8}
+Tim Dettmers et al.
+\newblock LLM.int8(): 8-bit Matrix Multiplication for Transformers at Scale.
+\newblock 2022.
+\newblock \url{https://arxiv.org/abs/2208.07339}
+
+\bibitem{frantar2022gptq}
+Elias Frantar et al.
+\newblock GPTQ: Accurate Post-Training Quantization for Generative Pre-trained Transformers.
+\newblock 2022.
+\newblock \url{https://arxiv.org/abs/2210.17323}
+
+\bibitem{radford2021clip}
+Alec Radford et al.
+\newblock Learning Transferable Visual Models From Natural Language Supervision.
+\newblock 2021.
+\newblock \url{https://arxiv.org/abs/2103.00020}
+
+\bibitem{ho2020ddpm}
+Jonathan Ho, Ajay Jain, Pieter Abbeel.
+\newblock Denoising Diffusion Probabilistic Models.
+\newblock 2020.
+\newblock \url{https://arxiv.org/abs/2006.11239}
+
+\bibitem{peebles2022dit}
+William Peebles, Saining Xie.
+\newblock Scalable Diffusion Models with Transformers.
+\newblock 2022.
+\newblock \url{https://arxiv.org/abs/2212.09748}
+
+\bibitem{hosalimans2022cfg}
+Jonathan Ho, Tim Salimans.
+\newblock Classifier-Free Diffusion Guidance.
+\newblock 2022.
+\newblock \url{https://arxiv.org/abs/2207.12598}
+
+\end{thebibliography}
+
+\end{document}

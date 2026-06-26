@@ -1,0 +1,42 @@
+## environment
+python3: Python 3.12.3
+python2: /bin/bash: line 4: python2: command not found
+
+## nematus v0.3 TensorFlow import check
+  File "/home/undefined/Desktop/ai/llm-systems-learning-pack/projects/rmsnorm_experiments/nematus/nematus/nmt.py", line 387
+    beam = map(lambda (sent, cost): (sent, cost/len(sent)), beam)
+                      ^^^^^^^^^^^^
+SyntaxError: Lambda expression parameters cannot be parenthesized
+
+## zero TensorFlow/Python2 check
+Traceback (most recent call last):
+  File "/home/undefined/Desktop/ai/llm-systems-learning-pack/projects/rmsnorm_experiments/zero/run.py", line 14, in <module>
+    import tensorflow as tf
+ModuleNotFoundError: No module named 'tensorflow'
+
+## weight_norm Theano/Lasagne/Python2 check
+Traceback (most recent call last):
+  File "/home/undefined/Desktop/ai/llm-systems-learning-pack/projects/rmsnorm_experiments/weight_norm/train.py", line 2, in <module>
+    import cPickle
+ModuleNotFoundError: No module named 'cPickle'
+
+## order-embedding Python2 check
+Traceback (most recent call last):
+  File "/home/undefined/Desktop/ai/llm-systems-learning-pack/projects/rmsnorm_experiments/order-embedding/driver.py", line 1, in <module>
+    import train
+  File "/home/undefined/Desktop/ai/llm-systems-learning-pack/projects/rmsnorm_experiments/order-embedding/train.py", line 36
+    print 'reloading...' + load_from
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+SyntaxError: Missing parentheses in call to 'print'. Did you mean print(...)?
+## nematus-theano Python2/Theano check
+  File "/home/undefined/Desktop/ai/llm-systems-learning-pack/projects/rmsnorm_experiments/nematus-theano/nematus/nmt.py", line 1325
+    print 'Using multilingual iterator'
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+SyntaxError: Missing parentheses in call to 'print'. Did you mean print(...)?
+
+## Attentive_reader entry check
+/home/undefined/Desktop/ai/llm-systems-learning-pack/projects/rmsnorm_experiments/Attentive_reader/codes/att_reader/train_attentive_reader.py
+  File "/home/undefined/Desktop/ai/llm-systems-learning-pack/projects/rmsnorm_experiments/Attentive_reader/codes/att_reader/train_attentive_reader.py", line 34
+    print "The model will be saved to %s" % new_model_name
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+SyntaxError: Missing parentheses in call to 'print'. Did you mean print(...)?

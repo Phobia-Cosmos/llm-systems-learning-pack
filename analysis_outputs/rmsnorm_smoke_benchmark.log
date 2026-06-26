@@ -1,0 +1,13 @@
+torch_version 2.12.1+cpu
+num_threads 1
+device cpu
+formula_max_abs_diff 0.0
+zero_mean_ln_rms_max_abs_diff 4.440892098500626e-16
+rms_rescale_diff 3.5762786865234375e-07
+prms_rescale_diff 7.152557373046875e-07
+ln_rescale_diff 4.76837158203125e-07
+rms_recenter_shift_diff 0.9177456498146057
+ln_recenter_shift_diff 1.1639031072263606e-07
+bench_forward_backward shape (128, 512) layernorm_ms 0.18 rmsnorm_ms 0.422 prmsnorm25_ms 0.343 rms_vs_ln_speedup_pct -134.25 prms_vs_ln_speedup_pct -90.33
+bench_forward_backward shape (128, 1024) layernorm_ms 0.345 rmsnorm_ms 0.809 prmsnorm25_ms 0.655 rms_vs_ln_speedup_pct -134.56 prms_vs_ln_speedup_pct -90.02
+bench_forward_backward shape (128, 4096) layernorm_ms 1.363 rmsnorm_ms 3.21 prmsnorm25_ms 2.662 rms_vs_ln_speedup_pct -135.46 prms_vs_ln_speedup_pct -95.26
