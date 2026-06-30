@@ -1,0 +1,18 @@
+Collecting nvidia-cuda-crt==13.2.78
+  Downloading nvidia_cuda_crt-13.2.78-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (1.7 kB)
+Collecting nvidia-cuda-runtime==13.2.75
+  Downloading nvidia_cuda_runtime-13.2.75-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (1.8 kB)
+Downloading nvidia_cuda_crt-13.2.78-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (133 kB)
+Downloading nvidia_cuda_runtime-13.2.75-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (2.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.3/2.3 MB 1.9 MB/s  0:00:01
+Installing collected packages: nvidia-cuda-runtime, nvidia-cuda-crt
+  Attempting uninstall: nvidia-cuda-runtime
+    Found existing installation: nvidia-cuda-runtime 13.0.96
+    Uninstalling nvidia-cuda-runtime-13.0.96:
+      Successfully uninstalled nvidia-cuda-runtime-13.0.96
+  Attempting uninstall: nvidia-cuda-crt
+    Found existing installation: nvidia-cuda-crt 13.3.33
+    Uninstalling nvidia-cuda-crt-13.3.33:
+      Successfully uninstalled nvidia-cuda-crt-13.3.33
+
+Successfully installed nvidia-cuda-crt-13.2.78 nvidia-cuda-runtime-13.2.75
