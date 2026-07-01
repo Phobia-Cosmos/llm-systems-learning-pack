@@ -1,0 +1,579 @@
+Using pip 26.1.2 from /home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/pip (python 3.12)
+Collecting flash-attn
+  Downloading flash_attn-2.8.3.post1.tar.gz (8.5 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 8.5/8.5 MB 502.6 kB/s  0:00:18
+  Preparing metadata (pyproject.toml): started
+  Running command Preparing metadata (pyproject.toml)
+  /home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/setuptools/_vendor/wheel/bdist_wheel.py:4: FutureWarning: The 'wheel' package is no longer the canonical location of the 'bdist_wheel' command, and will be removed in a future release. Please update to setuptools v70.1 or later which contains an integrated version of this command.
+    warn(
+  /home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/setuptools/dist.py:765: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+  !!
+
+          ********************************************************************************
+          Please consider removing the following classifiers in favor of a SPDX license expression:
+
+          License :: OSI Approved :: BSD License
+
+          See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+          ********************************************************************************
+
+  !!
+    self._finalize_license_expression()
+
+
+  torch.__version__  = 2.11.0+cu130
+
+
+  running dist_info
+  creating /mnt/ubuntu-space/build-tmp/pip-modern-metadata-5edmkxrb/flash_attn.egg-info
+  writing /mnt/ubuntu-space/build-tmp/pip-modern-metadata-5edmkxrb/flash_attn.egg-info/PKG-INFO
+  writing dependency_links to /mnt/ubuntu-space/build-tmp/pip-modern-metadata-5edmkxrb/flash_attn.egg-info/dependency_links.txt
+  writing requirements to /mnt/ubuntu-space/build-tmp/pip-modern-metadata-5edmkxrb/flash_attn.egg-info/requires.txt
+  writing top-level names to /mnt/ubuntu-space/build-tmp/pip-modern-metadata-5edmkxrb/flash_attn.egg-info/top_level.txt
+  writing manifest file '/mnt/ubuntu-space/build-tmp/pip-modern-metadata-5edmkxrb/flash_attn.egg-info/SOURCES.txt'
+  reading manifest file '/mnt/ubuntu-space/build-tmp/pip-modern-metadata-5edmkxrb/flash_attn.egg-info/SOURCES.txt'
+  reading manifest template 'MANIFEST.in'
+  warning: no files found matching '*.cu' under directory 'flash_attn'
+  warning: no files found matching '*.h' under directory 'flash_attn'
+  warning: no files found matching '*.cuh' under directory 'flash_attn'
+  warning: no files found matching '*.cpp' under directory 'flash_attn'
+  warning: no files found matching '*.hpp' under directory 'flash_attn'
+  adding license file 'LICENSE'
+  adding license file 'AUTHORS'
+  writing manifest file '/mnt/ubuntu-space/build-tmp/pip-modern-metadata-5edmkxrb/flash_attn.egg-info/SOURCES.txt'
+  creating '/mnt/ubuntu-space/build-tmp/pip-modern-metadata-5edmkxrb/flash_attn-2.8.3.post1.dist-info'
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Requirement already satisfied: torch in ./.venv-vllm/lib/python3.12/site-packages (from flash-attn) (2.11.0+cu130)
+Requirement already satisfied: einops in ./.venv-vllm/lib/python3.12/site-packages (from flash-attn) (0.8.2)
+Requirement already satisfied: filelock in ./.venv-vllm/lib/python3.12/site-packages (from torch->flash-attn) (3.29.4)
+Requirement already satisfied: typing-extensions>=4.10.0 in ./.venv-vllm/lib/python3.12/site-packages (from torch->flash-attn) (4.15.0)
+Requirement already satisfied: setuptools<82 in ./.venv-vllm/lib/python3.12/site-packages (from torch->flash-attn) (80.10.2)
+Requirement already satisfied: sympy>=1.13.3 in ./.venv-vllm/lib/python3.12/site-packages (from torch->flash-attn) (1.14.0)
+Requirement already satisfied: networkx>=2.5.1 in ./.venv-vllm/lib/python3.12/site-packages (from torch->flash-attn) (3.6.1)
+Requirement already satisfied: jinja2 in ./.venv-vllm/lib/python3.12/site-packages (from torch->flash-attn) (3.1.6)
+Requirement already satisfied: fsspec>=0.8.5 in ./.venv-vllm/lib/python3.12/site-packages (from torch->flash-attn) (2026.6.0)
+Requirement already satisfied: cuda-toolkit==13.0.2 in ./.venv-vllm/lib/python3.12/site-packages (from cuda-toolkit[cublas,cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch->flash-attn) (13.0.2)
+Requirement already satisfied: cuda-bindings<14,>=13.0.3 in ./.venv-vllm/lib/python3.12/site-packages (from torch->flash-attn) (13.3.1)
+Requirement already satisfied: nvidia-cudnn-cu13==9.19.0.56 in ./.venv-vllm/lib/python3.12/site-packages (from torch->flash-attn) (9.19.0.56)
+Requirement already satisfied: nvidia-cusparselt-cu13==0.8.0 in ./.venv-vllm/lib/python3.12/site-packages (from torch->flash-attn) (0.8.0)
+Requirement already satisfied: nvidia-nccl-cu13==2.28.9 in ./.venv-vllm/lib/python3.12/site-packages (from torch->flash-attn) (2.28.9)
+Requirement already satisfied: nvidia-nvshmem-cu13==3.4.5 in ./.venv-vllm/lib/python3.12/site-packages (from torch->flash-attn) (3.4.5)
+Requirement already satisfied: triton==3.6.0 in ./.venv-vllm/lib/python3.12/site-packages (from torch->flash-attn) (3.6.0)
+Requirement already satisfied: nvidia-cublas==13.1.0.3.* in ./.venv-vllm/lib/python3.12/site-packages (from cuda-toolkit[cublas,cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch->flash-attn) (13.1.0.3)
+Collecting nvidia-cuda-runtime==13.0.96.* (from cuda-toolkit[cublas,cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch->flash-attn)
+  Obtaining dependency information for nvidia-cuda-runtime==13.0.96.* from https://files.pythonhosted.org/packages/2e/24/d1558f3b68b1d26e706813b1d10aa1d785e4698c425af8db8edc3dced472/nvidia_cuda_runtime-13.0.96-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata
+  Downloading nvidia_cuda_runtime-13.0.96-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (1.7 kB)
+Requirement already satisfied: nvidia-cufft==12.0.0.61.* in ./.venv-vllm/lib/python3.12/site-packages (from cuda-toolkit[cublas,cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch->flash-attn) (12.0.0.61)
+Requirement already satisfied: nvidia-cufile==1.15.1.6.* in ./.venv-vllm/lib/python3.12/site-packages (from cuda-toolkit[cublas,cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch->flash-attn) (1.15.1.6)
+Requirement already satisfied: nvidia-cuda-cupti==13.0.85.* in ./.venv-vllm/lib/python3.12/site-packages (from cuda-toolkit[cublas,cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch->flash-attn) (13.0.85)
+Requirement already satisfied: nvidia-curand==10.4.0.35.* in ./.venv-vllm/lib/python3.12/site-packages (from cuda-toolkit[cublas,cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch->flash-attn) (10.4.0.35)
+Requirement already satisfied: nvidia-cusolver==12.0.4.66.* in ./.venv-vllm/lib/python3.12/site-packages (from cuda-toolkit[cublas,cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch->flash-attn) (12.0.4.66)
+Requirement already satisfied: nvidia-cusparse==12.6.3.3.* in ./.venv-vllm/lib/python3.12/site-packages (from cuda-toolkit[cublas,cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch->flash-attn) (12.6.3.3)
+Requirement already satisfied: nvidia-nvjitlink==13.0.88.* in ./.venv-vllm/lib/python3.12/site-packages (from cuda-toolkit[cublas,cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch->flash-attn) (13.0.88)
+Requirement already satisfied: nvidia-cuda-nvrtc==13.0.88.* in ./.venv-vllm/lib/python3.12/site-packages (from cuda-toolkit[cublas,cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch->flash-attn) (13.0.88)
+Requirement already satisfied: nvidia-nvtx==13.0.85.* in ./.venv-vllm/lib/python3.12/site-packages (from cuda-toolkit[cublas,cudart,cufft,cufile,cupti,curand,cusolver,cusparse,nvjitlink,nvrtc,nvtx]==13.0.2; platform_system == "Linux"->torch->flash-attn) (13.0.85)
+Requirement already satisfied: cuda-pathfinder>=1.4.2 in ./.venv-vllm/lib/python3.12/site-packages (from cuda-bindings<14,>=13.0.3->torch->flash-attn) (1.5.5)
+Requirement already satisfied: mpmath<1.4,>=1.1.0 in ./.venv-vllm/lib/python3.12/site-packages (from sympy>=1.13.3->torch->flash-attn) (1.3.0)
+Requirement already satisfied: MarkupSafe>=2.0 in ./.venv-vllm/lib/python3.12/site-packages (from jinja2->torch->flash-attn) (3.0.3)
+Downloading nvidia_cuda_runtime-13.0.96-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (2.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.2/2.2 MB 1.5 MB/s  0:00:01
+Building wheels for collected packages: flash-attn
+  Building wheel for flash-attn (pyproject.toml): started
+  Running command Building wheel for flash-attn (pyproject.toml)
+  /home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/setuptools/_vendor/wheel/bdist_wheel.py:4: FutureWarning: The 'wheel' package is no longer the canonical location of the 'bdist_wheel' command, and will be removed in a future release. Please update to setuptools v70.1 or later which contains an integrated version of this command.
+    warn(
+  /home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/setuptools/dist.py:765: SetuptoolsDeprecationWarning: License classifiers are deprecated.
+  !!
+
+          ********************************************************************************
+          Please consider removing the following classifiers in favor of a SPDX license expression:
+
+          License :: OSI Approved :: BSD License
+
+          See https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#license for details.
+          ********************************************************************************
+
+  !!
+    self._finalize_license_expression()
+
+
+  torch.__version__  = 2.11.0+cu130
+
+
+  running bdist_wheel
+  Guessing wheel URL:  https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3.post1/flash_attn-2.8.3.post1+cu13torch2.11cxx11abiTRUE-cp312-cp312-linux_x86_64.whl
+  Precompiled wheel not found. Building from source...
+  running build
+  running build_py
+  creating build/lib.linux-x86_64-cpython-312/flash_attn
+  copying flash_attn/flash_attn_interface.py -> build/lib.linux-x86_64-cpython-312/flash_attn
+  copying flash_attn/bert_padding.py -> build/lib.linux-x86_64-cpython-312/flash_attn
+  copying flash_attn/__init__.py -> build/lib.linux-x86_64-cpython-312/flash_attn
+  copying flash_attn/flash_attn_triton_og.py -> build/lib.linux-x86_64-cpython-312/flash_attn
+  copying flash_attn/flash_blocksparse_attention.py -> build/lib.linux-x86_64-cpython-312/flash_attn
+  copying flash_attn/flash_blocksparse_attn_interface.py -> build/lib.linux-x86_64-cpython-312/flash_attn
+  copying flash_attn/flash_attn_triton.py -> build/lib.linux-x86_64-cpython-312/flash_attn
+  creating build/lib.linux-x86_64-cpython-312/hopper
+  copying hopper/benchmark_attn.py -> build/lib.linux-x86_64-cpython-312/hopper
+  copying hopper/flash_attn_interface.py -> build/lib.linux-x86_64-cpython-312/hopper
+  copying hopper/benchmark_split_kv.py -> build/lib.linux-x86_64-cpython-312/hopper
+  copying hopper/setup.py -> build/lib.linux-x86_64-cpython-312/hopper
+  copying hopper/test_attn_kvcache.py -> build/lib.linux-x86_64-cpython-312/hopper
+  copying hopper/__init__.py -> build/lib.linux-x86_64-cpython-312/hopper
+  copying hopper/benchmark_mla_decode.py -> build/lib.linux-x86_64-cpython-312/hopper
+  copying hopper/test_flash_attn.py -> build/lib.linux-x86_64-cpython-312/hopper
+  copying hopper/test_util.py -> build/lib.linux-x86_64-cpython-312/hopper
+  copying hopper/padding.py -> build/lib.linux-x86_64-cpython-312/hopper
+  copying hopper/test_kvcache.py -> build/lib.linux-x86_64-cpython-312/hopper
+  copying hopper/benchmark_flash_attention_fp8.py -> build/lib.linux-x86_64-cpython-312/hopper
+  copying hopper/generate_kernels.py -> build/lib.linux-x86_64-cpython-312/hopper
+  creating build/lib.linux-x86_64-cpython-312/flash_attn/utils
+  copying flash_attn/utils/pretrained.py -> build/lib.linux-x86_64-cpython-312/flash_attn/utils
+  copying flash_attn/utils/library.py -> build/lib.linux-x86_64-cpython-312/flash_attn/utils
+  copying flash_attn/utils/__init__.py -> build/lib.linux-x86_64-cpython-312/flash_attn/utils
+  copying flash_attn/utils/torch.py -> build/lib.linux-x86_64-cpython-312/flash_attn/utils
+  copying flash_attn/utils/benchmark.py -> build/lib.linux-x86_64-cpython-312/flash_attn/utils
+  copying flash_attn/utils/generation.py -> build/lib.linux-x86_64-cpython-312/flash_attn/utils
+  copying flash_attn/utils/testing.py -> build/lib.linux-x86_64-cpython-312/flash_attn/utils
+  copying flash_attn/utils/distributed.py -> build/lib.linux-x86_64-cpython-312/flash_attn/utils
+  creating build/lib.linux-x86_64-cpython-312/flash_attn/losses
+  copying flash_attn/losses/__init__.py -> build/lib.linux-x86_64-cpython-312/flash_attn/losses
+  copying flash_attn/losses/cross_entropy.py -> build/lib.linux-x86_64-cpython-312/flash_attn/losses
+  creating build/lib.linux-x86_64-cpython-312/flash_attn/layers
+  copying flash_attn/layers/__init__.py -> build/lib.linux-x86_64-cpython-312/flash_attn/layers
+  copying flash_attn/layers/rotary.py -> build/lib.linux-x86_64-cpython-312/flash_attn/layers
+  copying flash_attn/layers/patch_embed.py -> build/lib.linux-x86_64-cpython-312/flash_attn/layers
+  creating build/lib.linux-x86_64-cpython-312/flash_attn/cute
+  copying flash_attn/cute/block_info.py -> build/lib.linux-x86_64-cpython-312/flash_attn/cute
+  copying flash_attn/cute/hopper_helpers.py -> build/lib.linux-x86_64-cpython-312/flash_attn/cute
+  copying flash_attn/cute/interface.py -> build/lib.linux-x86_64-cpython-312/flash_attn/cute
+  copying flash_attn/cute/flash_fwd_sm100.py -> build/lib.linux-x86_64-cpython-312/flash_attn/cute
+  copying flash_attn/cute/ampere_helpers.py -> build/lib.linux-x86_64-cpython-312/flash_attn/cute
+  copying flash_attn/cute/flash_bwd_preprocess.py -> build/lib.linux-x86_64-cpython-312/flash_attn/cute
+  copying flash_attn/cute/seqlen_info.py -> build/lib.linux-x86_64-cpython-312/flash_attn/cute
+  copying flash_attn/cute/fast_math.py -> build/lib.linux-x86_64-cpython-312/flash_attn/cute
+  copying flash_attn/cute/flash_fwd.py -> build/lib.linux-x86_64-cpython-312/flash_attn/cute
+  copying flash_attn/cute/__init__.py -> build/lib.linux-x86_64-cpython-312/flash_attn/cute
+  copying flash_attn/cute/tile_scheduler.py -> build/lib.linux-x86_64-cpython-312/flash_attn/cute
+  copying flash_attn/cute/blackwell_helpers.py -> build/lib.linux-x86_64-cpython-312/flash_attn/cute
+  copying flash_attn/cute/mask.py -> build/lib.linux-x86_64-cpython-312/flash_attn/cute
+  copying flash_attn/cute/flash_bwd_postprocess.py -> build/lib.linux-x86_64-cpython-312/flash_attn/cute
+  copying flash_attn/cute/named_barrier.py -> build/lib.linux-x86_64-cpython-312/flash_attn/cute
+  copying flash_attn/cute/utils.py -> build/lib.linux-x86_64-cpython-312/flash_attn/cute
+  copying flash_attn/cute/flash_bwd.py -> build/lib.linux-x86_64-cpython-312/flash_attn/cute
+  copying flash_attn/cute/softmax.py -> build/lib.linux-x86_64-cpython-312/flash_attn/cute
+  copying flash_attn/cute/pipeline.py -> build/lib.linux-x86_64-cpython-312/flash_attn/cute
+  copying flash_attn/cute/pack_gqa.py -> build/lib.linux-x86_64-cpython-312/flash_attn/cute
+  copying flash_attn/cute/mma_sm100_desc.py -> build/lib.linux-x86_64-cpython-312/flash_attn/cute
+  creating build/lib.linux-x86_64-cpython-312/flash_attn/ops
+  copying flash_attn/ops/rms_norm.py -> build/lib.linux-x86_64-cpython-312/flash_attn/ops
+  copying flash_attn/ops/fused_dense.py -> build/lib.linux-x86_64-cpython-312/flash_attn/ops
+  copying flash_attn/ops/__init__.py -> build/lib.linux-x86_64-cpython-312/flash_attn/ops
+  copying flash_attn/ops/activations.py -> build/lib.linux-x86_64-cpython-312/flash_attn/ops
+  copying flash_attn/ops/layer_norm.py -> build/lib.linux-x86_64-cpython-312/flash_attn/ops
+  creating build/lib.linux-x86_64-cpython-312/flash_attn/modules
+  copying flash_attn/modules/block.py -> build/lib.linux-x86_64-cpython-312/flash_attn/modules
+  copying flash_attn/modules/mlp.py -> build/lib.linux-x86_64-cpython-312/flash_attn/modules
+  copying flash_attn/modules/__init__.py -> build/lib.linux-x86_64-cpython-312/flash_attn/modules
+  copying flash_attn/modules/embedding.py -> build/lib.linux-x86_64-cpython-312/flash_attn/modules
+  copying flash_attn/modules/mha.py -> build/lib.linux-x86_64-cpython-312/flash_attn/modules
+  creating build/lib.linux-x86_64-cpython-312/flash_attn/flash_attn_triton_amd
+  copying flash_attn/flash_attn_triton_amd/bench.py -> build/lib.linux-x86_64-cpython-312/flash_attn/flash_attn_triton_amd
+  copying flash_attn/flash_attn_triton_amd/bwd_prefill_fused.py -> build/lib.linux-x86_64-cpython-312/flash_attn/flash_attn_triton_amd
+  copying flash_attn/flash_attn_triton_amd/bwd_prefill_onekernel.py -> build/lib.linux-x86_64-cpython-312/flash_attn/flash_attn_triton_amd
+  copying flash_attn/flash_attn_triton_amd/bwd_prefill.py -> build/lib.linux-x86_64-cpython-312/flash_attn/flash_attn_triton_amd
+  copying flash_attn/flash_attn_triton_amd/fwd_decode.py -> build/lib.linux-x86_64-cpython-312/flash_attn/flash_attn_triton_amd
+  copying flash_attn/flash_attn_triton_amd/fp8.py -> build/lib.linux-x86_64-cpython-312/flash_attn/flash_attn_triton_amd
+  copying flash_attn/flash_attn_triton_amd/__init__.py -> build/lib.linux-x86_64-cpython-312/flash_attn/flash_attn_triton_amd
+  copying flash_attn/flash_attn_triton_amd/train.py -> build/lib.linux-x86_64-cpython-312/flash_attn/flash_attn_triton_amd
+  copying flash_attn/flash_attn_triton_amd/test.py -> build/lib.linux-x86_64-cpython-312/flash_attn/flash_attn_triton_amd
+  copying flash_attn/flash_attn_triton_amd/fwd_ref.py -> build/lib.linux-x86_64-cpython-312/flash_attn/flash_attn_triton_amd
+  copying flash_attn/flash_attn_triton_amd/utils.py -> build/lib.linux-x86_64-cpython-312/flash_attn/flash_attn_triton_amd
+  copying flash_attn/flash_attn_triton_amd/interface_fa.py -> build/lib.linux-x86_64-cpython-312/flash_attn/flash_attn_triton_amd
+  copying flash_attn/flash_attn_triton_amd/bwd_prefill_split.py -> build/lib.linux-x86_64-cpython-312/flash_attn/flash_attn_triton_amd
+  copying flash_attn/flash_attn_triton_amd/fwd_prefill.py -> build/lib.linux-x86_64-cpython-312/flash_attn/flash_attn_triton_amd
+  copying flash_attn/flash_attn_triton_amd/bwd_ref.py -> build/lib.linux-x86_64-cpython-312/flash_attn/flash_attn_triton_amd
+  creating build/lib.linux-x86_64-cpython-312/flash_attn/models
+  copying flash_attn/models/bigcode.py -> build/lib.linux-x86_64-cpython-312/flash_attn/models
+  copying flash_attn/models/__init__.py -> build/lib.linux-x86_64-cpython-312/flash_attn/models
+  copying flash_attn/models/gpt.py -> build/lib.linux-x86_64-cpython-312/flash_attn/models
+  copying flash_attn/models/falcon.py -> build/lib.linux-x86_64-cpython-312/flash_attn/models
+  copying flash_attn/models/vit.py -> build/lib.linux-x86_64-cpython-312/flash_attn/models
+  copying flash_attn/models/gptj.py -> build/lib.linux-x86_64-cpython-312/flash_attn/models
+  copying flash_attn/models/btlm.py -> build/lib.linux-x86_64-cpython-312/flash_attn/models
+  copying flash_attn/models/llama.py -> build/lib.linux-x86_64-cpython-312/flash_attn/models
+  copying flash_attn/models/gpt_neox.py -> build/lib.linux-x86_64-cpython-312/flash_attn/models
+  copying flash_attn/models/opt.py -> build/lib.linux-x86_64-cpython-312/flash_attn/models
+  copying flash_attn/models/baichuan.py -> build/lib.linux-x86_64-cpython-312/flash_attn/models
+  copying flash_attn/models/bert.py -> build/lib.linux-x86_64-cpython-312/flash_attn/models
+  creating build/lib.linux-x86_64-cpython-312/flash_attn/ops/triton
+  copying flash_attn/ops/triton/mlp.py -> build/lib.linux-x86_64-cpython-312/flash_attn/ops/triton
+  copying flash_attn/ops/triton/__init__.py -> build/lib.linux-x86_64-cpython-312/flash_attn/ops/triton
+  copying flash_attn/ops/triton/k_activations.py -> build/lib.linux-x86_64-cpython-312/flash_attn/ops/triton
+  copying flash_attn/ops/triton/rotary.py -> build/lib.linux-x86_64-cpython-312/flash_attn/ops/triton
+  copying flash_attn/ops/triton/linear.py -> build/lib.linux-x86_64-cpython-312/flash_attn/ops/triton
+  copying flash_attn/ops/triton/cross_entropy.py -> build/lib.linux-x86_64-cpython-312/flash_attn/ops/triton
+  copying flash_attn/ops/triton/layer_norm.py -> build/lib.linux-x86_64-cpython-312/flash_attn/ops/triton
+  running build_ext
+  building 'flash_attn_2_cuda' extension
+  creating /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/build/temp.linux-x86_64-cpython-312/csrc/flash_attn
+  creating /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/build/temp.linux-x86_64-cpython-312/csrc/flash_attn/src
+  [1/73] c++ -MMD -MF /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/build/temp.linux-x86_64-cpython-312/csrc/flash_attn/flash_api.o.d -fno-strict-overflow -Wsign-compare -DNDEBUG -g -O2 -Wall -fPIC -I/mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn -I/mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn/src -I/mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include -I/home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/torch/include -I/home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/torch/include/torch/csrc/api/include -I/usr/local/cuda-13.0/include -I/home/undefined/Desktop/ai/.venv-vllm/include -I/usr/include/python3.12 -c -c /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn/flash_api.cpp -o /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/build/temp.linux-x86_64-cpython-312/csrc/flash_attn/flash_api.o -O3 -std=c++17 -DTORCH_API_INCLUDE_EXTENSION_H -DTORCH_EXTENSION_NAME=flash_attn_2_cuda
+  In file included from /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/integer_subbyte.h:47,
+                   from /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/numeric_types.h:40,
+                   from /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn/flash_api.cpp:13:
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:599:21: warning: ‘long4’ is deprecated: use long4_16a or long4_32a [-Wdeprecated-declarations]
+    599 | struct alignment_of<long4> {
+        |                     ^~~~~
+  In file included from /usr/local/cuda-13.0/include/driver_types.h:61,
+                   from /usr/local/cuda-13.0/include/builtin_types.h:59,
+                   from /usr/local/cuda-13.0/include/cuda_runtime.h:90,
+                   from /home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/torch/include/c10/cuda/CUDAMiscFunctions.h:7,
+                   from /home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/torch/include/c10/cuda/CUDAException.h:6,
+                   from /home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/torch/include/c10/cuda/CUDAAllocatorConfig.h:5,
+                   from /home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/torch/include/c10/cuda/CUDACachingAllocator.h:6,
+                   from /home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/torch/include/c10/cuda/impl/CUDAGuardImpl.h:9,
+                   from /home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/torch/include/c10/cuda/CUDAGuard.h:8,
+                   from /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn/flash_api.cpp:8:
+  /usr/local/cuda-13.0/include/vector_types.h:532:98: note: declared here
+    532 | typedef __device_builtin__ struct long4 __VECTOR_TYPE_DEPRECATED__("use long4_16a or long4_32a") long4;
+        |                                                                                                  ^~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:603:21: warning: ‘ulong4’ is deprecated: use ulong4_16a or ulong4_32a [-Wdeprecated-declarations]
+    603 | struct alignment_of<ulong4> {
+        |                     ^~~~~~
+  /usr/local/cuda-13.0/include/vector_types.h:533:101: note: declared here
+    533 | typedef __device_builtin__ struct ulong4 __VECTOR_TYPE_DEPRECATED__("use ulong4_16a or ulong4_32a") ulong4;
+        |                                                                                                     ^~~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:619:21: warning: ‘longlong4’ is deprecated: use longlong4_16a or longlong4_32a [-Wdeprecated-declarations]
+    619 | struct alignment_of<longlong4> {
+        |                     ^~~~~~~~~
+  /usr/local/cuda-13.0/include/vector_types.h:550:110: note: declared here
+    550 | typedef __device_builtin__ struct longlong4 __VECTOR_TYPE_DEPRECATED__("use longlong4_16a or longlong4_32a") longlong4;
+        |                                                                                                              ^~~~~~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:623:21: warning: ‘ulonglong4’ is deprecated: use ulonglong4_16a or ulonglong4_32a [-Wdeprecated-declarations]
+    623 | struct alignment_of<ulonglong4> {
+        |                     ^~~~~~~~~~
+  /usr/local/cuda-13.0/include/vector_types.h:551:113: note: declared here
+    551 | typedef __device_builtin__ struct ulonglong4 __VECTOR_TYPE_DEPRECATED__("use ulonglong4_16a or ulonglong4_32a") ulonglong4;
+        |                                                                                                                 ^~~~~~~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:627:21: warning: ‘double4’ is deprecated: use double4_16a or double4_32a [-Wdeprecated-declarations]
+    627 | struct alignment_of<double4> {
+        |                     ^~~~~~~
+  /usr/local/cuda-13.0/include/vector_types.h:561:104: note: declared here
+    561 | typedef __device_builtin__ struct double4 __VECTOR_TYPE_DEPRECATED__("use double4_16a or double4_32a") double4;
+        |                                                                                                        ^~~~~~~
+  [2/73] /usr/local/cuda-13.0/bin/nvcc -MD -MF /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/build/temp.linux-x86_64-cpython-312/csrc/flash_attn/src/flash_bwd_hdim128_bf16_causal_sm80.o.d -I/mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn -I/mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn/src -I/mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include -I/home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/torch/include -I/home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/torch/include/torch/csrc/api/include -I/usr/local/cuda-13.0/include -I/home/undefined/Desktop/ai/.venv-vllm/include -I/usr/include/python3.12 -c -c /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn/src/flash_bwd_hdim128_bf16_causal_sm80.cu -o /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/build/temp.linux-x86_64-cpython-312/csrc/flash_attn/src/flash_bwd_hdim128_bf16_causal_sm80.o -D__CUDA_NO_HALF_OPERATORS__ -D__CUDA_NO_HALF_CONVERSIONS__ -D__CUDA_NO_BFLOAT16_CONVERSIONS__ -D__CUDA_NO_HALF2_OPERATORS__ --expt-relaxed-constexpr --compiler-options ''"'"'-fPIC'"'"'' -O3 -std=c++17 -U__CUDA_NO_HALF_OPERATORS__ -U__CUDA_NO_HALF_CONVERSIONS__ -U__CUDA_NO_HALF2_OPERATORS__ -U__CUDA_NO_BFLOAT16_CONVERSIONS__ --expt-relaxed-constexpr --expt-extended-lambda --use_fast_math -gencode arch=compute_80,code=sm_80 -gencode arch=compute_90,code=sm_90 -gencode arch=compute_100,code=sm_100 -gencode arch=compute_120,code=sm_120 --threads 1 -DTORCH_API_INCLUDE_EXTENSION_H -DTORCH_EXTENSION_NAME=flash_attn_2_cuda
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:599:33: warning: ‘long4’ is deprecated: use long4_16a or long4_32a [-Wdeprecated-declarations]
+    599 | struct alignment_of<long4> {
+        |                                 ^
+  In file included from /usr/local/cuda-13.0/include/driver_types.h:61,
+                   from /usr/local/cuda-13.0/include/builtin_types.h:59,
+                   from /usr/local/cuda-13.0/include/crt/host_runtime.h:58,
+                   from /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h:218:
+  /usr/local/cuda-13.0/include/vector_types.h:532:98: note: declared here
+    532 | typedef __device_builtin__ struct long4 __VECTOR_TYPE_DEPRECATED__("use long4_16a or long4_32a") long4;
+        |                                                                                                  ^~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:603:33: warning: ‘ulong4’ is deprecated: use ulong4_16a or ulong4_32a [-Wdeprecated-declarations]
+    603 | struct alignment_of<ulong4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:533:101: note: declared here
+    533 | typedef __device_builtin__ struct ulong4 __VECTOR_TYPE_DEPRECATED__("use ulong4_16a or ulong4_32a") ulong4;
+        |                                                                                                     ^~~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:619:33: warning: ‘longlong4’ is deprecated: use longlong4_16a or longlong4_32a [-Wdeprecated-declarations]
+    619 | struct alignment_of<longlong4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:550:110: note: declared here
+    550 | typedef __device_builtin__ struct longlong4 __VECTOR_TYPE_DEPRECATED__("use longlong4_16a or longlong4_32a") longlong4;
+        |                                                                                                              ^~~~~~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:623:33: warning: ‘ulonglong4’ is deprecated: use ulonglong4_16a or ulonglong4_32a [-Wdeprecated-declarations]
+    623 | struct alignment_of<ulonglong4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:551:113: note: declared here
+    551 | typedef __device_builtin__ struct ulonglong4 __VECTOR_TYPE_DEPRECATED__("use ulonglong4_16a or ulonglong4_32a") ulonglong4;
+        |                                                                                                                 ^~~~~~~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:627:33: warning: ‘double4’ is deprecated: use double4_16a or double4_32a [-Wdeprecated-declarations]
+    627 | struct alignment_of<double4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:561:104: note: declared here
+    561 | typedef __device_builtin__ struct double4 __VECTOR_TYPE_DEPRECATED__("use double4_16a or double4_32a") double4;
+        |                                                                                                        ^~~~~~~
+  [3/73] /usr/local/cuda-13.0/bin/nvcc -MD -MF /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/build/temp.linux-x86_64-cpython-312/csrc/flash_attn/src/flash_bwd_hdim128_bf16_sm80.o.d -I/mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn -I/mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn/src -I/mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include -I/home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/torch/include -I/home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/torch/include/torch/csrc/api/include -I/usr/local/cuda-13.0/include -I/home/undefined/Desktop/ai/.venv-vllm/include -I/usr/include/python3.12 -c -c /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn/src/flash_bwd_hdim128_bf16_sm80.cu -o /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/build/temp.linux-x86_64-cpython-312/csrc/flash_attn/src/flash_bwd_hdim128_bf16_sm80.o -D__CUDA_NO_HALF_OPERATORS__ -D__CUDA_NO_HALF_CONVERSIONS__ -D__CUDA_NO_BFLOAT16_CONVERSIONS__ -D__CUDA_NO_HALF2_OPERATORS__ --expt-relaxed-constexpr --compiler-options ''"'"'-fPIC'"'"'' -O3 -std=c++17 -U__CUDA_NO_HALF_OPERATORS__ -U__CUDA_NO_HALF_CONVERSIONS__ -U__CUDA_NO_HALF2_OPERATORS__ -U__CUDA_NO_BFLOAT16_CONVERSIONS__ --expt-relaxed-constexpr --expt-extended-lambda --use_fast_math -gencode arch=compute_80,code=sm_80 -gencode arch=compute_90,code=sm_90 -gencode arch=compute_100,code=sm_100 -gencode arch=compute_120,code=sm_120 --threads 1 -DTORCH_API_INCLUDE_EXTENSION_H -DTORCH_EXTENSION_NAME=flash_attn_2_cuda
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:599:33: warning: ‘long4’ is deprecated: use long4_16a or long4_32a [-Wdeprecated-declarations]
+    599 | struct alignment_of<long4> {
+        |                                 ^
+  In file included from /usr/local/cuda-13.0/include/driver_types.h:61,
+                   from /usr/local/cuda-13.0/include/builtin_types.h:59,
+                   from /usr/local/cuda-13.0/include/crt/host_runtime.h:58,
+                   from /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h:218:
+  /usr/local/cuda-13.0/include/vector_types.h:532:98: note: declared here
+    532 | typedef __device_builtin__ struct long4 __VECTOR_TYPE_DEPRECATED__("use long4_16a or long4_32a") long4;
+        |                                                                                                  ^~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:603:33: warning: ‘ulong4’ is deprecated: use ulong4_16a or ulong4_32a [-Wdeprecated-declarations]
+    603 | struct alignment_of<ulong4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:533:101: note: declared here
+    533 | typedef __device_builtin__ struct ulong4 __VECTOR_TYPE_DEPRECATED__("use ulong4_16a or ulong4_32a") ulong4;
+        |                                                                                                     ^~~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:619:33: warning: ‘longlong4’ is deprecated: use longlong4_16a or longlong4_32a [-Wdeprecated-declarations]
+    619 | struct alignment_of<longlong4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:550:110: note: declared here
+    550 | typedef __device_builtin__ struct longlong4 __VECTOR_TYPE_DEPRECATED__("use longlong4_16a or longlong4_32a") longlong4;
+        |                                                                                                              ^~~~~~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:623:33: warning: ‘ulonglong4’ is deprecated: use ulonglong4_16a or ulonglong4_32a [-Wdeprecated-declarations]
+    623 | struct alignment_of<ulonglong4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:551:113: note: declared here
+    551 | typedef __device_builtin__ struct ulonglong4 __VECTOR_TYPE_DEPRECATED__("use ulonglong4_16a or ulonglong4_32a") ulonglong4;
+        |                                                                                                                 ^~~~~~~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:627:33: warning: ‘double4’ is deprecated: use double4_16a or double4_32a [-Wdeprecated-declarations]
+    627 | struct alignment_of<double4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:561:104: note: declared here
+    561 | typedef __device_builtin__ struct double4 __VECTOR_TYPE_DEPRECATED__("use double4_16a or double4_32a") double4;
+        |                                                                                                        ^~~~~~~
+  [4/73] /usr/local/cuda-13.0/bin/nvcc -MD -MF /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/build/temp.linux-x86_64-cpython-312/csrc/flash_attn/src/flash_bwd_hdim128_fp16_causal_sm80.o.d -I/mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn -I/mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn/src -I/mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include -I/home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/torch/include -I/home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/torch/include/torch/csrc/api/include -I/usr/local/cuda-13.0/include -I/home/undefined/Desktop/ai/.venv-vllm/include -I/usr/include/python3.12 -c -c /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn/src/flash_bwd_hdim128_fp16_causal_sm80.cu -o /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/build/temp.linux-x86_64-cpython-312/csrc/flash_attn/src/flash_bwd_hdim128_fp16_causal_sm80.o -D__CUDA_NO_HALF_OPERATORS__ -D__CUDA_NO_HALF_CONVERSIONS__ -D__CUDA_NO_BFLOAT16_CONVERSIONS__ -D__CUDA_NO_HALF2_OPERATORS__ --expt-relaxed-constexpr --compiler-options ''"'"'-fPIC'"'"'' -O3 -std=c++17 -U__CUDA_NO_HALF_OPERATORS__ -U__CUDA_NO_HALF_CONVERSIONS__ -U__CUDA_NO_HALF2_OPERATORS__ -U__CUDA_NO_BFLOAT16_CONVERSIONS__ --expt-relaxed-constexpr --expt-extended-lambda --use_fast_math -gencode arch=compute_80,code=sm_80 -gencode arch=compute_90,code=sm_90 -gencode arch=compute_100,code=sm_100 -gencode arch=compute_120,code=sm_120 --threads 1 -DTORCH_API_INCLUDE_EXTENSION_H -DTORCH_EXTENSION_NAME=flash_attn_2_cuda
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:599:33: warning: ‘long4’ is deprecated: use long4_16a or long4_32a [-Wdeprecated-declarations]
+    599 | struct alignment_of<long4> {
+        |                                 ^
+  In file included from /usr/local/cuda-13.0/include/driver_types.h:61,
+                   from /usr/local/cuda-13.0/include/builtin_types.h:59,
+                   from /usr/local/cuda-13.0/include/crt/host_runtime.h:58,
+                   from /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h:218:
+  /usr/local/cuda-13.0/include/vector_types.h:532:98: note: declared here
+    532 | typedef __device_builtin__ struct long4 __VECTOR_TYPE_DEPRECATED__("use long4_16a or long4_32a") long4;
+        |                                                                                                  ^~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:603:33: warning: ‘ulong4’ is deprecated: use ulong4_16a or ulong4_32a [-Wdeprecated-declarations]
+    603 | struct alignment_of<ulong4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:533:101: note: declared here
+    533 | typedef __device_builtin__ struct ulong4 __VECTOR_TYPE_DEPRECATED__("use ulong4_16a or ulong4_32a") ulong4;
+        |                                                                                                     ^~~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:619:33: warning: ‘longlong4’ is deprecated: use longlong4_16a or longlong4_32a [-Wdeprecated-declarations]
+    619 | struct alignment_of<longlong4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:550:110: note: declared here
+    550 | typedef __device_builtin__ struct longlong4 __VECTOR_TYPE_DEPRECATED__("use longlong4_16a or longlong4_32a") longlong4;
+        |                                                                                                              ^~~~~~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:623:33: warning: ‘ulonglong4’ is deprecated: use ulonglong4_16a or ulonglong4_32a [-Wdeprecated-declarations]
+    623 | struct alignment_of<ulonglong4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:551:113: note: declared here
+    551 | typedef __device_builtin__ struct ulonglong4 __VECTOR_TYPE_DEPRECATED__("use ulonglong4_16a or ulonglong4_32a") ulonglong4;
+        |                                                                                                                 ^~~~~~~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:627:33: warning: ‘double4’ is deprecated: use double4_16a or double4_32a [-Wdeprecated-declarations]
+    627 | struct alignment_of<double4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:561:104: note: declared here
+    561 | typedef __device_builtin__ struct double4 __VECTOR_TYPE_DEPRECATED__("use double4_16a or double4_32a") double4;
+        |                                                                                                        ^~~~~~~
+  [5/73] /usr/local/cuda-13.0/bin/nvcc -MD -MF /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/build/temp.linux-x86_64-cpython-312/csrc/flash_attn/src/flash_bwd_hdim128_fp16_sm80.o.d -I/mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn -I/mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn/src -I/mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include -I/home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/torch/include -I/home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/torch/include/torch/csrc/api/include -I/usr/local/cuda-13.0/include -I/home/undefined/Desktop/ai/.venv-vllm/include -I/usr/include/python3.12 -c -c /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn/src/flash_bwd_hdim128_fp16_sm80.cu -o /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/build/temp.linux-x86_64-cpython-312/csrc/flash_attn/src/flash_bwd_hdim128_fp16_sm80.o -D__CUDA_NO_HALF_OPERATORS__ -D__CUDA_NO_HALF_CONVERSIONS__ -D__CUDA_NO_BFLOAT16_CONVERSIONS__ -D__CUDA_NO_HALF2_OPERATORS__ --expt-relaxed-constexpr --compiler-options ''"'"'-fPIC'"'"'' -O3 -std=c++17 -U__CUDA_NO_HALF_OPERATORS__ -U__CUDA_NO_HALF_CONVERSIONS__ -U__CUDA_NO_HALF2_OPERATORS__ -U__CUDA_NO_BFLOAT16_CONVERSIONS__ --expt-relaxed-constexpr --expt-extended-lambda --use_fast_math -gencode arch=compute_80,code=sm_80 -gencode arch=compute_90,code=sm_90 -gencode arch=compute_100,code=sm_100 -gencode arch=compute_120,code=sm_120 --threads 1 -DTORCH_API_INCLUDE_EXTENSION_H -DTORCH_EXTENSION_NAME=flash_attn_2_cuda
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:599:33: warning: ‘long4’ is deprecated: use long4_16a or long4_32a [-Wdeprecated-declarations]
+    599 | struct alignment_of<long4> {
+        |                                 ^
+  In file included from /usr/local/cuda-13.0/include/driver_types.h:61,
+                   from /usr/local/cuda-13.0/include/builtin_types.h:59,
+                   from /usr/local/cuda-13.0/include/crt/host_runtime.h:58,
+                   from /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h:218:
+  /usr/local/cuda-13.0/include/vector_types.h:532:98: note: declared here
+    532 | typedef __device_builtin__ struct long4 __VECTOR_TYPE_DEPRECATED__("use long4_16a or long4_32a") long4;
+        |                                                                                                  ^~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:603:33: warning: ‘ulong4’ is deprecated: use ulong4_16a or ulong4_32a [-Wdeprecated-declarations]
+    603 | struct alignment_of<ulong4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:533:101: note: declared here
+    533 | typedef __device_builtin__ struct ulong4 __VECTOR_TYPE_DEPRECATED__("use ulong4_16a or ulong4_32a") ulong4;
+        |                                                                                                     ^~~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:619:33: warning: ‘longlong4’ is deprecated: use longlong4_16a or longlong4_32a [-Wdeprecated-declarations]
+    619 | struct alignment_of<longlong4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:550:110: note: declared here
+    550 | typedef __device_builtin__ struct longlong4 __VECTOR_TYPE_DEPRECATED__("use longlong4_16a or longlong4_32a") longlong4;
+        |                                                                                                              ^~~~~~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:623:33: warning: ‘ulonglong4’ is deprecated: use ulonglong4_16a or ulonglong4_32a [-Wdeprecated-declarations]
+    623 | struct alignment_of<ulonglong4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:551:113: note: declared here
+    551 | typedef __device_builtin__ struct ulonglong4 __VECTOR_TYPE_DEPRECATED__("use ulonglong4_16a or ulonglong4_32a") ulonglong4;
+        |                                                                                                                 ^~~~~~~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:627:33: warning: ‘double4’ is deprecated: use double4_16a or double4_32a [-Wdeprecated-declarations]
+    627 | struct alignment_of<double4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:561:104: note: declared here
+    561 | typedef __device_builtin__ struct double4 __VECTOR_TYPE_DEPRECATED__("use double4_16a or double4_32a") double4;
+        |                                                                                                        ^~~~~~~
+  [6/73] /usr/local/cuda-13.0/bin/nvcc -MD -MF /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/build/temp.linux-x86_64-cpython-312/csrc/flash_attn/src/flash_bwd_hdim192_bf16_causal_sm80.o.d -I/mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn -I/mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn/src -I/mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include -I/home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/torch/include -I/home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/torch/include/torch/csrc/api/include -I/usr/local/cuda-13.0/include -I/home/undefined/Desktop/ai/.venv-vllm/include -I/usr/include/python3.12 -c -c /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn/src/flash_bwd_hdim192_bf16_causal_sm80.cu -o /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/build/temp.linux-x86_64-cpython-312/csrc/flash_attn/src/flash_bwd_hdim192_bf16_causal_sm80.o -D__CUDA_NO_HALF_OPERATORS__ -D__CUDA_NO_HALF_CONVERSIONS__ -D__CUDA_NO_BFLOAT16_CONVERSIONS__ -D__CUDA_NO_HALF2_OPERATORS__ --expt-relaxed-constexpr --compiler-options ''"'"'-fPIC'"'"'' -O3 -std=c++17 -U__CUDA_NO_HALF_OPERATORS__ -U__CUDA_NO_HALF_CONVERSIONS__ -U__CUDA_NO_HALF2_OPERATORS__ -U__CUDA_NO_BFLOAT16_CONVERSIONS__ --expt-relaxed-constexpr --expt-extended-lambda --use_fast_math -gencode arch=compute_80,code=sm_80 -gencode arch=compute_90,code=sm_90 -gencode arch=compute_100,code=sm_100 -gencode arch=compute_120,code=sm_120 --threads 1 -DTORCH_API_INCLUDE_EXTENSION_H -DTORCH_EXTENSION_NAME=flash_attn_2_cuda
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:599:33: warning: ‘long4’ is deprecated: use long4_16a or long4_32a [-Wdeprecated-declarations]
+    599 | struct alignment_of<long4> {
+        |                                 ^
+  In file included from /usr/local/cuda-13.0/include/driver_types.h:61,
+                   from /usr/local/cuda-13.0/include/builtin_types.h:59,
+                   from /usr/local/cuda-13.0/include/crt/host_runtime.h:58,
+                   from /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h:218:
+  /usr/local/cuda-13.0/include/vector_types.h:532:98: note: declared here
+    532 | typedef __device_builtin__ struct long4 __VECTOR_TYPE_DEPRECATED__("use long4_16a or long4_32a") long4;
+        |                                                                                                  ^~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:603:33: warning: ‘ulong4’ is deprecated: use ulong4_16a or ulong4_32a [-Wdeprecated-declarations]
+    603 | struct alignment_of<ulong4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:533:101: note: declared here
+    533 | typedef __device_builtin__ struct ulong4 __VECTOR_TYPE_DEPRECATED__("use ulong4_16a or ulong4_32a") ulong4;
+        |                                                                                                     ^~~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:619:33: warning: ‘longlong4’ is deprecated: use longlong4_16a or longlong4_32a [-Wdeprecated-declarations]
+    619 | struct alignment_of<longlong4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:550:110: note: declared here
+    550 | typedef __device_builtin__ struct longlong4 __VECTOR_TYPE_DEPRECATED__("use longlong4_16a or longlong4_32a") longlong4;
+        |                                                                                                              ^~~~~~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:623:33: warning: ‘ulonglong4’ is deprecated: use ulonglong4_16a or ulonglong4_32a [-Wdeprecated-declarations]
+    623 | struct alignment_of<ulonglong4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:551:113: note: declared here
+    551 | typedef __device_builtin__ struct ulonglong4 __VECTOR_TYPE_DEPRECATED__("use ulonglong4_16a or ulonglong4_32a") ulonglong4;
+        |                                                                                                                 ^~~~~~~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:627:33: warning: ‘double4’ is deprecated: use double4_16a or double4_32a [-Wdeprecated-declarations]
+    627 | struct alignment_of<double4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:561:104: note: declared here
+    561 | typedef __device_builtin__ struct double4 __VECTOR_TYPE_DEPRECATED__("use double4_16a or double4_32a") double4;
+        |                                                                                                        ^~~~~~~
+  [7/73] /usr/local/cuda-13.0/bin/nvcc -MD -MF /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/build/temp.linux-x86_64-cpython-312/csrc/flash_attn/src/flash_bwd_hdim192_bf16_sm80.o.d -I/mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn -I/mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn/src -I/mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include -I/home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/torch/include -I/home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/torch/include/torch/csrc/api/include -I/usr/local/cuda-13.0/include -I/home/undefined/Desktop/ai/.venv-vllm/include -I/usr/include/python3.12 -c -c /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn/src/flash_bwd_hdim192_bf16_sm80.cu -o /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/build/temp.linux-x86_64-cpython-312/csrc/flash_attn/src/flash_bwd_hdim192_bf16_sm80.o -D__CUDA_NO_HALF_OPERATORS__ -D__CUDA_NO_HALF_CONVERSIONS__ -D__CUDA_NO_BFLOAT16_CONVERSIONS__ -D__CUDA_NO_HALF2_OPERATORS__ --expt-relaxed-constexpr --compiler-options ''"'"'-fPIC'"'"'' -O3 -std=c++17 -U__CUDA_NO_HALF_OPERATORS__ -U__CUDA_NO_HALF_CONVERSIONS__ -U__CUDA_NO_HALF2_OPERATORS__ -U__CUDA_NO_BFLOAT16_CONVERSIONS__ --expt-relaxed-constexpr --expt-extended-lambda --use_fast_math -gencode arch=compute_80,code=sm_80 -gencode arch=compute_90,code=sm_90 -gencode arch=compute_100,code=sm_100 -gencode arch=compute_120,code=sm_120 --threads 1 -DTORCH_API_INCLUDE_EXTENSION_H -DTORCH_EXTENSION_NAME=flash_attn_2_cuda
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:599:33: warning: ‘long4’ is deprecated: use long4_16a or long4_32a [-Wdeprecated-declarations]
+    599 | struct alignment_of<long4> {
+        |                                 ^
+  In file included from /usr/local/cuda-13.0/include/driver_types.h:61,
+                   from /usr/local/cuda-13.0/include/builtin_types.h:59,
+                   from /usr/local/cuda-13.0/include/crt/host_runtime.h:58,
+                   from /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h:218:
+  /usr/local/cuda-13.0/include/vector_types.h:532:98: note: declared here
+    532 | typedef __device_builtin__ struct long4 __VECTOR_TYPE_DEPRECATED__("use long4_16a or long4_32a") long4;
+        |                                                                                                  ^~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:603:33: warning: ‘ulong4’ is deprecated: use ulong4_16a or ulong4_32a [-Wdeprecated-declarations]
+    603 | struct alignment_of<ulong4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:533:101: note: declared here
+    533 | typedef __device_builtin__ struct ulong4 __VECTOR_TYPE_DEPRECATED__("use ulong4_16a or ulong4_32a") ulong4;
+        |                                                                                                     ^~~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:619:33: warning: ‘longlong4’ is deprecated: use longlong4_16a or longlong4_32a [-Wdeprecated-declarations]
+    619 | struct alignment_of<longlong4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:550:110: note: declared here
+    550 | typedef __device_builtin__ struct longlong4 __VECTOR_TYPE_DEPRECATED__("use longlong4_16a or longlong4_32a") longlong4;
+        |                                                                                                              ^~~~~~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:623:33: warning: ‘ulonglong4’ is deprecated: use ulonglong4_16a or ulonglong4_32a [-Wdeprecated-declarations]
+    623 | struct alignment_of<ulonglong4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:551:113: note: declared here
+    551 | typedef __device_builtin__ struct ulonglong4 __VECTOR_TYPE_DEPRECATED__("use ulonglong4_16a or ulonglong4_32a") ulonglong4;
+        |                                                                                                                 ^~~~~~~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:627:33: warning: ‘double4’ is deprecated: use double4_16a or double4_32a [-Wdeprecated-declarations]
+    627 | struct alignment_of<double4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:561:104: note: declared here
+    561 | typedef __device_builtin__ struct double4 __VECTOR_TYPE_DEPRECATED__("use double4_16a or double4_32a") double4;
+        |                                                                                                        ^~~~~~~
+  [8/73] /usr/local/cuda-13.0/bin/nvcc -MD -MF /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/build/temp.linux-x86_64-cpython-312/csrc/flash_attn/src/flash_bwd_hdim192_fp16_causal_sm80.o.d -I/mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn -I/mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn/src -I/mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include -I/home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/torch/include -I/home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/torch/include/torch/csrc/api/include -I/usr/local/cuda-13.0/include -I/home/undefined/Desktop/ai/.venv-vllm/include -I/usr/include/python3.12 -c -c /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn/src/flash_bwd_hdim192_fp16_causal_sm80.cu -o /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/build/temp.linux-x86_64-cpython-312/csrc/flash_attn/src/flash_bwd_hdim192_fp16_causal_sm80.o -D__CUDA_NO_HALF_OPERATORS__ -D__CUDA_NO_HALF_CONVERSIONS__ -D__CUDA_NO_BFLOAT16_CONVERSIONS__ -D__CUDA_NO_HALF2_OPERATORS__ --expt-relaxed-constexpr --compiler-options ''"'"'-fPIC'"'"'' -O3 -std=c++17 -U__CUDA_NO_HALF_OPERATORS__ -U__CUDA_NO_HALF_CONVERSIONS__ -U__CUDA_NO_HALF2_OPERATORS__ -U__CUDA_NO_BFLOAT16_CONVERSIONS__ --expt-relaxed-constexpr --expt-extended-lambda --use_fast_math -gencode arch=compute_80,code=sm_80 -gencode arch=compute_90,code=sm_90 -gencode arch=compute_100,code=sm_100 -gencode arch=compute_120,code=sm_120 --threads 1 -DTORCH_API_INCLUDE_EXTENSION_H -DTORCH_EXTENSION_NAME=flash_attn_2_cuda
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:599:33: warning: ‘long4’ is deprecated: use long4_16a or long4_32a [-Wdeprecated-declarations]
+    599 | struct alignment_of<long4> {
+        |                                 ^
+  In file included from /usr/local/cuda-13.0/include/driver_types.h:61,
+                   from /usr/local/cuda-13.0/include/builtin_types.h:59,
+                   from /usr/local/cuda-13.0/include/crt/host_runtime.h:58,
+                   from /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h:218:
+  /usr/local/cuda-13.0/include/vector_types.h:532:98: note: declared here
+    532 | typedef __device_builtin__ struct long4 __VECTOR_TYPE_DEPRECATED__("use long4_16a or long4_32a") long4;
+        |                                                                                                  ^~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:603:33: warning: ‘ulong4’ is deprecated: use ulong4_16a or ulong4_32a [-Wdeprecated-declarations]
+    603 | struct alignment_of<ulong4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:533:101: note: declared here
+    533 | typedef __device_builtin__ struct ulong4 __VECTOR_TYPE_DEPRECATED__("use ulong4_16a or ulong4_32a") ulong4;
+        |                                                                                                     ^~~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:619:33: warning: ‘longlong4’ is deprecated: use longlong4_16a or longlong4_32a [-Wdeprecated-declarations]
+    619 | struct alignment_of<longlong4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:550:110: note: declared here
+    550 | typedef __device_builtin__ struct longlong4 __VECTOR_TYPE_DEPRECATED__("use longlong4_16a or longlong4_32a") longlong4;
+        |                                                                                                              ^~~~~~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:623:33: warning: ‘ulonglong4’ is deprecated: use ulonglong4_16a or ulonglong4_32a [-Wdeprecated-declarations]
+    623 | struct alignment_of<ulonglong4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:551:113: note: declared here
+    551 | typedef __device_builtin__ struct ulonglong4 __VECTOR_TYPE_DEPRECATED__("use ulonglong4_16a or ulonglong4_32a") ulonglong4;
+        |                                                                                                                 ^~~~~~~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:627:33: warning: ‘double4’ is deprecated: use double4_16a or double4_32a [-Wdeprecated-declarations]
+    627 | struct alignment_of<double4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:561:104: note: declared here
+    561 | typedef __device_builtin__ struct double4 __VECTOR_TYPE_DEPRECATED__("use double4_16a or double4_32a") double4;
+        |                                                                                                        ^~~~~~~
+  [9/73] /usr/local/cuda-13.0/bin/nvcc -MD -MF /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/build/temp.linux-x86_64-cpython-312/csrc/flash_attn/src/flash_bwd_hdim192_fp16_sm80.o.d -I/mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn -I/mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn/src -I/mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include -I/home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/torch/include -I/home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/torch/include/torch/csrc/api/include -I/usr/local/cuda-13.0/include -I/home/undefined/Desktop/ai/.venv-vllm/include -I/usr/include/python3.12 -c -c /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn/src/flash_bwd_hdim192_fp16_sm80.cu -o /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/build/temp.linux-x86_64-cpython-312/csrc/flash_attn/src/flash_bwd_hdim192_fp16_sm80.o -D__CUDA_NO_HALF_OPERATORS__ -D__CUDA_NO_HALF_CONVERSIONS__ -D__CUDA_NO_BFLOAT16_CONVERSIONS__ -D__CUDA_NO_HALF2_OPERATORS__ --expt-relaxed-constexpr --compiler-options ''"'"'-fPIC'"'"'' -O3 -std=c++17 -U__CUDA_NO_HALF_OPERATORS__ -U__CUDA_NO_HALF_CONVERSIONS__ -U__CUDA_NO_HALF2_OPERATORS__ -U__CUDA_NO_BFLOAT16_CONVERSIONS__ --expt-relaxed-constexpr --expt-extended-lambda --use_fast_math -gencode arch=compute_80,code=sm_80 -gencode arch=compute_90,code=sm_90 -gencode arch=compute_100,code=sm_100 -gencode arch=compute_120,code=sm_120 --threads 1 -DTORCH_API_INCLUDE_EXTENSION_H -DTORCH_EXTENSION_NAME=flash_attn_2_cuda
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:599:33: warning: ‘long4’ is deprecated: use long4_16a or long4_32a [-Wdeprecated-declarations]
+    599 | struct alignment_of<long4> {
+        |                                 ^
+  In file included from /usr/local/cuda-13.0/include/driver_types.h:61,
+                   from /usr/local/cuda-13.0/include/builtin_types.h:59,
+                   from /usr/local/cuda-13.0/include/crt/host_runtime.h:58,
+                   from /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h:218:
+  /usr/local/cuda-13.0/include/vector_types.h:532:98: note: declared here
+    532 | typedef __device_builtin__ struct long4 __VECTOR_TYPE_DEPRECATED__("use long4_16a or long4_32a") long4;
+        |                                                                                                  ^~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:603:33: warning: ‘ulong4’ is deprecated: use ulong4_16a or ulong4_32a [-Wdeprecated-declarations]
+    603 | struct alignment_of<ulong4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:533:101: note: declared here
+    533 | typedef __device_builtin__ struct ulong4 __VECTOR_TYPE_DEPRECATED__("use ulong4_16a or ulong4_32a") ulong4;
+        |                                                                                                     ^~~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:619:33: warning: ‘longlong4’ is deprecated: use longlong4_16a or longlong4_32a [-Wdeprecated-declarations]
+    619 | struct alignment_of<longlong4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:550:110: note: declared here
+    550 | typedef __device_builtin__ struct longlong4 __VECTOR_TYPE_DEPRECATED__("use longlong4_16a or longlong4_32a") longlong4;
+        |                                                                                                              ^~~~~~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:623:33: warning: ‘ulonglong4’ is deprecated: use ulonglong4_16a or ulonglong4_32a [-Wdeprecated-declarations]
+    623 | struct alignment_of<ulonglong4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:551:113: note: declared here
+    551 | typedef __device_builtin__ struct ulonglong4 __VECTOR_TYPE_DEPRECATED__("use ulonglong4_16a or ulonglong4_32a") ulonglong4;
+        |                                                                                                                 ^~~~~~~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:627:33: warning: ‘double4’ is deprecated: use double4_16a or double4_32a [-Wdeprecated-declarations]
+    627 | struct alignment_of<double4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:561:104: note: declared here
+    561 | typedef __device_builtin__ struct double4 __VECTOR_TYPE_DEPRECATED__("use double4_16a or double4_32a") double4;
+        |                                                                                                        ^~~~~~~
+  [10/73] /usr/local/cuda-13.0/bin/nvcc -MD -MF /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/build/temp.linux-x86_64-cpython-312/csrc/flash_attn/src/flash_bwd_hdim256_bf16_causal_sm80.o.d -I/mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn -I/mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn/src -I/mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include -I/home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/torch/include -I/home/undefined/Desktop/ai/.venv-vllm/lib/python3.12/site-packages/torch/include/torch/csrc/api/include -I/usr/local/cuda-13.0/include -I/home/undefined/Desktop/ai/.venv-vllm/include -I/usr/include/python3.12 -c -c /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/flash_attn/src/flash_bwd_hdim256_bf16_causal_sm80.cu -o /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/build/temp.linux-x86_64-cpython-312/csrc/flash_attn/src/flash_bwd_hdim256_bf16_causal_sm80.o -D__CUDA_NO_HALF_OPERATORS__ -D__CUDA_NO_HALF_CONVERSIONS__ -D__CUDA_NO_BFLOAT16_CONVERSIONS__ -D__CUDA_NO_HALF2_OPERATORS__ --expt-relaxed-constexpr --compiler-options ''"'"'-fPIC'"'"'' -O3 -std=c++17 -U__CUDA_NO_HALF_OPERATORS__ -U__CUDA_NO_HALF_CONVERSIONS__ -U__CUDA_NO_HALF2_OPERATORS__ -U__CUDA_NO_BFLOAT16_CONVERSIONS__ --expt-relaxed-constexpr --expt-extended-lambda --use_fast_math -gencode arch=compute_80,code=sm_80 -gencode arch=compute_90,code=sm_90 -gencode arch=compute_100,code=sm_100 -gencode arch=compute_120,code=sm_120 --threads 1 -DTORCH_API_INCLUDE_EXTENSION_H -DTORCH_EXTENSION_NAME=flash_attn_2_cuda
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:599:33: warning: ‘long4’ is deprecated: use long4_16a or long4_32a [-Wdeprecated-declarations]
+    599 | struct alignment_of<long4> {
+        |                                 ^
+  In file included from /usr/local/cuda-13.0/include/driver_types.h:61,
+                   from /usr/local/cuda-13.0/include/builtin_types.h:59,
+                   from /usr/local/cuda-13.0/include/crt/host_runtime.h:58,
+                   from /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h:218:
+  /usr/local/cuda-13.0/include/vector_types.h:532:98: note: declared here
+    532 | typedef __device_builtin__ struct long4 __VECTOR_TYPE_DEPRECATED__("use long4_16a or long4_32a") long4;
+        |                                                                                                  ^~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:603:33: warning: ‘ulong4’ is deprecated: use ulong4_16a or ulong4_32a [-Wdeprecated-declarations]
+    603 | struct alignment_of<ulong4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:533:101: note: declared here
+    533 | typedef __device_builtin__ struct ulong4 __VECTOR_TYPE_DEPRECATED__("use ulong4_16a or ulong4_32a") ulong4;
+        |                                                                                                     ^~~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:619:33: warning: ‘longlong4’ is deprecated: use longlong4_16a or longlong4_32a [-Wdeprecated-declarations]
+    619 | struct alignment_of<longlong4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:550:110: note: declared here
+    550 | typedef __device_builtin__ struct longlong4 __VECTOR_TYPE_DEPRECATED__("use longlong4_16a or longlong4_32a") longlong4;
+        |                                                                                                              ^~~~~~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:623:33: warning: ‘ulonglong4’ is deprecated: use ulonglong4_16a or ulonglong4_32a [-Wdeprecated-declarations]
+    623 | struct alignment_of<ulonglong4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:551:113: note: declared here
+    551 | typedef __device_builtin__ struct ulonglong4 __VECTOR_TYPE_DEPRECATED__("use ulonglong4_16a or ulonglong4_32a") ulonglong4;
+        |                                                                                                                 ^~~~~~~~~~
+  /mnt/ubuntu-space/build-tmp/pip-install-1e8icufr/flash-attn_c8157dfca0bc4c989872f7fc22b897e9/csrc/cutlass/include/cutlass/platform/platform.h:627:33: warning: ‘double4’ is deprecated: use double4_16a or double4_32a [-Wdeprecated-declarations]
+    627 | struct alignment_of<double4> {
+        |                                 ^
+  /usr/local/cuda-13.0/include/vector_types.h:561:104: note: declared here
+    561 | typedef __device_builtin__ struct double4 __VECTOR_TYPE_DEPRECATED__("use double4_16a or double4_32a") double4;
+        |                                                                                                        ^~~~~~~

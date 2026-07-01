@@ -7,5 +7,8 @@ __pycache__/
 .ruff_cache/
 
 .venv*/
+.venv-sglang
+.venv-vllm
 .model_cache/
+.model_cache
 *.pyc

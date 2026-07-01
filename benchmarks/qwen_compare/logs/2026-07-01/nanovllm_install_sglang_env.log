@@ -1,0 +1,17 @@
+Obtaining file:///home/undefined/Desktop/ai/projects/nano-vllm
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Getting requirements to build editable: started
+  Getting requirements to build editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Building wheels for collected packages: nano-vllm
+  Building editable for nano-vllm (pyproject.toml): started
+  Building editable for nano-vllm (pyproject.toml): finished with status 'done'
+  Created wheel for nano-vllm: filename=nano_vllm-0.2.0-0.editable-py3-none-any.whl size=4874 sha256=6d67219f2bb0b6047092176e53982768b1bccad955953bd0704376505624a3f1
+  Stored in directory: /tmp/pip-ephem-wheel-cache-_1qpnvvm/wheels/1c/e8/f3/80bcc30701798f206b53135bbc139ec71cc290c1f8d2ec5f10
+Successfully built nano-vllm
+Installing collected packages: nano-vllm
+Successfully installed nano-vllm-0.2.0
