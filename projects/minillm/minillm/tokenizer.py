@@ -46,6 +46,7 @@ class CharTokenizer:
         for idx in ids:
             token = self.itos[int(idx)]
             pieces.append("?" if token == self.unk_token else token)
+        # TODO:生成string的方法有哪些 为什么使用这个？
         return "".join(pieces)
 
     @property
