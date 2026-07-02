@@ -12,3 +12,5 @@ __pycache__/
 .model_cache/
 .model_cache
 *.pyc
+projects/minillm/checkpoints/
+projects/minillm/hf_exports/

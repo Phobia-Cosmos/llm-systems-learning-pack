@@ -71,6 +71,31 @@ python generate.py --device cpu --prompt "用户: LLM 可以做什么？"
 python generate.py --prompt "MiniGPT" --max-new-tokens 200 --temperature 0.8 --top-k 40
 ```
 
+
+
+## 更稳定的教学输出
+
+原始 `data/tiny_corpus.txt` 很小，训练步数少时输出会像随机字符。现在提供了更结构化的教学语料：
+
+```bash
+/home/undefined/Desktop/ai/.venv/bin/python train.py   --data data/teaching_corpus.txt   --device cpu   --max-steps 1500   --eval-interval 300   --eval-iters 5   --batch-size 32   --block-size 128   --n-layer 2   --n-head 4   --n-embd 128
+```
+
+训练后先用 greedy 解码检查模型是否学会稳定格式：
+
+```bash
+/home/undefined/Desktop/ai/.venv/bin/python generate.py   --device cpu   --prompt "用户: 什么是 attention？
+助手:"   --max-new-tokens 120   --greedy
+```
+
+导出教学用 HF-like 目录：
+
+```bash
+/home/undefined/Desktop/ai/.venv-sglang/bin/python export_hf_like.py   --checkpoint checkpoints/minillm.pt   --out-dir hf_exports/minillm   --safe-serialization
+```
+
+这个导出目录用于学习 Hugging Face 文件结构；要让 vLLM/SGLang 直接加载，还需要实现并注册 MiniGPT 模型后端。
+
 ## 这个 LLM 可以做什么
 
 在默认 tiny corpus 上，它只能学到很小语料里的字符模式，输出可能不稳定。它适合做这些事情：

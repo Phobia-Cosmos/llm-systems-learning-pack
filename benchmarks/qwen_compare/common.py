@@ -6,6 +6,7 @@ from pathlib import Path
 
 
 ROOT = Path("/home/undefined/Desktop/ai")
+# TODO:这个赋值方式是什么？为什么可以用/直接拼接？
 MODEL_PATH = ROOT / ".model_cache" / "huggingface" / "Qwen3-0.6B"
 
 PROMPTS = [
@@ -14,6 +15,7 @@ PROMPTS = [
     "写一个 Python 函数，输入整数 n，返回前 n 个斐波那契数。",
 ]
 
+# TODO:这几个代表什么意思？在transformer哪里作用？
 MAX_NEW_TOKENS = 128
 TEMPERATURE = 0.6
 TOP_P = 0.95

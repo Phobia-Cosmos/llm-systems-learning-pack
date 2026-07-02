@@ -16,15 +16,18 @@ from common import (
 
 
 def main() -> None:
+    # TODO:AutoTokenizer是什么？apply_chat_template除了这个还可以做哪些事情分词器？
     tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH, trust_remote_code=True)
     prompts = [
         tokenizer.apply_chat_template(
             [{"role": "user", "content": prompt}],
             tokenize=False,
+            # TODO:这个属性是什么意思？
             add_generation_prompt=True,
         )
         for prompt in PROMPTS
     ]
+    # TODO:请你帮我解释以下各个参数的作用是什么以及为什么要使用这些参数？
     llm = sgl.Engine(
         model_path=str(MODEL_PATH),
         trust_remote_code=True,
@@ -50,6 +53,7 @@ def main() -> None:
             )
 
         texts = [out["text"] for out in outputs]
+        # TODO:为什么要使用tokenizer单独编码然后才能计算长度？
         output_tokens = sum(len(tokenizer.encode(text)) for text in texts)
         result = BenchResult(
             engine="sglang-full-flashinfer-attn-sampler-cudagraph",

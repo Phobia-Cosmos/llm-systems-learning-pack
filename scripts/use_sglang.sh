@@ -19,6 +19,7 @@ fi
 if [ -x "$CUDA_HOME/bin/nvcc" ]; then
   export FLASHINFER_NVCC="${FLASHINFER_NVCC:-$CUDA_HOME/bin/nvcc}"
 fi
+# TODO:这里是在判断什么？为什么还要单独判断so文件？
 if [ "$CUDA_HOME" = "$SGLANG_VENV/lib/python3.12/site-packages/nvidia/cu13" ]; then
   if [ -d "$CUDA_HOME/lib" ] && [ ! -e "$CUDA_HOME/lib64" ]; then
     ln -s lib "$CUDA_HOME/lib64"
