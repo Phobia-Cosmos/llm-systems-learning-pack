@@ -71,6 +71,12 @@ python generate.py --device cpu --prompt "用户: LLM 可以做什么？"
 python generate.py --prompt "MiniGPT" --max-new-tokens 200 --temperature 0.8 --top-k 40
 ```
 
+使用教学版 KV cache 生成：
+
+```bash
+python generate.py --prompt "MiniGPT" --max-new-tokens 40 --greedy --kv-cache
+```
+
 
 
 ## 更稳定的教学输出
@@ -104,7 +110,7 @@ python generate.py --prompt "MiniGPT" --max-new-tokens 200 --temperature 0.8 --t
 - 观察 loss 如何下降。
 - 理解 token、embedding、attention、MLP、采样之间的关系。
 - 作为读论文时的实验底座。
-- 后续扩展 LoRA、RoPE、RMSNorm、SwiGLU、KV cache、量化、RAG、指令微调。
+- 后续扩展 LoRA、RoPE、RMSNorm、SwiGLU、量化、RAG、指令微调。
 
 它不适合：
 
@@ -119,7 +125,7 @@ python generate.py --prompt "MiniGPT" --max-new-tokens 200 --temperature 0.8 --t
 1. 把 `CharTokenizer` 换成 BPE/SentencePiece tokenizer。
 2. 把 `position_embedding` 换成 RoPE。
 3. 把 `LayerNorm + GELU MLP` 换成 `RMSNorm + SwiGLU`。
-4. 给 `generate()` 加 KV cache，减少重复计算。
+4. 继续完善 KV cache：当前已有教学版 `--kv-cache`，下一步支持 RoPE 和更长上下文。
 5. 加 `torch.utils.data.Dataset/DataLoader`，支持大文件和多 worker。
 6. 加验证集 perplexity、生成样例、checkpoint resume。
 7. 加 LoRA，只训练 adapter。
@@ -135,4 +141,19 @@ python generate.py --prompt "MiniGPT" --max-new-tokens 200 --temperature 0.8 --t
 - 数据 batch: `minillm/data.py`
 - 训练: `train.py`
 - 生成: `generate.py`
+- KV cache、autograd、训练到推理路线: `docs/kvcache_autograd_training_roadmap.md`
 
+### 通过 nano-vLLM 教学后端运行 MiniLLM
+
+先训练并导出 HF-like 目录后，可以通过 nano-vLLM 的最小 MiniGPT 后端运行：
+
+```bash
+/home/undefined/Desktop/ai/.venv-sglang/bin/python export_hf_like.py \
+  --checkpoint checkpoints/minillm.pt \
+  --out-dir hf_exports/minillm \
+  --safe-serialization
+
+/home/undefined/Desktop/ai/.venv-sglang/bin/python scripts/run_nanovllm_minigpt.py
+```
+
+当前这个 nano-vLLM 后端用于学习“如何给 serving engine 添加新模型架构”。它已经走 nano-vLLM 的 `LLM.generate()`、scheduler 和 sampler，但 MiniGPT attention 暂时没有 paged KV cache，decode 时会重算完整上下文，所以它不是高性能版本。

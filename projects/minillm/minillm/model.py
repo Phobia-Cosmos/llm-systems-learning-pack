@@ -11,6 +11,7 @@ from .config import GPTConfig
 # 问题（已回答）:除了这一种attention 还可以使用哪些？为什么注意力也是nn.Module？n_embd和n_head分别代表什么以及为什么有这样的关系？这里的head代表什么意思？head可以无限增加吗？head_dim代表一个head处理多少的embed吗？
 # 回答：这里实现的是 decoder-only GPT 的 causal multi-head self-attention。其他常见 attention 包括 encoder bidirectional self-attention、
 # encoder-decoder cross-attention、multi-query/grouped-query attention、sliding-window attention、linear/sparse attention、FlashAttention 等。
+
 # 注意力写成 nn.Module，是因为它有可训练参数 Wq/Wk/Wv/Wo，也需要被 PyTorch 注册、保存、移动设备和参与反向传播。
 # n_embd 是每个 token 的隐藏向量总维度；n_head 是把这个总维度切成多少个注意力头；head 表示一组独立的 Q/K/V 子空间。
 # n_embd 必须能整除 n_head，因为每个头拿到 head_dim = n_embd // n_head 维。head 不能无限增加：head_dim 太小会损失表达能力，
@@ -28,16 +29,20 @@ class CausalSelfAttention(nn.Module):
         # 后面再 split 成 q/k/v。这样等价于三个 Linear，但更紧凑。c_proj 是 attention 输出后的输出投影 Wo，
         # 把多个 head 拼回来的 n_embd 维结果再混合一次，送回残差主干。Linear 的本质是 y = xW^T + b，
         # 这里输入最后一维是 n_embd，所以 in_features=n_embd；QKV 总共三份，所以 out_features=3*n_embd。
+        # TODO:为什么可以一次性生成 Q、K、V 的线性层？这里token向量维度是多少？为什么要投影到3倍？为什么这个在论文中没有提到这个概念？紧凑有什么好处吗？多个head返回的结果混合原理是什么？残差主干指的是什么？
+        # TODO:请你帮我把网络的结构画出来。proj针对每一个qkv都要做投影还是？
         self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
         self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
         # 问题（已回答）:Dropout是一个函数吗？
         # 回答：nn.Dropout 是一个 Module，不只是普通函数。训练时它按概率随机把部分元素置 0 并缩放剩余元素，
         # 用来防止过拟合；eval() 时它自动关闭，直接返回输入。
+        # TODO:为什么要针对atten和residual同时都要做？
         self.attn_dropout = nn.Dropout(config.dropout)
         self.resid_dropout = nn.Dropout(config.dropout)
         # 问题（已回答）:这个是什么？内部生成一个2d矩阵？然后进行什么运算？为什么要有mask？这个mask的作用是什么？register_buffer又是什么？为什么view有四个参数？persistent代表什么意思？
         # 回答：torch.ones 先生成 [block_size, block_size] 的全 1 矩阵，torch.tril 保留下三角，得到 causal mask。
         # 第 i 行只能看第 0..i 列，不能看未来 token；否则训练时模型会偷看答案。
+
         # register_buffer 注册的是“跟随模型移动设备但不是可训练参数”的张量。view(1,1,T,T) 是为了和 scores 的
         # [batch, head, seq, seq] 广播对齐；前两个 1 分别对应 batch 和 head 维。persistent=False 表示不把这个 mask 存进 state_dict，
         # 因为它可以由 block_size 重新生成，不属于训练得到的权重。
@@ -91,6 +96,37 @@ class CausalSelfAttention(nn.Module):
         # x = x + self.attn(self.ln_1(x))。这里返回的是要被加回主干的那一支。
         return self.resid_dropout(self.c_proj(y))
 
+    def forward_with_cache(
+        self,
+        x: torch.Tensor,
+        past_kv: tuple[torch.Tensor, torch.Tensor] | None = None,
+    ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
+        batch, seq_len, channels = x.shape
+        q, k, v = self.c_attn(x).split(channels, dim=2)
+        q = q.view(batch, seq_len, self.n_head, self.head_dim).transpose(1, 2)
+        k = k.view(batch, seq_len, self.n_head, self.head_dim).transpose(1, 2)
+        v = v.view(batch, seq_len, self.n_head, self.head_dim).transpose(1, 2)
+
+        past_len = 0
+        if past_kv is not None:
+            past_k, past_v = past_kv
+            past_len = past_k.size(2)
+            k = torch.cat((past_k, k), dim=2)
+            v = torch.cat((past_v, v), dim=2)
+
+        total_len = past_len + seq_len
+        if total_len > self.causal_mask.size(-1):
+            raise ValueError("KV cache length exceeds block_size; use a longer block_size or fewer generated tokens")
+
+        scores = (q @ k.transpose(-2, -1)) / math.sqrt(self.head_dim)
+        mask = self.causal_mask[:, :, past_len:total_len, :total_len]
+        scores = scores.masked_fill(mask == 0, float("-inf"))
+        weights = F.softmax(scores, dim=-1)
+        weights = self.attn_dropout(weights)
+        y = weights @ v
+        y = y.transpose(1, 2).contiguous().view(batch, seq_len, channels)
+        return self.resid_dropout(self.c_proj(y)), (k, v)
+
 # 问题（已回答）:为什么nn中还有Sequential？nn中都包含哪些东西？
 # 回答：nn.Sequential 是把多个层按顺序串起来的容器，适合“输入依次经过 A、B、C”的简单网络。
 # torch.nn 里包含 Module 基类、Linear/Embedding/Conv、LayerNorm/BatchNorm/RMSNorm 类似归一化层、Dropout、激活函数、损失函数等。
@@ -132,6 +168,16 @@ class TransformerBlock(nn.Module):
         x = x + self.attn(self.ln_1(x))
         x = x + self.mlp(self.ln_2(x))
         return x
+
+    def forward_with_cache(
+        self,
+        x: torch.Tensor,
+        past_kv: tuple[torch.Tensor, torch.Tensor] | None = None,
+    ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
+        attn_out, present_kv = self.attn.forward_with_cache(self.ln_1(x), past_kv)
+        x = x + attn_out
+        x = x + self.mlp(self.ln_2(x))
+        return x, present_kv
 
 # 问题（已回答）:nn.Module是什么？为什么需要token_embedding和position_embedding？ModuleList是什么？nn中的Norm都有哪些选项？lm_head是什么？
 # 回答：nn.Module 是 PyTorch 所有可训练网络模块的基类，负责参数注册、设备迁移、train/eval 模式、state_dict 保存等。
@@ -208,6 +254,47 @@ class MiniGPT(nn.Module):
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
         return logits, loss
 
+    def forward_with_cache(
+        self,
+        idx: torch.Tensor,
+        past_key_values: list[tuple[torch.Tensor, torch.Tensor]] | None = None,
+    ) -> tuple[torch.Tensor, list[tuple[torch.Tensor, torch.Tensor]]]:
+        batch, seq_len = idx.shape
+        past_len = 0 if past_key_values is None else past_key_values[0][0].size(2)
+        total_len = past_len + seq_len
+        if total_len > self.config.block_size:
+            raise ValueError(f"sequence length {total_len} exceeds block_size {self.config.block_size}")
+
+        positions = torch.arange(past_len, total_len, device=idx.device)
+        x = self.token_embedding(idx) + self.position_embedding(positions)
+        x = self.drop(x)
+
+        present_key_values: list[tuple[torch.Tensor, torch.Tensor]] = []
+        for layer_idx, block in enumerate(self.blocks):
+            past_kv = None if past_key_values is None else past_key_values[layer_idx]
+            x, present_kv = block.forward_with_cache(x, past_kv)
+            present_key_values.append(present_kv)
+
+        x = self.ln_f(x)
+        logits = self.lm_head(x)
+        return logits, present_key_values
+
+    def _sample_next_token(
+        self,
+        logits: torch.Tensor,
+        temperature: float = 1.0,
+        top_k: int | None = None,
+        greedy: bool = False,
+    ) -> torch.Tensor:
+        logits = logits / max(temperature, 1e-6)
+        if top_k is not None:
+            values, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+            logits = logits.masked_fill(logits < values[:, [-1]], float("-inf"))
+        if greedy:
+            return torch.argmax(logits, dim=-1, keepdim=True)
+        probs = F.softmax(logits, dim=-1)
+        return torch.multinomial(probs, num_samples=1)
+
     # 问题（已回答）:这个@会有什么用？decorator的作用是什么？top_k的作用是什么？
     # 回答：@ 是装饰器语法，把下面的 generate 函数交给 torch.no_grad() 包装。生成阶段不训练，不需要保存梯度，
     # 所以 no_grad 可以省显存、加快速度。top_k 是采样截断：只允许从分数最高的 k 个 token 中采样，减少低质量长尾 token。
@@ -227,30 +314,44 @@ class MiniGPT(nn.Module):
             # logits 的 shape 是 [batch, seq_len, vocab_size]；这里随后取 logits[:, -1, :]，只用最后一个位置预测下一个 token。
             idx_cond = idx[:, -self.config.block_size :]
             logits, _ = self(idx_cond)
-            logits = logits[:, -1, :] / max(temperature, 1e-6)
-
-            # 问题（已回答）:为什么需要选出k个？values为什么是2D？各个dim代表什么？masked_fill函数如何使用的？为什么需要传入类型和一个比较值？masked_fill运行以后代表什么？为什么要对logits这样运算？
-            # 回答：top-k 只保留最可能的 k 个候选，降低随机采样跑到低概率 token 的风险。logits 此时是 [B,V]，
-            # torch.topk 沿最后一维取每个 batch 的 top k，所以 values 是 [B,k]。values[:, [-1]] 是第 k 大分数，shape [B,1]，
-            # 可以和 [B,V] 广播比较。masked_fill(mask, value) 把 mask 为 True 的元素替换成 value；这里把低于第 k 大的 logits 设为 -inf。
-            # 后续 softmax 时这些位置概率变成 0，相当于禁止采样。
-            if top_k is not None:
-                values, _ = torch.topk(logits, min(top_k, logits.size(-1)))
-                logits = logits.masked_fill(logits < values[:, [-1]], float("-inf"))
+            logits = logits[:, -1, :]
 
             # 问题（已回答）:为什么dim=-1？probs代表什么意思？一个token？为什么idx next是multinomial计算出来的？这个函数主要在做什么？还有最后的cat又在做什么？
             # 回答：dim=-1 表示在最后一维 vocab_size 上做 softmax，让每行词表分数变成概率分布。probs 是“下一个 token 是每个词表项的概率”，
             # 不是单个 token。torch.multinomial 按概率分布随机抽样，返回采到的 token id，shape [B,1]。
             # torch.cat((idx, idx_next), dim=1) 把新 token 接到序列末尾，下一轮继续用更长上下文生成。
-            if greedy:
-                idx_next = torch.argmax(logits, dim=-1, keepdim=True)
-            else:
-                probs = F.softmax(logits, dim=-1)
-                idx_next = torch.multinomial(probs, num_samples=1)
+            idx_next = self._sample_next_token(logits, temperature=temperature, top_k=top_k, greedy=greedy)
             idx = torch.cat((idx, idx_next), dim=1)
         # 问题（已回答）:返回的idx代表什么意思？是我们人类能理解的文本吗？
         # 回答：返回的 idx 是完整 token id 序列，包括原 prompt 和新生成 token。它不是人类可读文本；
         # 需要交给 tokenizer.decode(idx.tolist()) 才能变回字符串。
+        return idx
+
+    @torch.no_grad()
+    def generate_with_kv_cache(
+        self,
+        idx: torch.Tensor,
+        max_new_tokens: int,
+        temperature: float = 1.0,
+        top_k: int | None = None,
+        greedy: bool = False,
+    ) -> torch.Tensor:
+        if idx.size(1) + max_new_tokens > self.config.block_size:
+            raise ValueError(
+                "MiniLLM uses learned absolute position embeddings, so this teaching KV-cache path "
+                "requires prompt_len + max_new_tokens <= block_size."
+            )
+
+        logits, past_key_values = self.forward_with_cache(idx)
+        for _ in range(max_new_tokens):
+            idx_next = self._sample_next_token(
+                logits[:, -1, :],
+                temperature=temperature,
+                top_k=top_k,
+                greedy=greedy,
+            )
+            idx = torch.cat((idx, idx_next), dim=1)
+            logits, past_key_values = self.forward_with_cache(idx_next, past_key_values)
         return idx
 
     def parameter_count(self) -> int:

@@ -12,5 +12,14 @@ __pycache__/
 .model_cache/
 .model_cache
 *.pyc
-projects/minillm/checkpoints/
-projects/minillm/hf_exports/
+projects/minillm/checkpoints/*
+!projects/minillm/checkpoints/minillm.pt
+projects/minillm/hf_exports/*
+!projects/minillm/hf_exports/minillm/
+!projects/minillm/hf_exports/minillm/**
+
+projects/minimind/checkpoints/*_resume.pth
+projects/minimind/logs/
+projects/minimind/dataset/.msc
+projects/minimind/dataset/.mv
+projects/minimind/dataset/*.jsonl
