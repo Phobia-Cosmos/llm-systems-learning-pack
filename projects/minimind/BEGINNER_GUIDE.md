@@ -50,26 +50,32 @@ epochs             = 1 + 1
 
 ## 4. 复现命令
 
-在项目根目录：
+当前工作区统一复用 Disk 下的共享 AI 环境：
 
 ```bash
-python3 -m venv .venv
-.venv/bin/pip install --upgrade pip setuptools wheel
-.venv/bin/pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cu124
-.venv/bin/pip install datasets==3.6.0 transformers==4.57.6 tokenizers==0.22.1 safetensors tqdm modelscope==1.37.0
+cd /home/undefined/Desktop/ai
+source scripts/use_disk_ai_env.sh
 ```
+
+当前验证可用环境：
+
+```text
+/home/undefined/Disk/ai-storage/.venv-sglang
+```
+
+它已经包含 `torch`、`transformers`、`datasets`、`tokenizers`、`safetensors`、`modelscope` 等 MiniMind 需要的核心依赖。不要在 `projects/minimind` 下再创建 `.venv`。
 
 下载数据：
 
 ```bash
-.venv/bin/modelscope download --dataset gongjy/minimind_dataset pretrain_t2t_mini.jsonl sft_t2t_mini.jsonl --local_dir dataset
+modelscope download --dataset gongjy/minimind_dataset pretrain_t2t_mini.jsonl sft_t2t_mini.jsonl --local_dir dataset
 ```
 
 预训练：
 
 ```bash
 cd trainer
-../.venv/bin/python train_pretrain.py \
+python train_pretrain.py \
   --epochs 1 \
   --hidden_size 512 \
   --num_hidden_layers 8 \
@@ -87,7 +93,7 @@ SFT：
 
 ```bash
 cd trainer
-../.venv/bin/python train_full_sft.py \
+python train_full_sft.py \
   --epochs 1 \
   --hidden_size 512 \
   --num_hidden_layers 8 \
@@ -104,7 +110,8 @@ cd trainer
 测试原生权重：
 
 ```bash
-.venv/bin/python eval_llm.py \
+cd /home/undefined/Desktop/ai/projects/minimind
+python eval_llm.py \
   --load_from model \
   --weight full_sft \
   --hidden_size 512 \
@@ -119,7 +126,7 @@ cd trainer
 
 ```bash
 cd scripts
-../.venv/bin/python export_cpu_model.py \
+python export_cpu_model.py \
   --torch_path ../out/full_sft_512.pth \
   --output_dir ../artifacts/minimind-cpu-512 \
   --hidden_size 512 \
@@ -130,7 +137,8 @@ cd scripts
 然后可以直接用 Transformers 格式推理：
 
 ```bash
-.venv/bin/python eval_llm.py \
+cd /home/undefined/Desktop/ai/projects/minimind
+python eval_llm.py \
   --load_from artifacts/minimind-cpu-512 \
   --device cpu \
   --max_new_tokens 256
@@ -147,9 +155,9 @@ tar -czf artifacts/minimind-cpu-512.tar.gz -C artifacts minimind-cpu-512
 如果要上传到 HuggingFace：
 
 ```bash
-.venv/bin/pip install huggingface_hub
-.venv/bin/huggingface-cli login
-.venv/bin/huggingface-cli upload YOUR_NAME/minimind-cpu-512 artifacts/minimind-cpu-512 .
+pip install huggingface_hub
+huggingface-cli login
+huggingface-cli upload YOUR_NAME/minimind-cpu-512 artifacts/minimind-cpu-512 .
 ```
 
 如果要上传到 ModelScope，先登录 ModelScope CLI，再上传 `artifacts/minimind-cpu-512/` 或压缩包。
