@@ -47,6 +47,7 @@ class CausalSelfAttention(nn.Module):
         # [batch, head, seq, seq] 广播对齐；前两个 1 分别对应 batch 和 head 维。persistent=False 表示不把这个 mask 存进 state_dict，
         # 因为它可以由 block_size 重新生成，不属于训练得到的权重。
         mask = torch.tril(torch.ones(config.block_size, config.block_size))
+        # TODO：为什么要生成张量？score是什么？state_dict又是什么？代码中没有出现这个属性呀？
         self.register_buffer("causal_mask", mask.view(1, 1, config.block_size, config.block_size), persistent=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -65,6 +66,7 @@ class CausalSelfAttention(nn.Module):
         # 回答：这一步把 [B,T,C] 拆成多头形式 [B,T,H,D]，其中 H=n_head、D=head_dim，然后转成 [B,H,T,D]。
         # 这样每个 head 可以独立计算 Attention(Q,K,V)=softmax(QK^T/sqrt(D))V。view 的四个参数就是目标 shape。
         # transpose(1,2) 把 head 维提前，是为了后续矩阵乘法能在每个 batch、每个 head 上并行计算。
+        # TODO：转置后这个矩阵变成什么样子了？transpose函数的作用是什么 为什么可以对矩阵内部进行使用？
         q = q.view(batch, seq_len, self.n_head, self.head_dim).transpose(1, 2)
         k = k.view(batch, seq_len, self.n_head, self.head_dim).transpose(1, 2)
         v = v.view(batch, seq_len, self.n_head, self.head_dim).transpose(1, 2)
@@ -72,12 +74,14 @@ class CausalSelfAttention(nn.Module):
         # 问题（已回答）:为什么转置还可以是负数？@是什么意思？
         # 回答：负数维度是从后往前数，-1 是最后一维，-2 是倒数第二维；k.transpose(-2,-1) 把 [B,H,T,D] 变成 [B,H,D,T]。
         # @ 是 Python 的矩阵乘法运算符，对张量来说会做 batch matrix multiply。这里计算 QK^T，得到 [B,H,T,T] 的注意力分数。
+        # TODO：注意力分数不是Q K V计算出来的吗,为什么会和[B,H,T,T] 的注意力分数相关？
         scores = (q @ k.transpose(-2, -1)) / math.sqrt(self.head_dim)
 
         # 问题（已回答）:这里又是在做什么？这个函数的作用是什么？原理？公式是什么？
         # 回答：masked_fill 把 mask 为 True 的位置替换成指定值。这里先找 causal_mask 中为 0 的未来位置，
         # 再把对应 scores 设为 -inf。softmax(-inf)=0，所以未来 token 的注意力权重会变成 0。
         # 数学上是 softmax((QK^T / sqrt(d)) + mask)，其中 mask 的未来位置是 -inf。
+        # TODO：masked_fill是nn内置的函数是吗？一定要现有mask才能使用吧？这里的F是什么？
         scores = scores.masked_fill(self.causal_mask[:, :, :seq_len, :seq_len] == 0, float("-inf"))
         weights = F.softmax(scores, dim=-1)
 
@@ -90,10 +94,13 @@ class CausalSelfAttention(nn.Module):
         # 问题（已回答）:contiguous的作用是什么？为什么要变成view？
         # 回答：transpose 后张量的内存步长可能不是连续的，view 要求按连续内存解释 shape。
         # contiguous 会拷贝/整理成连续内存。这里 view 把 [B,T,H,D] 重新拼回 [B,T,C]，让多头结果回到原 embedding 维度。
+
+        # TODO：为什么transpose 后张量的内存步长可能不是连续的？
         y = y.transpose(1, 2).contiguous().view(batch, seq_len, channels)
         # 问题（已回答）:这里是在计算残差吗？
         # 回答：这里还不是残差相加，只是在计算 attention 分支输出。真正的残差在 TransformerBlock.forward 里：
         # x = x + self.attn(self.ln_1(x))。这里返回的是要被加回主干的那一支。
+        # TODO：残差是什么以及为什么需要残差？
         return self.resid_dropout(self.c_proj(y))
 
     def forward_with_cache(
