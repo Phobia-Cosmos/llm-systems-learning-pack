@@ -145,6 +145,7 @@ class MLP(nn.Module):
         # Linear 是最常见选择，现代 LLM 也常用 SwiGLU/GEGLU 这类门控 MLP，不是只能用普通 Linear+GELU。
         # GELU 是平滑激活函数，引入非线性；如果只有线性层叠加，整体仍等价于一个线性变换。
         # Dropout 训练时随机丢一部分激活，降低 toy 语料上的过拟合。
+        # TODO：为什么是变为4而不是其他的数量的embed？线性层后面一定要接激活函数吗？为什么后一个linear使用的是Dropout而不是激活函数了？
         self.net = nn.Sequential(
             nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias),
             nn.GELU(),
@@ -196,6 +197,7 @@ class MiniGPT(nn.Module):
     def __init__(self, config: GPTConfig):
         super().__init__()
         self.config = config
+        # TODO：各个参数的意义是什么？为什么token和position不一致？
         self.token_embedding = nn.Embedding(config.vocab_size, config.n_embd)
         self.position_embedding = nn.Embedding(config.block_size, config.n_embd)
         self.drop = nn.Dropout(config.dropout)
@@ -205,8 +207,10 @@ class MiniGPT(nn.Module):
         # ln_f 是所有 Transformer block 之后的最终归一化，帮助输出分布稳定，再交给 lm_head 预测词表 logits。
         self.ln_f = nn.LayerNorm(config.n_embd, bias=config.bias)
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+        # TODO：为什么token embedding会有默认的weight 我们传入了吗？
         self.lm_head.weight = self.token_embedding.weight
 
+        # TODO：这个是在调用谁的函数？那里定义的？nn.Module？
         self.apply(self._init_weights)
 
     def _init_weights(self, module: nn.Module) -> None:
@@ -214,6 +218,7 @@ class MiniGPT(nn.Module):
         # 回答：神经网络不能把权重全初始化成 0，否则不同神经元会学到完全相同的东西。
         # 小方差正态分布是 GPT 系列常见的简单初始化，让初始激活和梯度规模比较稳定。
         # 真实大模型还会根据层数、残差分支做更精细的缩放初始化。
+        # TODO：为什么初始化为0就会学到相同的内容？这里初始化的缩放原理是什么？为什么针对不同的层 初始化方式不同？为什么MLP不初始化？为什么激活函数不初始化？
         if isinstance(module, nn.Linear):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
             if module.bias is not None:
