@@ -160,6 +160,7 @@ _TEXT_GENERATION_MODELS = {
         "vllm.models.minimax_m3",
         "MiniMaxM3SparseForCausalLM",
     ),
+    "MiniGPTForCausalLM": ("minigpt", "MiniGPTForCausalLM"),
     "Ministral3ForCausalLM": ("mistral", "MistralForCausalLM"),
     "MistralForCausalLM": ("mistral", "MistralForCausalLM"),
     "MistralLarge3ForCausalLM": ("mistral_large_3", "MistralLarge3ForCausalLM"),

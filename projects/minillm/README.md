@@ -142,6 +142,7 @@ python generate.py --prompt "MiniGPT" --max-new-tokens 40 --greedy --kv-cache
 - 训练: `train.py`
 - 生成: `generate.py`
 - KV cache、autograd、训练到推理路线: `docs/kvcache_autograd_training_roadmap.md`
+- 模型结构、推理引擎接入、AI Infra 表格: `docs/minillm_ai_infra_engine_requirements.md`
 
 ### 通过 nano-vLLM 教学后端运行 MiniLLM
 
@@ -157,3 +158,23 @@ python generate.py --prompt "MiniGPT" --max-new-tokens 40 --greedy --kv-cache
 ```
 
 当前这个 nano-vLLM 后端用于学习“如何给 serving engine 添加新模型架构”。它已经走 nano-vLLM 的 `LLM.generate()`、scheduler 和 sampler，但 MiniGPT attention 暂时没有 paged KV cache，decode 时会重算完整上下文，所以它不是高性能版本。
+
+### 通过 mini-sglang 教学服务调用 MiniLLM
+
+```bash
+cd /home/undefined/Desktop/ai
+source scripts/use_disk_ai_env.sh
+python projects/mini-sglang/mini_sglang_server.py \
+  --checkpoint projects/minillm/checkpoints/minillm.pt \
+  --host 127.0.0.1 \
+  --port 8011 \
+  --device cpu
+```
+
+然后请求 OpenAI-like completion：
+
+```bash
+curl http://127.0.0.1:8011/v1/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"prompt":"用户: 什么是 decoder-only Transformer？\n助手:","max_tokens":80}'
+```
