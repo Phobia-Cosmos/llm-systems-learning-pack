@@ -15,12 +15,13 @@ AI_ROOT = Path(__file__).resolve().parents[2]
 MINILLM_ROOT = AI_ROOT / "projects" / "minillm"
 sys.path.insert(0, str(MINILLM_ROOT))
 
-from minillm import CharTokenizer, GPTConfig, MiniGPT  # noqa: E402
+from minillm import GPTConfig, MiniGPT  # noqa: E402
+from minillm.tokenizer_registry import MiniTokenizer, tokenizer_from_checkpoint  # noqa: E402
 
 
 def load_minillm(checkpoint_path: str, device: str):
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
-    tokenizer = CharTokenizer.from_dict(checkpoint["tokenizer"])
+    tokenizer = tokenizer_from_checkpoint(checkpoint)
     model = MiniGPT(GPTConfig(**checkpoint["config"])).to(device)
     model.load_state_dict(checkpoint["model"])
     model.eval()
@@ -42,7 +43,7 @@ def messages_to_prompt(messages: list[dict[str, Any]]) -> str:
 
 class MiniSGLangHandler(BaseHTTPRequestHandler):
     model: MiniGPT
-    tokenizer: CharTokenizer
+    tokenizer: MiniTokenizer
     device: str
 
     def _send_json(self, status: int, payload: dict[str, Any]) -> None:

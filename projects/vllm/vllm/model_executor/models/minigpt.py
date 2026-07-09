@@ -249,16 +249,20 @@ class MiniGPTForCausalLM(nn.Module):
         return self.logits_processor(self.lm_head, hidden_states)
 
     def load_weights(self, weights: Iterable[tuple[str, torch.Tensor]]) -> set[str]:
-        remapped = []
-        for name, tensor in weights:
-            if not name.startswith("model.") and not name.startswith("lm_head."):
-                name = "model." + name
-            remapped.append((name, tensor))
-        loaded = self.model.load_weights(remapped)
         params_dict = dict(self.named_parameters(remove_duplicate=False))
-        for name, tensor in remapped:
-            if name == "lm_head.weight" and name in params_dict:
-                weight_loader = getattr(params_dict[name], "weight_loader", default_weight_loader)
-                weight_loader(params_dict[name], tensor)
-                loaded.add(name)
-        return loaded
+        loaded_params: set[str] = set()
+        for name, tensor in weights:
+            candidates = [name]
+            if not name.startswith("model.") and not name.startswith("lm_head."):
+                candidates.append("model." + name)
+            for candidate in candidates:
+                if candidate not in params_dict:
+                    continue
+                param = params_dict[candidate]
+                weight_loader = getattr(param, "weight_loader", default_weight_loader)
+                weight_loader(param, tensor)
+                loaded_params.add(candidate)
+                if candidate == "lm_head.weight":
+                    loaded_params.add("model.token_embedding.weight")
+                break
+        return loaded_params

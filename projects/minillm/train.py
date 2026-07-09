@@ -6,8 +6,9 @@ from pathlib import Path
 
 import torch
 
-from minillm import CharTokenizer, GPTConfig, MiniGPT
+from minillm import GPTConfig, MiniGPT
 from minillm.data import get_batch, read_text, split_train_val
+from minillm.tokenizer_registry import build_tokenizer, tokenizer_to_checkpoint_payload
 
 
 def parse_args() -> argparse.Namespace:
@@ -31,6 +32,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lr", type=float, default=3e-4)
     parser.add_argument("--seed", type=int, default=1337)
     parser.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda", "mps"])
+    parser.add_argument("--tokenizer", default="char", choices=["char", "byte-bpe"])
+    parser.add_argument("--tokenizer-path", default=None, help="Load an existing tokenizer.json for tokenizer variants.")
+    parser.add_argument("--tokenizer-output-dir", default="tokenizer_variants/byte_bpe")
+    parser.add_argument("--tokenizer-vocab-size", type=int, default=512)
+    parser.add_argument("--retrain-tokenizer", action="store_true")
     return parser.parse_args()
 
 
@@ -85,7 +91,15 @@ def main() -> None:
     device = pick_device(args.device)
 
     text = read_text(args.data)
-    tokenizer = CharTokenizer.from_text(text)
+    tokenizer = build_tokenizer(
+        args.tokenizer,
+        text,
+        training_file=args.data,
+        tokenizer_path=args.tokenizer_path,
+        tokenizer_output_dir=args.tokenizer_output_dir,
+        tokenizer_vocab_size=args.tokenizer_vocab_size,
+        retrain_tokenizer=args.retrain_tokenizer,
+    )
     token_ids = tokenizer.encode(text)
     train_data, val_data = split_train_val(token_ids)
 
@@ -141,7 +155,8 @@ def main() -> None:
         {
             "model": model.state_dict(),
             "config": asdict(config),
-            "tokenizer": tokenizer.to_dict(),
+            "tokenizer_type": args.tokenizer,
+            "tokenizer": tokenizer_to_checkpoint_payload(args.tokenizer, tokenizer),
             "args": vars(args),
         },
         ckpt_path,

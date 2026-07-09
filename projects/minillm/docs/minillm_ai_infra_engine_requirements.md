@@ -246,8 +246,18 @@ sglang backend 负责用 SGLang 的高性能 attention/runtime 执行这个结�
 | --- | --- | --- |
 | mini-sglang | 通过 | `/health` 和 `/v1/completions` 已返回 JSON |
 | nano-vLLM | 通过 | `scripts/run_nanovllm_minigpt.py` 已加载 HF-like export 并生成 |
-| vLLM | 语法/静态接入通过，运行级未通过 | 本地 vLLM 源码缺 `_C_stable_libtorch` 编译扩展，registry runtime import 被挡住 |
+| vLLM | 通过 | 使用 `/home/undefined/Disk/ai-storage/.venv-vllm`，以 `VLLM_USE_PRECOMPILED=1` 做 editable build；本地源码路径为 `/home/undefined/Desktop/ai/projects/vllm/vllm/__init__.py`；MiniGPT registry、safetensors 加载、KV cache 初始化、Triton attention、FlashInfer sampler、token 生成均已验证 |
 | SGLang | 未实现 native backend | 需要后续新增 `sglang/srt/models/minigpt.py` 并接 RadixAttention |
+
+vLLM 验证口径：
+
+```text
+全量从源码编译 CUDA/C++ 扩展：尝试过，但超过 30 分钟未完成。
+当前通过的构建方式：复用已安装 wheel 中的编译扩展，安装本地 Python 源码为 editable package。
+验证模型：/home/undefined/Desktop/ai/projects/minillm/hf_exports/minillm
+验证调用：LLM(..., skip_tokenizer_init=True, dtype="float32", enforce_eager=True)
+验证结果：engine 初始化、权重加载、KV cache 分配、生成 token 全部通过。
+```
 
 ## 10. vLLM / nano-vLLM 外层服务层
 

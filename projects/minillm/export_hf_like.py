@@ -6,7 +6,9 @@ from pathlib import Path
 
 import torch
 
-from minillm import CharTokenizer, GPTConfig, MiniGPT
+from minillm import GPTConfig, MiniGPT
+from minillm.tokenizer_registry import tokenizer_from_checkpoint
+from minillm.tokenizer_variants import HFByteBPETokenizer
 
 
 def parse_args() -> argparse.Namespace:
@@ -24,7 +26,8 @@ def main() -> None:
 
     checkpoint = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
     config = GPTConfig(**checkpoint["config"])
-    tokenizer = CharTokenizer.from_dict(checkpoint["tokenizer"])
+    tokenizer = tokenizer_from_checkpoint(checkpoint)
+    tokenizer_type = checkpoint.get("tokenizer_type", checkpoint.get("tokenizer", {}).get("type", "char"))
 
     model = MiniGPT(config)
     model.load_state_dict(checkpoint["model"])
@@ -49,21 +52,24 @@ def main() -> None:
     }
     (out_dir / "config.json").write_text(json.dumps(config_json, ensure_ascii=False, indent=2) + "\n")
 
-    tokenizer_payload = tokenizer.to_dict()
-    (out_dir / "tokenizer.json").write_text(json.dumps(tokenizer_payload, ensure_ascii=False, indent=2) + "\n")
-    (out_dir / "tokenizer_config.json").write_text(
-        json.dumps(
-            {
-                "tokenizer_class": "CharTokenizer",
-                "unk_token": tokenizer.unk_token,
-                "model_max_length": config.block_size,
-                "note": "This is MiniLLM's educational char tokenizer, not a standard HF fast tokenizer.",
-            },
-            ensure_ascii=False,
-            indent=2,
+    if tokenizer_type == "byte-bpe" and isinstance(tokenizer, HFByteBPETokenizer):
+        tokenizer.save(out_dir, model_max_length=config.block_size)
+    else:
+        tokenizer_payload = tokenizer.to_dict()
+        (out_dir / "tokenizer.json").write_text(json.dumps(tokenizer_payload, ensure_ascii=False, indent=2) + "\n")
+        (out_dir / "tokenizer_config.json").write_text(
+            json.dumps(
+                {
+                    "tokenizer_class": "CharTokenizer",
+                    "unk_token": tokenizer.unk_token,
+                    "model_max_length": config.block_size,
+                    "note": "This is MiniLLM's educational char tokenizer, not a standard HF fast tokenizer.",
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n"
         )
-        + "\n"
-    )
     (out_dir / "generation_config.json").write_text(
         json.dumps({"max_new_tokens": 160, "temperature": 0.8, "top_k": 40}, ensure_ascii=False, indent=2) + "\n"
     )
@@ -80,8 +86,8 @@ def main() -> None:
     (out_dir / "README.md").write_text(
         "# MiniLLM HF-like Export\n\n"
         "This directory is useful for learning the Hugging Face model layout. "
-        "It is not directly loadable by vLLM/SGLang until MiniGPT is implemented "
-        "as a Transformers PreTrainedModel and registered in the target engine.\n"
+        f"Tokenizer type: `{tokenizer_type}`.\n\n"
+        "It can be loaded by teaching backends that implement and register MiniGPT.\n"
     )
     print(f"exported to {out_dir}")
 

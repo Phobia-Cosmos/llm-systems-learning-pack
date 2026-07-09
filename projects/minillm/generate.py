@@ -4,7 +4,8 @@ import argparse
 
 import torch
 
-from minillm import CharTokenizer, GPTConfig, MiniGPT
+from minillm import GPTConfig, MiniGPT
+from minillm.tokenizer_registry import tokenizer_from_checkpoint
 from train import pick_device
 
 
@@ -35,7 +36,7 @@ def main() -> None:
     # TODO:反序列化任意 Python 对象的风险有哪些？为什么会在这里出现？checkpoint输出时会显式保存这些内容是吗？
     checkpoint = torch.load(args.checkpoint, map_location=device, weights_only=False)
 
-    tokenizer = CharTokenizer.from_dict(checkpoint["tokenizer"])
+    tokenizer = tokenizer_from_checkpoint(checkpoint)
     # TODO:checkpoint加载出来是一个什么类型的对象，为什么这里要用**?这里的to又是什么东西？
     config = GPTConfig(**checkpoint["config"])
     model = MiniGPT(config).to(device)
