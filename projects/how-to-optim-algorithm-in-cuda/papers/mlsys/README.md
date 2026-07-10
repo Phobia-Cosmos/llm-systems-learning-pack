@@ -1,0 +1,15 @@
+## Paper
+
+- [Efficient Parallelization Layouts for Large-Scale Distributed Model Training](https://openreview.net/pdf?id=Y0AHNkVDeu)
+- [LIGHTSEQ: SEQUENCE LEVEL PARALLELISM FOR DISTRIBUTED TRAINING OF LONG CONTEXT TRANS-FORMERS](https://arxiv.org/pdf/2310.03294.pdf)
+- [NEAR ZERO BUBBLE PIPELINE PARALLELISM](https://openreview.net/pdf?id=tuzTN0eIO5)
+- [Lightning Attention-2: A Free Lunch for Handling Unlimited Sequence Lengths in Large Language Models](https://arxiv.org/pdf/2401.04658.pdf)
+- [LIGHTSEQ: SEQUENCE LEVEL PARALLELISM FOR DISTRIBUTED TRAINING OF LONG CONTEXT TRANS-FORMERS](https://arxiv.org/pdf/2310.03294.pdf)
+- [BPipe: Memory-Balanced Pipeline Parallelism for Training Large Language Models](https://openreview.net/forum?id=HVKmLi1iR4)
+- [Reducing Activation Recomputation in Large Transformer Models](https://arxiv.org/pdf/2205.05198.pdf)
+- [LLM Inference Unveiled: Survey and Roofline Model Insights](https://arxiv.org/pdf/2402.16363.pdf)
+- [AMSP: Reducing Communication Overhead of ZeRO for Efficient LLM Training](https://arxiv.org/pdf/2311.00257.pdf)
+- [Transformer-Lite: High-efficiency Deployment of Large Language Models on Mobile Phone GPUs](https://arxiv.org/pdf/2403.20041.pdf)
+- [vAttention: Dynamic Memory Management for Serving LLMs without PagedAttention](https://arxiv.org/pdf/2405.04437v1)
+- [An LLM Compiler for Parallel Function Calling](https://openreview.net/pdf?id=uQ2FUoFjnF)
+- [NanoFlow: Towards Optimal Large Language Model Serving Throughput](https://arxiv.org/abs/2408.12757)

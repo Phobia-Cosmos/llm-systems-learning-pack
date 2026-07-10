@@ -1,0 +1,106 @@
+[project]
+
+name = "ffpa-attn"
+dynamic = ["version"]
+requires-python = ">=3.10"
+authors = [{name = "DefTruth, Butterfingrz"}]
+maintainers = [{name = "DefTruth, Butterfingrz"}]
+description = "FFPA: Yet another Faster Flash Prefill Attention for large headdim, 1.5~3x faster than SDPA."
+readme = "README.md"
+license = {text = "Apache-2.0"}
+
+dependencies = [
+    "packaging",
+    "ninja",
+    "numpy",
+    "ray", # autotuning
+    "torch>=2.11.0",
+    "quack-kernels>=0.4.1",
+    "nvidia-cutlass-dsl>=4.5.1",
+    "apache-tvm-ffi>=0.1.11,<0.2",
+]
+
+[project.optional-dependencies]
+
+dev = [
+    "pre-commit",
+    "packaging",
+    "ninja",
+    "setuptools-scm",
+    "pytest",
+    "yapf==0.40.2",
+    "flake8",
+]
+
+tests = [
+    "pytest",
+    "matplotlib",
+]
+
+bench = [
+    "matplotlib",
+]
+
+docs = [
+    # Pinning mkdocs to 1.6.1 and mkdocs-material to 9.7.1 to avoid
+    # the breaking changes in mkdocs 2.0.0, which causes the CI failure
+    # in the check-mkdocs workflow.
+    # https://squidfunk.github.io/mkdocs-material/blog/2026/02/18/mkdocs-2.0/
+    "mkdocs==1.6.1",
+    "mkdocs-material==9.7.1",
+    "mkdocs-api-autonav",
+    "mkdocstrings-python",
+    "mkdocs-gen-files",
+    "mkdocs-awesome-nav",
+    "mkdocs-glightbox",
+    "mkdocs-git-revision-date-localized-plugin",
+    "mkdocs-minify-plugin",
+    "mkdocs-callouts",
+    "regex",
+]
+
+all = [
+    "ffpa-attn[dev]",
+    "ffpa-attn[tests]",
+    "ffpa-attn[bench]",
+]
+
+[project.urls]
+
+Repository = "https://github.com/xlite-dev/ffpa-attn"
+Homepage = "https://github.com/xlite-dev/ffpa-attn"
+GitHub = "https://github.com/xlite-dev/ffpa-attn"
+Documentation = "https://ffpa-attn.readthedocs.io"
+
+[build-system]
+
+requires = ["setuptools>=64", "setuptools_scm>=8", "torch>=2.7.0", "packaging", "ninja", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+version_scheme = "python-simplified-semver"
+local_scheme = "no-local-version"
+write_to = "src/ffpa_attn/_version.py"
+
+[tool.setuptools]
+include-package-data = true
+package-dir = {"" = "src"}
+
+[tool.setuptools.package-data]
+"ffpa_attn.triton" = ["configs/*.json"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+exclude = [
+    "build*",
+    "dist*",
+    "include*",
+    "csrc*",
+    "tests*",
+    "bench*",
+    "tmp*",
+    "docs*",
+    "tools*",
+    "third_party*",
+    "*.egg-info",
+]

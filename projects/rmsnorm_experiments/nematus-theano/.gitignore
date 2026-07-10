@@ -1,0 +1,5 @@
+*.pyc
+build
+dist
+nmt.egg-info
+*DS_Store

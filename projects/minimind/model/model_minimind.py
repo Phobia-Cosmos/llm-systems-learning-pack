@@ -15,11 +15,13 @@ class MiniMindConfig(PretrainedConfig):
         self.num_hidden_layers = num_hidden_layers
         self.use_moe = use_moe
         self.dropout = kwargs.get("dropout", 0.0)
+        # TODO：为什么vocab size可以这么大？这个为什么是可以预先定义好的？PretrainedConfig的默认就是6400吗？
         self.vocab_size = kwargs.get("vocab_size", 6400)
         self.bos_token_id = kwargs.get("bos_token_id", 1)
         self.eos_token_id = kwargs.get("eos_token_id", 2)
         self.flash_attn = kwargs.get("flash_attn", True)
         self.num_attention_heads = kwargs.get("num_attention_heads", 8)
+        # TODO：num_key_value_heads是什么？intermediate_size？max_position_embeddings？rms_norm_eps？rope_theta？
         self.num_key_value_heads = kwargs.get("num_key_value_heads", 4)
         self.head_dim = kwargs.get("head_dim", self.hidden_size // self.num_attention_heads)
         self.hidden_act = kwargs.get("hidden_act", 'silu')
@@ -27,6 +29,7 @@ class MiniMindConfig(PretrainedConfig):
         self.max_position_embeddings = kwargs.get("max_position_embeddings", 32768)
         self.rms_norm_eps = kwargs.get("rms_norm_eps", 1e-6)
         self.rope_theta = kwargs.get("rope_theta", 1e6)
+        # TODO：这里的参数分别代表什么意思?router_aux_loss_coef?
         self.tie_word_embeddings = kwargs.get("tie_word_embeddings", True)
         self.inference_rope_scaling = kwargs.get("inference_rope_scaling", False)
         self.rope_scaling = {
@@ -47,6 +50,7 @@ class MiniMindConfig(PretrainedConfig):
 # 🌏🌎🌍🌏🌎🌍🌏🌎🌍🌏🌎🌍🌏🌎🌍🌏🌎🌍🌏🌎🌍🌏🌎🌍🌏🌎🌍🌏🌎🌍🌏🌎🌍🌏🌎🌍🌏🌎🌍🌏🌎🌍🌏🌎🌍🌏🌎🌍🌏🌎🌍🌏
 #                                     MiniMind Model
 # 🌏🌎🌍🌏🌎🌍🌏🌎🌍🌏🌎🌍🌏🌎🌍🌏🌎🌍🌏🌎🌍🌏🌎🌍🌏🌎🌍🌏🌎🌍🌏🌎🌍🌏🌎🌍🌏🌎🌍🌏🌎🌍🌏🌎🌍🌏🌎🌍🌏🌎🌍🌏
+# TODO：原理以及公式分别是什么？
 class RMSNorm(torch.nn.Module):
     def __init__(self, dim: int, eps: float = 1e-5):
         super().__init__()
@@ -59,6 +63,7 @@ class RMSNorm(torch.nn.Module):
     def forward(self, x):
         return (self.weight * self.norm(x.float())).type_as(x)
 
+# TODO：这个函数的作用是什么以及end为什么是这样的形状？rope_base是什么？rope_scaling一般都是什么结构的 其中每一个字段代表什么?每一步都是在做什么？
 def precompute_freqs_cis(dim: int, end: int = int(32 * 1024), rope_base: float = 1e6, rope_scaling: dict = None):
     freqs, attn_factor = 1.0 / (rope_base ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim)), 1.0
     if rope_scaling is not None: # YaRN: f'(i) = f(i)((1-γ) + γ/s), where γ∈[0,1] is linear ramp
@@ -83,7 +88,9 @@ def apply_rotary_pos_emb(q, k, cos, sin, unsqueeze_dim=1):
     k_embed = ((k * cos.unsqueeze(unsqueeze_dim)) + (rotate_half(k) * sin.unsqueeze(unsqueeze_dim))).to(k.dtype)
     return q_embed, k_embed
 
+# TODO：这个函数的作用是什么？为什么return的内容需要expand后在进行reshape？x的维度是怎么样的？
 def repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
+    # TODO:这里是什么 每一个参数分别代表什么意思？
     bs, slen, num_key_value_heads, head_dim = x.shape
     if n_rep == 1: return x
     return (x[:, :, :, None, :].expand(bs, slen, num_key_value_heads, n_rep, head_dim).reshape(bs, slen, num_key_value_heads * n_rep, head_dim))

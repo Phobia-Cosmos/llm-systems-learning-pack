@@ -1,0 +1,153 @@
+import sys
+from attentive_reader import train
+import argparse
+import cPickle as pkl
+import os
+import pprint as pp
+from utils import create_model_name, create_entity_mask
+from pkl_data_iterator import get_data_files
+from rc_data_iter import load_vocab_path
+
+import numpy, scipy.sparse
+
+
+def main(job_id, params):
+    if params["data_mode"] == "full":
+        vpath = load_vocab_path()
+        train_files, valid_files = None, None
+    else:
+        train_files, valid_files, vpath = get_data_files(mode=params["data_mode"])
+    dvocab = pkl.load(open(vpath))
+    emb_sz = len(dvocab) + 1
+    eyem = scipy.sparse.eye(emb_sz)
+
+    sent_opts = {'use_sent_reps': False}
+# {'use_sent_reps': params['use_sent_reps'],
+#                 'sent_end_tok_ids': [dvocab['.'],
+#                                      dvocab['!']]}
+    cost_mask = None#create_entity_mask(dvocab, eyem)
+    pp.pprint(params)
+    #new_model_name = create_model_name([params['model']], params)
+    # model names based on options too hard to deal with
+    new_model_name = params['model']
+
+    print "The model will be saved to %s" % new_model_name
+    validerr, validcost = train(saveto=new_model_name,
+                                reload_=params['reload'][0],
+                                dim=params['dim'][0],
+                                decay_c=params['decay-c'][0],
+                                clip_c=params['clip-c'][0],
+                                lrate=params['learning-rate'][0],
+                                optimizer=params['optimizer'],
+                                ms_nlayers=params['ms_nlayers'],
+                                n_words_q=emb_sz,
+                                n_words_desc=emb_sz,
+                                n_words_ans=emb_sz,
+                                cost_mask=cost_mask,
+                                vocab=vpath,
+                                use_elu_g=params['use_elu_g'],
+                                encoder_desc=params['encoder_desc'],
+                                encoder_desc_word=params['encoder_desc_word'],
+                                encoder_q=params['encoder_q'],
+                                debug=params['debug'],
+                                dim_word_q=params['dim_word_q'][0],
+                                dim_word_ans=params['dim_word_ans'][0],
+                                dim_word_desc=params['dim_word_desc'][0],
+                                dim_proj=params['dim_proj'][0],
+                                valid_datasets=params['valid_datasets'],
+                                batch_size=params['batch_size'],
+                                model_dir=params['model_dir'],
+                                learn_h0=params['learn_h0'],
+                                use_dq_sims=params['use_dq_sims'],
+                                use_desc_skip_c_g=params['use_desc_skip_c_g'],
+                                truncate=params['truncate'],
+                                use_bidir=params['use_bidir'],
+                                valid_batch_size=params['batch_size'],
+                                validFreq=params['validFreq'],
+                                pkl_train_files=train_files,
+                                pkl_valid_files=valid_files,
+                                dispFreq=20,
+                                eyem=eyem,
+                                saveFreq=3000,
+                                patience=1000,
+                                use_dropout=params['use-dropout'][0],
+                                bn_everywhere=params['bn_everywhere'],
+                                bn_input_sequencewise=params['bn_input_sequencewise'],
+                                bn_input_not=params['bn_input_not'],
+                                popstat_eval=params['popstat_eval'],
+                                **sent_opts)
+
+    return validerr, validcost
+
+
+if __name__ == '__main__':
+    model_dir = "./"
+
+    parser = argparse.ArgumentParser("The different variations of the attentive reader.")
+    parser.add_argument("--use_dq_sims", default=0, type=int)
+    parser.add_argument("--use_desc_skip_c_g", type=int, default=0)
+    parser.add_argument("--truncate", default=-1, type=int)
+    parser.add_argument("--model", default="new_model.npz")
+    parser.add_argument("--dim", default=250, type=int)
+    parser.add_argument("--learn_h0", default=1, type=int)
+    parser.add_argument("--model_dir", default=model_dir, type=str)
+    parser.add_argument("--lr", default=4e-4, type=float)
+    parser.add_argument("--optimizer", default="adam", type=str)
+    parser.add_argument("--validFreq", default=1000, type=int)
+    parser.add_argument("--batch_size", default=32, type=int)
+    parser.add_argument("--use_sent_reps", default=0, type=int)
+    parser.add_argument("--unit_type", default="lstm", type=str)
+    parser.add_argument("--clip_grad", default=10.0, type=float)
+    parser.add_argument("--use_elu_g", default=0, type=int)
+    parser.add_argument("--data_mode", default="top4", type=str)
+    parser.add_argument("--debug", default=0, type=int)
+    parser.add_argument("--use_bidir", default=0, type=int)
+    parser.add_argument("--use_dropout", default=1, type=int)
+    parser.add_argument("--ms_nlayers", default=2, type=int)
+    parser.add_argument("--bn-everywhere", action="store_true")
+    parser.add_argument("--bn-input-sequencewise", action="store_true")
+    parser.add_argument("--bn-input-not", action="store_true")
+    parser.add_argument("--popstat-eval", action="store_true")
+    parser.add_argument("--reloadm", default=0, type=int)
+    args = parser.parse_args()
+
+    if args.bn_everywhere:
+        # haven't implemented BN versions of other unit types
+        assert args.unit_type in "lstm bnlstm".split()
+        args.unit_type = "bnlstm"
+
+    main(0, {
+        'debug': args.debug,
+        'model': args.model,
+        'dim': [int(args.dim)],
+        'dim_word_q': [int(args.dim)],
+        'dim_word_ans': [int(args.dim)],
+        'dim_proj': [int(args.dim)],
+        'dim_word_desc': [int(args.dim)],
+        'use_dq_sims': args.use_dq_sims,
+        'use_desc_skip_c_g': args.use_desc_skip_c_g,
+        'valid_datasets': ['/data/lisatmp4/gulcehrc/reading_comprehension_data/cleaned_cnn/cnn_validation_data.h5',
+                           '/data/lisatmp4/gulcehrc/reading_comprehension_data/cleaned_cnn/cnn_test_data.h5'],
+        'decay-c': [0.],
+        'use_bidir': args.use_bidir,
+        'ms_nlayers': args.ms_nlayers,
+        'clip-c': [args.clip_grad],
+        'use_elu_g': args.use_elu_g,
+        'encoder_desc': args.unit_type,
+        'encoder_desc_word': args.unit_type,
+        'encoder_q': args.unit_type,
+        'truncate': int(args.truncate),
+        'learn_h0': args.learn_h0,
+        'use-dropout': [bool(args.use_dropout)],
+        'model_dir': args.model_dir,
+        'optimizer': args.optimizer,
+        'validFreq': args.validFreq,
+        'data_mode': args.data_mode,
+        'use_sent_reps': args.use_sent_reps,
+        'learning-rate': [args.lr],
+        'batch_size': args.batch_size,
+        'bn_everywhere': args.bn_everywhere,
+        'bn_input_sequencewise': args.bn_input_sequencewise,
+        'bn_input_not': args.bn_input_not,
+        'popstat_eval': args.popstat_eval,
+        'reload': [args.reloadm]})
