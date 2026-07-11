@@ -3,7 +3,7 @@
 // =============================================================================
 //
 // 整理自 LeetCUDA 项目（https://github.com/xlite-dev/LeetCUDA），涵盖：
-//   - 面试高频 CUDA kernel 的完整实现（~30 个 kernel）
+//   - 面试高频 CUDA kernel 的完整实现（共 26 个 kernel）
 //   - 每类 kernel 附带详细的面试要点注释（WHY + HOW）
 //   - 优化技术的递进式讲解（naive → tiling → vectorize → tensor core → ws）
 //   - BLAS 语义：N=col-major(Normal), T=row-major(Transposed)
@@ -27,7 +27,7 @@
 //
 // SM (Streaming Multiprocessor) 内部结构：
 //   - Warp Scheduler ×4：每 SM 4 个 warp scheduler，每个每周期可发射 1 条指令
-//   - Register File：每 SM 65536 × 32-bit (4 bytes) = 256KB
+//   - Register File：每 SM 65536 × 32-bit = 256KB
 //   - Shared Memory / L1：可配置，最大 shared memory ~228KB (Hopper)
 //   - Tensor Cores：Hopper 每 SM 4 个；Blackwell 数量随型号/定义不同，建议以官方 ISV guide 为准
 //   - Warp = 32 threads：最小调度单元，SIMT 执行模型
@@ -84,7 +84,7 @@
 //    - 通过 cuda::barrier 同步，完全解耦数据搬运和计算
 //
 // 9. TMA (Tensor Memory Accelerator, Hopper+)
-//    - 硬件 DMA 引擎，支持 1D~5D 寻址，低寄存器开销
+//    - 硬件 DMA 引擎，支持 2D~5D 寻址，低寄存器开销
 //    - 配合 cp.async.bulk 实现异步数据搬运
 
 // ---- Roofline 分析公式 ----
@@ -214,7 +214,7 @@ __device__ float block_reduce_sum(float val) {
   constexpr int NUM_WARPS = (NUM_THREADS + WARP_SIZE - 1) / WARP_SIZE;
   int warp = threadIdx.x / WARP_SIZE;
   int lane = threadIdx.x % WARP_SIZE;
-  __shared__ float shared[NUM_WARPS];
+  static __shared__ float shared[NUM_WARPS];
 
   float value = warp_reduce_sum<WARP_SIZE>(val);
   if (lane == 0)
@@ -234,7 +234,7 @@ __device__ float block_reduce_max(float val) {
   constexpr int NUM_WARPS = (NUM_THREADS + WARP_SIZE - 1) / WARP_SIZE;
   int warp = threadIdx.x / WARP_SIZE;
   int lane = threadIdx.x % WARP_SIZE;
-  __shared__ float shared[NUM_WARPS];
+  static __shared__ float shared[NUM_WARPS];
 
   float value = warp_reduce_max<WARP_SIZE>(val);
   if (lane == 0)
@@ -257,7 +257,7 @@ __global__ void block_reduce_all(float *a, float *y, int N) {
   int tid = threadIdx.x;
   int idx = blockIdx.x * NUM_THREADS + tid;
   constexpr int NUM_WARPS = (NUM_THREADS + WARP_SIZE - 1) / WARP_SIZE;
-  __shared__ float shared[NUM_WARPS];
+  __shared__ float reduce_smem[NUM_WARPS];
 
   float val = (idx < N) ? a[idx] : 0.0f;
   int warp = tid / WARP_SIZE;
@@ -265,10 +265,10 @@ __global__ void block_reduce_all(float *a, float *y, int N) {
 
   val = warp_reduce_sum<WARP_SIZE>(val);
   if (lane == 0)
-    shared[warp] = val;
+    reduce_smem[warp] = val;
   __syncthreads();
 
-  val = (lane < NUM_WARPS) ? shared[lane] : 0.0f;
+  val = (lane < NUM_WARPS) ? reduce_smem[lane] : 0.0f;
   if (warp == 0)
     val = warp_reduce_sum<NUM_WARPS>(val);
   if (tid == 0) // tid == 0, not lane 0. 只有 block 内的一个线程负责写回全局结果，避免重复累加
@@ -285,7 +285,7 @@ __global__ void dot(float *a, float *b, float *y, int N) {
   int tid = threadIdx.x;
   int idx = blockIdx.x * NUM_THREADS + tid;
   constexpr int NUM_WARPS = (NUM_THREADS + WARP_SIZE - 1) / WARP_SIZE;
-  __shared__ float shared[NUM_WARPS];
+  __shared__ float reduce_smem[NUM_WARPS];
 
   float prod = (idx < N) ? a[idx] * b[idx] : 0.0f;
   int warp = tid / WARP_SIZE;
@@ -293,10 +293,10 @@ __global__ void dot(float *a, float *b, float *y, int N) {
 
   prod = warp_reduce_sum<WARP_SIZE>(prod);
   if (lane == 0)
-    shared[warp] = prod;
+    reduce_smem[warp] = prod;
   __syncthreads();
 
-  prod = (lane < NUM_WARPS) ? shared[lane] : 0.0f;
+  prod = (lane < NUM_WARPS) ? reduce_smem[lane] : 0.0f;
   if (warp == 0) // 只需要 warp 0 的线程继续 reduce 即可
     prod = warp_reduce_sum<NUM_WARPS>(prod);
   if (tid == 0) // tid == 0, not lane 0. 只有 block 内的一个线程负责写回全局结果，避免重复累加
@@ -313,7 +313,7 @@ __global__ void dot_vec4(float *a, float *b, float *y, int N) {
   int tid = threadIdx.x;
   int idx = (blockIdx.x * NUM_THREADS + tid) * 4;
   constexpr int NUM_WARPS = (NUM_THREADS + WARP_SIZE - 1) / WARP_SIZE;
-  __shared__ float shared[NUM_WARPS];
+  __shared__ float reduce_smem[NUM_WARPS];
 
   float4 reg_a = FLOAT4(a[idx]);
   float4 reg_b = FLOAT4(b[idx]);
@@ -325,10 +325,10 @@ __global__ void dot_vec4(float *a, float *b, float *y, int N) {
 
   prod = warp_reduce_sum<WARP_SIZE>(prod);
   if (lane == 0)
-    shared[warp] = prod;
+    reduce_smem[warp] = prod;
   __syncthreads();
 
-  prod = (lane < NUM_WARPS) ? shared[lane] : 0.0f;
+  prod = (lane < NUM_WARPS) ? reduce_smem[lane] : 0.0f;
   if (warp == 0)
     prod = warp_reduce_sum<NUM_WARPS>(prod);
   if (tid == 0)
@@ -480,29 +480,27 @@ __global__ void merge_attn_states(
   using pack_t = uint4;
 
   // 每个 (token, head) 对需要 threads_per_head 个线程覆盖 head_size 个元素
-  const int threads_per_head = head_size / PACK_SIZE;
-  // 实际有效总线程数，超过这个数的线程会被忽略，block是按照NUM_THREADS=128
-  // 来分配的，那么最后一个block的线程数可能会超过实际需要的线程数
-  const int total_threads = num_tokens * num_heads * threads_per_head;
+  int threads_per_head = head_size / PACK_SIZE;
+  int total_threads = num_tokens * num_heads * threads_per_head;
 
-  const int global_idx = blockIdx.x * NUM_THREADS + threadIdx.x;
+  int global_idx = blockIdx.x * NUM_THREADS + threadIdx.x;
   if (global_idx >= total_threads)
     return;
 
   // global_idx → (token_head_idx, pack_idx) → (token_idx, head_idx, pack_offset)
   // token_head_idx: 第几个 (token, head) 对，行优先展平
-  const int token_head_idx = global_idx / threads_per_head;
+  int token_head_idx = global_idx / threads_per_head;
   // pack_idx: 该 (token, head) 对内第几个 pack，0 ~ threads_per_head-1
-  const int pack_idx = global_idx % threads_per_head;
+  int pack_idx = global_idx % threads_per_head;
 
   // token_head_idx 分解为 (token_idx, head_idx)
-  const int token_idx = token_head_idx / num_heads; // token 变化慢（外维）
-  const int head_idx = token_head_idx % num_heads;  // head 变化快（内维）
+  int token_idx = token_head_idx / num_heads; // token 变化慢（外维）
+  int head_idx = token_head_idx % num_heads;  // head 变化快（内维）
 
   // pack_offset: 该 pack 覆盖的元素在 head_size 中的起始偏移（0, 4, 8, ...）
-  const int pack_offset = pack_idx * PACK_SIZE;
+  int pack_offset = pack_idx * PACK_SIZE;
   // head_offset: 该 (token, head) 对在 output 展平一维数组中的起始偏移
-  const int head_offset = token_idx * num_heads * head_size + head_idx * head_size;
+  int head_offset = token_idx * num_heads * head_size + head_idx * head_size;
 
   // 定位到当前 (token, head) 的输出段起始
   const float *prefix_head = prefix_output + head_offset;
@@ -518,35 +516,35 @@ __global__ void merge_attn_states(
   s_lse = isinf(s_lse) ? -INFINITY : s_lse;
 
   // Step 1: max 归一化（与 safe softmax 同理，防 exp 溢出）
-  const float max_lse = fmaxf(p_lse, s_lse);
+  float max_lse = fmaxf(p_lse, s_lse);
   p_lse -= max_lse;
   s_lse -= max_lse;
 
   // Step 2-3: 指数还原 → 混合比例 alpha, beta
-  const float p_se = expf(p_lse);
-  const float s_se = expf(s_lse);
-  const float out_se = p_se + s_se;
-  const float p_scale = p_se / out_se; // alpha = w_1 / (w_1 + w_2)
-  const float s_scale = s_se / out_se; // beta  = w_2 / (w_1 + w_2)
+  float p_se = expf(p_lse);
+  float s_se = expf(s_lse);
+  float out_se = p_se + s_se;
+  float p_scale = p_se / out_se; // alpha = w_1 / (w_1 + w_2)
+  float s_scale = s_se / out_se; // beta  = w_2 / (w_1 + w_2)
 
   // Step 4: 逐元素加权合并 O = alpha * O_1 + beta * O_2
   // 128-bit 向量化: uint4 load → per-element FMA → uint4 store
   if (pack_offset < head_size) {
     pack_t p_pack =
-        reinterpret_cast<const pack_t *>(prefix_head)[pack_idx];
+        reinterpret_cast<const pack_t *>(prefix_head)[pack_offset / PACK_SIZE];
     pack_t s_pack =
-        reinterpret_cast<const pack_t *>(suffix_head)[pack_idx];
+        reinterpret_cast<const pack_t *>(suffix_head)[pack_offset / PACK_SIZE];
     pack_t o_pack;
 
 #pragma unroll
     for (int i = 0; i < PACK_SIZE; ++i) {
-      const float p_v = reinterpret_cast<const float *>(&p_pack)[i];
-      const float s_v = reinterpret_cast<const float *>(&s_pack)[i];
-      const float o_v = p_v * p_scale + (s_v * s_scale); // FMA
-      reinterpret_cast<float *>(&o_pack)[i] = o_v;
+      float p_val = reinterpret_cast<const float *>(&p_pack)[i];
+      float s_val = reinterpret_cast<const float *>(&s_pack)[i];
+      float o_val = p_val * p_scale + s_val * s_scale;
+      reinterpret_cast<float *>(&o_pack)[i] = o_val;
     }
 
-    reinterpret_cast<pack_t *>(output_head)[pack_idx] = o_pack;
+    reinterpret_cast<pack_t *>(output_head)[pack_offset / PACK_SIZE] = o_pack;
   }
 }
 
@@ -617,8 +615,8 @@ __global__ void safe_softmax_per_token(float *x, float *y, int N) {
 //      m_new = max(m_old, x_i)
 //      d_new = d_old * exp(m_old - m_new) + exp(x_i - m_new)
 //   2) 二元合并 (binary merge，合并两个部分累加器，warp/block reduce 使用)：
-//      m = max(m1, m2) safe softmax用的max值
-//      d = d1*exp(m1-m) + d2*exp(m2-m) softmax用的分母值
+//      m = max(m1, m2)
+//      d = d1*exp(m1-m) + d2*exp(m2-m)
 //      当 m1≥m2 时退化为 d1 + d2*exp(m2-m1)（d_bigger + d_smaller*exp(m_smaller - m_bigger)）
 // 算法来源: "Online normalizer calculation for softmax" (arXiv:1805.02867)
 // Warp Reduce for Online Softmax — binary merge of two partial (m,d) accumulators.
@@ -666,33 +664,39 @@ __global__ void online_safe_softmax_per_token(const float *x, float *y, int N) {
   int tid = threadIdx.x;
   int idx = blockIdx.x * NUM_THREADS + threadIdx.x;
   const int NUM_WARPS = (NUM_THREADS + WARP_SIZE - 1) / WARP_SIZE;
-  __shared__ MD shared[NUM_WARPS];
-
-  float val = (idx < N) ? x[idx] : -FLT_MAX;
   int warp = tid / WARP_SIZE;
   int lane = tid % WARP_SIZE;
 
   // 初始化：每个线程持有一个 (max, denom) 对
   MD md;
-  md.m = idx < N ? val : -FLT_MAX;
+  md.m = idx < N ? x[idx] : -FLT_MAX;
   md.d = idx < N ? 1.0f : 0.0f;
 
-  // 第一级规约：warp_reduce_md 在归约中自动更新 m 和 d
+  // Block reduce：warp_reduce_md 在归约中自动更新 m 和 d
+  __shared__ MD shared[NUM_WARPS];
   md = warp_reduce_md<WARP_SIZE>(md);
 
   if (lane == 0)
     shared[warp] = md;
   __syncthreads();
 
-  // 第二级归约：每个 warp 结果再做一次 warp_reduce_md（复用 block_reduce 模式）
-  md = lane < NUM_WARPS ? shared[lane] : MD{-FLT_MAX, 0.0f};
-  md = warp_reduce_md<WARP_SIZE>(md); // 用WARP_SIZE确保每个lane都能拿到最终结果
+  // 第二级归约：warp0 收集各 warp 结果再做一次 warp_reduce_md（复用 block_reduce 模式）
+  // 只有 tid < 32 的线程参与；shared[0] 在第二次 __syncthreads 后才对整个 block 可见
+  if (tid < WARP_SIZE) {
+    md = tid < NUM_WARPS ? shared[tid] : MD{-FLT_MAX, 0.0f};
+    md = warp_reduce_md<NUM_WARPS>(md);
+    if (tid == 0) {
+      shared[0] = md;
+    }
+  }
+  __syncthreads();
 
   // 用全局 max 和 denom 做最终 softmax
+  md = shared[0];
   float d_inv = __fdividef(1.0f, md.d);
   // 边界线程即使看到 d=0 的填充值，也不会走到写回路径
   if (idx < N) {
-    y[idx] = __expf(val - md.m) * d_inv;
+    y[idx] = __expf(x[idx] - md.m) * d_inv;
   }
 }
 
@@ -903,13 +907,12 @@ __global__ void mat_transpose(float *x, float *y, const int row, const int col) 
 // source: LeetCUDA/kernels/mat-transpose/mat_transpose.cu
 __global__ void mat_transpose_padded(
     float *x, float *y, const int row, const int col) {
-  const int tx = threadIdx.x;
-  const int ty = threadIdx.y;
+  const int tx = threadIdx.x, ty = threadIdx.y;
 
   constexpr int TILE = 16;
   constexpr int PAD = 1;
   // Bank conflict fix: 每行多 1 个元素，打破 32-bank 对齐
-  __shared__ float tile[TILE * 4][TILE + PAD]; // 64x16
+  __shared__ float tile[TILE * 4][TILE + PAD];
 
   // x 空间坐标; 每线程覆盖 4 行 (actual row = x_r * 4)
   const int x_c = blockIdx.x * TILE + tx;
@@ -1157,21 +1160,18 @@ __global__ void sgemm_vec4(float *a, float *b, float *c, int M, int N, int K) {
   int load_gmem_a_m = by * BM + load_smem_a_m;
   int load_gmem_b_n = bx * BN + load_smem_b_n;
 
-  // 4×4 Thread Tile 基址（独立于加载映射），这里compute索引的计算逻辑要和
-  // load索引的计算逻辑分开，load/compute是可以独立索引的，理解这点很重要。
-  // 目标C Tile为[BM,BN]=[128x128], 有32x32线程，则每个线程处理4x4 tile
-  // 那么，就可以不重不漏地覆盖[32x4,32x4]=[128x128]的大小
+  // 4×4 Thread Tile 基址（独立于加载映射，避免 /4 漏乘 bug）
   int comp_smem_a_m_base = (tid / 32) * 4; // 0,4,8,...,124
   int comp_smem_b_n_base = (tid % 32) * 4; // 0,4,8,...,124
 
   float sum[4][4] = {0.f};
   for (int bk = 0; bk < (K + BK - 1) / BK; ++bk) {
-    int load_gmem_a_k = bk * BK + load_smem_a_k; // A [M, K]
+    int load_gmem_a_k = bk * BK + load_smem_a_k;
     int load_gmem_a_addr = load_gmem_a_m * K + load_gmem_a_k;
-    FLOAT4(s_a[load_smem_a_m][load_smem_a_k]) = FLOAT4(a[load_gmem_a_addr]); // s_a [BM,BK]
-    int load_gmem_b_k = bk * BK + load_smem_b_k; // B [K, N]
+    FLOAT4(s_a[load_smem_a_m][load_smem_a_k]) = FLOAT4(a[load_gmem_a_addr]);
+    int load_gmem_b_k = bk * BK + load_smem_b_k;
     int load_gmem_b_addr = load_gmem_b_k * N + load_gmem_b_n;
-    FLOAT4(s_b[load_smem_b_k][load_smem_b_n]) = FLOAT4(b[load_gmem_b_addr]); // s_b [BK,BN]
+    FLOAT4(s_b[load_smem_b_k][load_smem_b_n]) = FLOAT4(b[load_gmem_b_addr]);
     __syncthreads();
 
 #pragma unroll

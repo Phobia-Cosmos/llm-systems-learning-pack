@@ -11,6 +11,7 @@
 #include <vector>
 
 #define WARP_SIZE 32
+// TODO:reinterpret_cast是什么？这几个宏的作用是什么？
 #define INT4(value) (reinterpret_cast<int4 *>(&(value))[0])
 #define FLOAT4(value) (reinterpret_cast<float4 *>(&(value))[0])
 #define HALF2(value) (reinterpret_cast<half2 *>(&(value))[0])
@@ -19,21 +20,27 @@
 
 // FP32
 // ElementWise Add grid(N/256),
+// TODO:a: Nx1, b: Nx1其中的Nx1是什么意思？为什么不需要返回值？为什么使用c就可以代表完成计算？
 // block(256) a: Nx1, b: Nx1, c: Nx1, c = elementwise_add(a, b)
 __global__ void elementwise_add_f32_kernel(float *a, float *b, float *c,
-                                           int N) {
+                                           int N)
+{
   int idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx < N)
     c[idx] = a[idx] + b[idx];
 }
 
+// TODO:这里的Vec4是什么？为什么block是256/4？为什么计算idx的方式也发生了改变？
 // ElementWise Add + Vec4
 // grid(N/256), block(256/4)
 // a: Nx1, b: Nx1, c: Nx1, c = elementwise_add(a, b)
 __global__ void elementwise_add_f32x4_kernel(float *a, float *b, float *c,
-                                             int N) {
+                                             int N)
+{
   int idx = 4 * (blockIdx.x * blockDim.x + threadIdx.x);
-  if ((idx + 3) < N) {
+  if ((idx + 3) < N)
+  {
+    // TODO：这里的float4是什么？以及为什么要用宏？为什么使用reg？为什么reg_c有四个维度？
     float4 reg_a = FLOAT4(a[idx]);
     float4 reg_b = FLOAT4(b[idx]);
     float4 reg_c;
@@ -42,8 +49,12 @@ __global__ void elementwise_add_f32x4_kernel(float *a, float *b, float *c,
     reg_c.z = reg_a.z + reg_b.z;
     reg_c.w = reg_a.w + reg_b.w;
     FLOAT4(c[idx]) = reg_c;
-  } else if (idx < N) {
-    for (int i = 0; (idx + i) < N; i++) {
+  }
+  // TODO:这里单独判断的原因是什么？
+  else if (idx < N)
+  {
+    for (int i = 0; (idx + i) < N; i++)
+    {
       c[idx + i] = a[idx + i] + b[idx + i];
     }
   }
@@ -52,30 +63,40 @@ __global__ void elementwise_add_f32x4_kernel(float *a, float *b, float *c,
 // FP16
 // ElementWise Add grid(N/256),
 // block(256) a: Nx1, b: Nx1, c: Nx1, c = elementwise_add(a, b)
-__global__ void elementwise_add_f16_kernel(half *a, half *b, half *c, int N) {
+// TODO:half是什么？__hadd？
+__global__ void elementwise_add_f16_kernel(half *a, half *b, half *c, int N)
+{
   int idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx < N)
     c[idx] = __hadd(a[idx], b[idx]);
 }
 
+// TODO：为什么这里不是*4而是x2？为什么这里的reg都是只有两个维度？
 // a: Nx1, b: Nx1, c: Nx1, c = elementwise_add(a, b)
-__global__ void elementwise_add_f16x2_kernel(half *a, half *b, half *c, int N) {
+__global__ void elementwise_add_f16x2_kernel(half *a, half *b, half *c, int N)
+{
   int idx = 2 * (blockIdx.x * blockDim.x + threadIdx.x);
-  if ((idx + 1) < N) {
+  if ((idx + 1) < N)
+  {
     half2 reg_a = HALF2(a[idx]);
     half2 reg_b = HALF2(b[idx]);
     half2 reg_c;
     reg_c.x = __hadd(reg_a.x, reg_b.x);
     reg_c.y = __hadd(reg_a.y, reg_b.y);
     HALF2(c[idx]) = reg_c;
-  } else if (idx < N) {
+  }
+  else if (idx < N)
+  {
     c[idx] = __hadd(a[idx], b[idx]);
   }
 }
 
-__global__ void elementwise_add_f16x8_kernel(half *a, half *b, half *c, int N) {
+// TODO:为什么内部计算时每一个reg有四个？
+__global__ void elementwise_add_f16x8_kernel(half *a, half *b, half *c, int N)
+{
   int idx = 8 * (blockIdx.x * blockDim.x + threadIdx.x);
-  if ((idx + 7) < N) {
+  if ((idx + 7) < N)
+  {
     half2 reg_a_0 = HALF2(a[idx + 0]);
     half2 reg_a_1 = HALF2(a[idx + 2]);
     half2 reg_a_2 = HALF2(a[idx + 4]);
@@ -97,57 +118,76 @@ __global__ void elementwise_add_f16x8_kernel(half *a, half *b, half *c, int N) {
     HALF2(c[idx + 2]) = reg_c_1;
     HALF2(c[idx + 4]) = reg_c_2;
     HALF2(c[idx + 6]) = reg_c_3;
-  } else if (idx < N) {
-    for (int i = 0; (idx + i) < N; i++) {
+  }
+  else if (idx < N)
+  {
+    for (int i = 0; (idx + i) < N; i++)
+    {
       c[idx + i] = __hadd(a[idx + i], b[idx + i]);
     }
   }
 }
 
+// TODO:pack代表什么意思？
 __global__ void elementwise_add_f16x8_pack_kernel(half *a, half *b, half *c,
-                                                  int N) {
+                                                  int N)
+{
   int idx = 8 * (blockIdx.x * blockDim.x + threadIdx.x);
-  if ((idx + 7) < N) {
+  if ((idx + 7) < N)
+  {
+    // TODO:temporary register(memory), .local space in ptx, addressable是什么意思？
     // temporary register(memory), .local space in ptx, addressable
     half pack_a[8], pack_b[8], pack_c[8]; // 8x16 bits=128 bits.
     // reinterpret as float4 and load 128 bits in 1 memory issue.
+    // TODO:为什么仅仅load pack_a[0]?
     LDST128BITS(pack_a[0]) = LDST128BITS(a[idx]); // load 128 bits
     LDST128BITS(pack_b[0]) = LDST128BITS(b[idx]); // load 128 bits
 
+    // TODO:#pragma unroll是什么意思？
 #pragma unroll
-    for (int i = 0; i < 8; i += 2) {
+    for (int i = 0; i < 8; i += 2)
+    {
       // __hadd2 for half2 x 4
       HALF2(pack_c[i]) = __hadd2(HALF2(pack_a[i]), HALF2(pack_b[i]));
     }
     // reinterpret as float4 and store 128 bits in 1 memory issue.
     LDST128BITS(c[idx]) = LDST128BITS(pack_c[0]);
-  } else if (idx < N) {
-    for (int i = 0; (idx + i) < N; i++) {
+  }
+  else if (idx < N)
+  {
+    for (int i = 0; (idx + i) < N; i++)
+    {
       c[idx + i] = __hadd(a[idx + i], b[idx + i]);
     }
   }
 }
 
 #define STRINGFY(str) #str
-#define TORCH_BINDING_COMMON_EXTENSION(func)                                   \
+// TODO:这个宏是什么意思？
+#define TORCH_BINDING_COMMON_EXTENSION(func) \
   m.def(STRINGFY(func), &func, STRINGFY(func));
 
-#define CHECK_TORCH_TENSOR_DTYPE(T, th_type)                                   \
-  if (((T).options().dtype() != (th_type))) {                                  \
-    std::cout << "Tensor Info:" << (T).options() << std::endl;                 \
-    throw std::runtime_error("values must be " #th_type);                      \
+#define CHECK_TORCH_TENSOR_DTYPE(T, th_type)                   \
+  if (((T).options().dtype() != (th_type)))                    \
+  {                                                            \
+    std::cout << "Tensor Info:" << (T).options() << std::endl; \
+    throw std::runtime_error("values must be " #th_type);      \
   }
 
+// TODO:这个宏的作用是什么？为什么要判断ndim是否为2？dim3是什么？为什么不同的if代码快中都在计算N？这个N代表什么东西？
 #define TORCH_BINDING_ELEM_ADD(packed_type, th_type, element_type, n_elements) \
   void elementwise_add_##packed_type(torch::Tensor a, torch::Tensor b,         \
-                                     torch::Tensor c) {                        \
+                                     torch::Tensor c)                          \
+  {                                                                            \
     CHECK_TORCH_TENSOR_DTYPE(a, (th_type))                                     \
     CHECK_TORCH_TENSOR_DTYPE(b, (th_type))                                     \
     CHECK_TORCH_TENSOR_DTYPE(c, (th_type))                                     \
     const int ndim = a.dim();                                                  \
-    if (ndim != 2) {                                                           \
+    if (ndim != 2)                                                             \
+    {                                                                          \
       int N = 1;                                                               \
-      for (int i = 0; i < ndim; ++i) {                                         \
+      for (int i = 0; i < ndim; ++i)                                           \
+      {                                                                        \
         N *= a.size(i);                                                        \
       }                                                                        \
       dim3 block(256 / (n_elements));                                          \
@@ -156,20 +196,26 @@ __global__ void elementwise_add_f16x8_pack_kernel(half *a, half *b, half *c,
           reinterpret_cast<element_type *>(a.data_ptr()),                      \
           reinterpret_cast<element_type *>(b.data_ptr()),                      \
           reinterpret_cast<element_type *>(c.data_ptr()), N);                  \
-    } else {                                                                   \
+    }                                                                          \
+    else                                                                       \
+    {                                                                          \
       const int S = a.size(0);                                                 \
       const int K = a.size(1);                                                 \
       const int N = S * K;                                                     \
-      if ((K / (n_elements)) <= 1024) {                                        \
+      if ((K / (n_elements)) <= 1024)                                          \
+      {                                                                        \
         dim3 block(K / (n_elements));                                          \
         dim3 grid(S);                                                          \
         elementwise_add_##packed_type##_kernel<<<grid, block>>>(               \
             reinterpret_cast<element_type *>(a.data_ptr()),                    \
             reinterpret_cast<element_type *>(b.data_ptr()),                    \
             reinterpret_cast<element_type *>(c.data_ptr()), N);                \
-      } else {                                                                 \
+      }                                                                        \
+      else                                                                     \
+      {                                                                        \
         int N = 1;                                                             \
-        for (int i = 0; i < ndim; ++i) {                                       \
+        for (int i = 0; i < ndim; ++i)                                         \
+        {                                                                      \
           N *= a.size(i);                                                      \
         }                                                                      \
         dim3 block(256 / (n_elements));                                        \
@@ -189,7 +235,8 @@ TORCH_BINDING_ELEM_ADD(f16x2, torch::kHalf, half, 2)
 TORCH_BINDING_ELEM_ADD(f16x8, torch::kHalf, half, 8)
 TORCH_BINDING_ELEM_ADD(f16x8_pack, torch::kHalf, half, 8)
 
-PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
+{
   TORCH_BINDING_COMMON_EXTENSION(elementwise_add_f32)
   TORCH_BINDING_COMMON_EXTENSION(elementwise_add_f32x4)
   TORCH_BINDING_COMMON_EXTENSION(elementwise_add_f16)
