@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 @dataclass(slots=True)
 class SamplingParams:
+    # TODO：采样是发生在logits输出之后吧 为什么要声明一个max tokens？
     temperature: float = 1.0
     max_tokens: int = 64
     ignore_eos: bool = False

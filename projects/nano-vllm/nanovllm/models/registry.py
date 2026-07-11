@@ -10,14 +10,15 @@ from typing import Callable
 from torch import nn
 from transformers import AutoTokenizer, PretrainedConfig
 
-
+# TODO：这个是需要我们自己生成还是？
 TokenizerLoader = Callable[[str], object]
 
-
+# TODO：frozen是什么意思？
 @dataclass(frozen=True)
 class ModelSpec:
     model_type: str
     architectures: tuple[str, ...]
+    # TODO：这里定义type的作用是什么？为什么model class是nn.Module？
     config_class: type[PretrainedConfig]
     model_class: type[nn.Module]
     tokenizer_loader: TokenizerLoader | None = None
@@ -26,7 +27,7 @@ class ModelSpec:
 _MODEL_SPECS: list[ModelSpec] = []
 _builtins_loaded = False
 
-
+# TODO：为什么要在函数内部定义def？为什么返回的是一个decorator？
 def register_model(
     *,
     model_type: str,
@@ -54,18 +55,19 @@ def register_model(
 
     return decorator
 
-
+# TODO：这里是把符合的model全部列出来是吗？
 def _load_builtin_models() -> None:
     global _builtins_loaded
     if _builtins_loaded:
         return
     models_package = importlib.import_module("nanovllm.models")
+    # TODO：为什么要判断module name符合的的条件？
     for module in pkgutil.iter_modules(models_package.__path__):
         if not module.name.startswith("_") and module.name != "registry":
             importlib.import_module(f"{models_package.__name__}.{module.name}")
     _builtins_loaded = True
 
-
+# TODO：为什么要匹配model type和architectures？
 def _resolve_model(model_type: str | None, architectures: list[str] | tuple[str, ...] | None) -> ModelSpec:
     _load_builtin_models()
     architecture_set = set(architectures or ())
@@ -115,6 +117,7 @@ def load_tokenizer(model_path: str, config: PretrainedConfig):
     spec = _resolve_model(getattr(config, "model_type", None), getattr(config, "architectures", None))
     if spec.tokenizer_loader is not None:
         return spec.tokenizer_loader(model_path)
+    # TODO：这里是使用默认的分词器是吗？
     return AutoTokenizer.from_pretrained(model_path, use_fast=True)
 
 

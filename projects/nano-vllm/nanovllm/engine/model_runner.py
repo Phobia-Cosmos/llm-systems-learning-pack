@@ -19,20 +19,26 @@ class ModelRunner:
         hf_config = config.hf_config
         self.block_size = config.kvcache_block_size
         self.enforce_eager = config.enforce_eager
+        # TODO：这里为什么要配置rank以及rank是否为0为什么很重要？
         self.world_size = config.tensor_parallel_size
         self.rank = rank
         self.event = event
 
+        # TODO：nccl是什么？为什么要使用tcp连接？set_device作用是什么？default_dtype是什么？
         dist.init_process_group("nccl", "tcp://localhost:2333", world_size=self.world_size, rank=rank)
         torch.cuda.set_device(rank)
         default_dtype = torch.get_default_dtype()
+        # TODO：为什么要传入第三个参数？
         model_dtype = getattr(hf_config, "dtype", getattr(hf_config, "torch_dtype", None))
         if isinstance(model_dtype, str):
+            # TODO：这是什么？
             model_dtype = getattr(torch, model_dtype)
         if model_dtype is not None:
             torch.set_default_dtype(model_dtype)
+        # TODO：为什么要先设置rank在设置device？
         torch.set_default_device("cuda")
         self.model = create_model(hf_config)
+        # TODO：？？是什么？
         self.model_dtype = next(self.model.parameters()).dtype
         load_model(self.model, config.model)
         self.sampler = Sampler()
@@ -72,19 +78,25 @@ class ModelRunner:
 
     def read_shm(self):
         assert self.world_size > 1 and self.rank > 0
+        # TODO：为什么要wait？
         self.event.wait()
         n = int.from_bytes(self.shm.buf[0:4], "little")
         method_name, *args = pickle.loads(self.shm.buf[4:n+4])
+        # TODO：为什么要clear？
         self.event.clear()
         return method_name, args
 
+    # TODO：这个函数作用是什么？
     def write_shm(self, method_name, *args):
         assert self.world_size > 1 and self.rank == 0
+        # TODO：这里是在做什么？dump出来的是什么？
         data = pickle.dumps([method_name, *args])
         n = len(data)
+        # TODO：前5个是什么？这里为什么要这样把buf这样划分？
         self.shm.buf[0:4] = n.to_bytes(4, "little")
         self.shm.buf[4:n+4] = data
         for event in self.event:
+            # TODO：set的作用是什么？
             event.set()
 
     def call(self, method_name, *args):
@@ -95,9 +107,11 @@ class ModelRunner:
 
     def warmup_model(self):
         torch.cuda.empty_cache()
+        # TODO：这个是什么意思？
         torch.cuda.reset_peak_memory_stats()
         max_num_batched_tokens, max_model_len = self.config.max_num_batched_tokens, self.config.max_model_len
         seq_len = min(max_num_batched_tokens, max_model_len)
+        # TODO：seq的作用是什么？为什么需要num_seqs个Sequence？
         num_seqs = min(max_num_batched_tokens // seq_len, self.config.max_num_seqs)
         seqs = [Sequence([0] * seq_len) for _ in range(num_seqs)]
         for seq in seqs:

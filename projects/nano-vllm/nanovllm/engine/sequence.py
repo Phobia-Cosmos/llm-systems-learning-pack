@@ -6,13 +6,15 @@ from nanovllm.sampling_params import SamplingParams
 
 
 class SequenceStatus(Enum):
+    # TODO：auto()的作用是什么？
     WAITING = auto()
     RUNNING = auto()
     FINISHED = auto()
 
-
+# TODO：这个是用来存储什么内容的？kvcache吗？
 class Sequence:
     block_size = 256
+    # TODO：这个是在记录什么数字？next可以调用count是吗？
     counter = count()
 
     def __init__(self, token_ids: list[int], sampling_params = SamplingParams()):
@@ -21,7 +23,9 @@ class Sequence:
         self.token_ids = copy(token_ids)
         self.last_token = token_ids[-1]
         self.num_tokens = len(self.token_ids)
+        # TODO：为什么还要多一个提示token？和num tokens有何区别？
         self.num_prompt_tokens = len(token_ids)
+        # TODO：cache token存储在哪里？block_table是用来存什么的？num_scheduled_tokens？
         self.num_cached_tokens = 0
         self.num_scheduled_tokens = 0
         self.is_prefill = True
@@ -52,6 +56,7 @@ class Sequence:
     def completion_token_ids(self):
         return self.token_ids[self.num_prompt_tokens:]
 
+    # TODO：为什么针对不同的block需要不同的处理？难道block不满是无法处理？
     @property
     def num_blocks(self):
         return (self.num_tokens + self.block_size - 1) // self.block_size
@@ -69,6 +74,7 @@ class Sequence:
         self.last_token = token_id
         self.num_tokens += 1
 
+    # TODO：这个是什么意思？
     def __getstate__(self):
         last_state = self.last_token if not self.is_prefill else self.token_ids
         return (self.num_tokens, self.num_prompt_tokens, self.num_cached_tokens, self.num_scheduled_tokens, self.block_table, last_state)

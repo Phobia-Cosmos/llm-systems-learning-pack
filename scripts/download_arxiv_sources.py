@@ -16,7 +16,6 @@ import csv
 import difflib
 import gzip
 import json
-import os
 import re
 import shutil
 import subprocess
@@ -361,6 +360,44 @@ def atomic_json(path: Path, value) -> None:
     temporary.replace(path)
 
 
+def write_title_list(
+    papers: list[LocalPaper],
+    path: Path,
+    known_entries: Iterable[tuple[str, str, str]],
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    with temporary.open("w", newline="", encoding="utf-8") as output:
+        writer = csv.writer(output, delimiter="\t")
+        writer.writerow(
+            [
+                "year",
+                "venue",
+                "title",
+                "pdf_path",
+                "known_arxiv_id",
+                "planned_directory",
+            ]
+        )
+        for paper in papers:
+            known = match_known_arxiv(paper, known_entries)
+            official_title = known.title if known else paper.title
+            year = paper.year or (known.published_year if known else "")
+            venue = paper.venue or ("arXiv" if known else "")
+            planned_directory = safe_name(f"{year}{venue}-{official_title}") if year and venue else ""
+            writer.writerow(
+                [
+                    paper.year,
+                    paper.venue,
+                    paper.title,
+                    paper.pdf_path,
+                    known.arxiv_id if known else "",
+                    planned_directory,
+                ]
+            )
+    temporary.replace(path)
+
+
 def install_source(
     client: ArxivClient,
     paper: LocalPaper,
@@ -407,11 +444,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--papers-root", type=Path, default=home / "Desktop/ai/papers")
     parser.add_argument("--output", type=Path, default=home / "Downloads/arxiv_sources")
     parser.add_argument("--index", type=Path, default=home / "Desktop/ai/paper_list.tsv")
+    parser.add_argument("--titles-file", type=Path, default=home / "Desktop/ai/paper_titles.tsv")
     parser.add_argument("--force-search", action="store_true", help="Ignore arXiv IDs already recorded in paper_list.tsv")
     parser.add_argument("--force", action="store_true", help="Replace existing source directories")
     parser.add_argument("--keep-archive", action="store_true", help="Keep the raw e-print download after extraction")
-    parser.add_argument("--search-only", action="store_true", help="Search and write the manifest without downloading sources")
-    parser.add_argument("--dry-run", action="store_true", help="Only print extracted local paper names")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--download", action="store_true", help="Search and download matched TeX sources")
+    mode.add_argument("--search-only", action="store_true", help="Search and write the manifest without downloading sources")
+    mode.add_argument("--dry-run", action="store_true", help="Only extract and print local paper names (default)")
     parser.add_argument("--limit", type=int, help="Process at most this many unique papers")
     parser.add_argument("--match", help="Only process local titles containing this text")
     parser.add_argument("--delay", type=float, default=3.1, help="Minimum seconds between arXiv requests")
@@ -426,7 +466,12 @@ def main() -> int:
     if not papers_root.is_dir():
         raise SystemExit(f"papers directory not found: {papers_root}")
 
-    papers, duplicate_count = discover_papers(papers_root)
+    all_papers, duplicate_count = discover_papers(papers_root)
+    known_entries = [] if args.force_search else load_known_arxiv(args.index.expanduser())
+    titles_file = args.titles_file.expanduser().resolve()
+    write_title_list(all_papers, titles_file, known_entries)
+
+    papers = all_papers
     if args.match:
         query = normalize_title(args.match)
         papers = [paper for paper in papers if query in normalize_title(paper.title)]
@@ -434,14 +479,14 @@ def main() -> int:
         papers = papers[: max(0, args.limit)]
 
     print(f"Found {len(papers)} unique papers ({duplicate_count} duplicate PDF names removed).")
-    if args.dry_run:
+    print(f"Title list: {titles_file} ({len(all_papers)} total unique papers)")
+    if args.dry_run or (not args.download and not args.search_only):
         for index, paper in enumerate(papers, 1):
             prefix = paper.prefix or "<year+venue from arXiv>"
             print(f"{index:03d}  {prefix}-{paper.title}")
         return 0
 
     output_root.mkdir(parents=True, exist_ok=True)
-    known_entries = [] if args.force_search else load_known_arxiv(args.index.expanduser())
     client = ArxivClient(delay=max(0.0, args.delay))
     results: list[dict] = []
     manifest_path = output_root / "manifest.json"

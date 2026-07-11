@@ -20,9 +20,11 @@ class LLMEngine:
         config = Config(model, **config_kwargs)
         self.max_model_len = config.max_model_len
         Sequence.block_size = config.kvcache_block_size
+        # TODO：这两个数组的作用是什么？mp.get_context("spawn")的作用是什么？spawn是context的名称吗？event的作用是什么？
         self.ps = []
         self.events = []
         ctx = mp.get_context("spawn")
+        # TODO：这个循环中只是声明定义还没有start是吗？
         for i in range(1, config.tensor_parallel_size):
             event = ctx.Event()
             process = ctx.Process(target=ModelRunner, args=(config, i, event))
@@ -31,6 +33,7 @@ class LLMEngine:
             self.events.append(event)
         self.model_runner = ModelRunner(config, 0, self.events)
         self.tokenizer = load_tokenizer(config.model, config.hf_config)
+        # TODO：所以分词器中需要有eos_token_id是吗？
         config.eos = self.tokenizer.eos_token_id
         self.scheduler = Scheduler(config)
         atexit.register(self.exit)
