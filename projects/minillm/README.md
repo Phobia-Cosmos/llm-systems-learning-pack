@@ -100,7 +100,7 @@ python generate.py --prompt "MiniGPT" --max-new-tokens 40 --greedy --kv-cache
 /home/undefined/Desktop/ai/.venv-sglang/bin/python export_hf_like.py   --checkpoint checkpoints/minillm.pt   --out-dir hf_exports/minillm   --safe-serialization
 ```
 
-这个导出目录用于学习 Hugging Face 文件结构；要让 vLLM/SGLang 直接加载，还需要实现并注册 MiniGPT 模型后端。
+这个导出目录用于学习 Hugging Face 文件结构。当前同级 `nano-vllm` 项目已经注册 MiniGPT 后端；原版 vLLM/SGLang 仍需各自实现并注册该架构。
 
 ## 这个 LLM 可以做什么
 
@@ -157,7 +157,7 @@ python generate.py --prompt "MiniGPT" --max-new-tokens 40 --greedy --kv-cache
 /home/undefined/Desktop/ai/.venv-sglang/bin/python scripts/run_nanovllm_minigpt.py
 ```
 
-当前这个 nano-vLLM 后端用于学习“如何给 serving engine 添加新模型架构”。它已经走 nano-vLLM 的 `LLM.generate()`、scheduler 和 sampler，但 MiniGPT attention 暂时没有 paged KV cache，decode 时会重算完整上下文，所以它不是高性能版本。
+当前 MiniGPT 通过独立模型模块注册，走 nano-vLLM 的 `LLM.generate()`、scheduler、sampler、FlashAttention 和 paged KV cache。模型仍使用训练时的 learned absolute position embedding，因此 prompt 与生成 token 总数不能超过导出配置中的 `block_size`。
 
 ### 通过 mini-sglang 教学服务调用 MiniLLM
 

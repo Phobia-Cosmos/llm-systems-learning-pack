@@ -2,7 +2,6 @@ import atexit
 from dataclasses import fields
 from time import perf_counter
 from tqdm.auto import tqdm
-from transformers import AutoTokenizer
 import torch.multiprocessing as mp
 
 from nanovllm.config import Config
@@ -10,6 +9,7 @@ from nanovllm.sampling_params import SamplingParams
 from nanovllm.engine.sequence import Sequence
 from nanovllm.engine.scheduler import Scheduler
 from nanovllm.engine.model_runner import ModelRunner
+from nanovllm.models.registry import load_tokenizer
 
 
 class LLMEngine:
@@ -18,6 +18,7 @@ class LLMEngine:
         config_fields = {field.name for field in fields(Config)}
         config_kwargs = {k: v for k, v in kwargs.items() if k in config_fields}
         config = Config(model, **config_kwargs)
+        self.max_model_len = config.max_model_len
         Sequence.block_size = config.kvcache_block_size
         self.ps = []
         self.events = []
@@ -29,7 +30,7 @@ class LLMEngine:
             self.ps.append(process)
             self.events.append(event)
         self.model_runner = ModelRunner(config, 0, self.events)
-        self.tokenizer = AutoTokenizer.from_pretrained(config.model, use_fast=True)
+        self.tokenizer = load_tokenizer(config.model, config.hf_config)
         config.eos = self.tokenizer.eos_token_id
         self.scheduler = Scheduler(config)
         atexit.register(self.exit)
@@ -43,6 +44,13 @@ class LLMEngine:
     def add_request(self, prompt: str | list[int], sampling_params: SamplingParams):
         if isinstance(prompt, str):
             prompt = self.tokenizer.encode(prompt)
+        if not prompt:
+            raise ValueError("Prompt must contain at least one token")
+        if len(prompt) + sampling_params.max_tokens > self.max_model_len:
+            raise ValueError(
+                f"Prompt ({len(prompt)} tokens) and requested completion "
+                f"({sampling_params.max_tokens} tokens) exceed max_model_len={self.max_model_len}"
+            )
         seq = Sequence(prompt, sampling_params)
         self.scheduler.add(seq)
 

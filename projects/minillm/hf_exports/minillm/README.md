@@ -1,3 +1,5 @@
 # MiniLLM HF-like Export
 
-This directory is useful for learning the Hugging Face model layout. It is not directly loadable by vLLM/SGLang until MiniGPT is implemented as a Transformers PreTrainedModel and registered in the target engine.
+This directory is useful for learning the Hugging Face model layout. Tokenizer type: `char`.
+
+It can be loaded by the sibling nano-vLLM project's registered MiniGPT backend. Other serving engines still need their own MiniGPT implementation and registration.

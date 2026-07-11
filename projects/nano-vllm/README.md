@@ -43,6 +43,43 @@ outputs = llm.generate(prompts, sampling_params)
 outputs[0]["text"]
 ```
 
+## Supported Models
+
+- Qwen3 (`model_type: qwen3`)
+- MiniLLM MiniGPT (`model_type: minigpt`), including its character tokenizer and HF-compatible Byte BPE exports
+
+Run the MiniLLM export in this workspace with:
+
+```bash
+cd /home/undefined/Desktop/ai/projects/minillm
+python export_hf_like.py \
+  --checkpoint checkpoints/minillm.pt \
+  --out-dir hf_exports/minillm \
+  --safe-serialization
+python scripts/run_nanovllm_minigpt.py
+```
+
+The bundled character model has a vocabulary size of 339, so use `tensor_parallel_size=1` for that checkpoint.
+
+## Adding A Model
+
+Model-specific code lives under `nanovllm/models/`. A model module owns its `PretrainedConfig`, inference model, optional tokenizer loader, and registration:
+
+```python
+from nanovllm.models.registry import register_model
+
+@register_model(
+    model_type="my_model",
+    architectures=("MyModelForCausalLM",),
+    config_class=MyModelConfig,
+    tokenizer_loader=load_my_tokenizer,  # optional
+)
+class MyModelForCausalLM(nn.Module):
+    ...
+```
+
+Built-in modules under `nanovllm.models` are discovered and imported lazily by the registry. External model modules can register themselves before constructing `LLM`. The scheduler, model runner, and request API do not require architecture-specific branches.
+
 ## Benchmark
 
 See `bench.py` for benchmark.

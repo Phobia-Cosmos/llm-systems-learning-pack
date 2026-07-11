@@ -48,7 +48,7 @@ def main() -> None:
         "dropout": config.dropout,
         "bias": config.bias,
         "tie_word_embeddings": True,
-        "torch_dtype": "float32",
+        "torch_dtype": "float16",
     }
     (out_dir / "config.json").write_text(json.dumps(config_json, ensure_ascii=False, indent=2) + "\n")
 
@@ -87,7 +87,8 @@ def main() -> None:
         "# MiniLLM HF-like Export\n\n"
         "This directory is useful for learning the Hugging Face model layout. "
         f"Tokenizer type: `{tokenizer_type}`.\n\n"
-        "It can be loaded by teaching backends that implement and register MiniGPT.\n"
+        "It can be loaded by the sibling nano-vLLM project's registered MiniGPT backend. "
+        "Other serving engines still need their own MiniGPT implementation and registration.\n"
     )
     print(f"exported to {out_dir}")
 

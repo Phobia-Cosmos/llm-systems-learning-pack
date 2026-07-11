@@ -15,5 +15,5 @@
   "dropout": 0.1,
   "bias": true,
   "tie_word_embeddings": true,
-  "torch_dtype": "float32"
+  "torch_dtype": "float16"
 }

@@ -1,0 +1,220 @@
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+from pathlib import Path
+
+import torch
+import torch.distributed as dist
+from torch import nn
+from transformers import AutoTokenizer, PretrainedConfig
+
+from nanovllm.layers.attention import Attention
+from nanovllm.layers.embed_head import ParallelLMHead, VocabParallelEmbedding
+from nanovllm.layers.linear import ColumnParallelLinear, QKVParallelLinear, RowParallelLinear
+from nanovllm.models.registry import register_model
+
+
+def _resolve_alias(name: str, value, alias_name: str, alias_value, default):
+    if value is not None and alias_value is not None and value != alias_value:
+        raise ValueError(f"Conflicting {name}={value!r} and {alias_name}={alias_value!r}")
+    if value is not None:
+        return value
+    if alias_value is not None:
+        return alias_value
+    return default
+
+
+class MiniGPTConfig(PretrainedConfig):
+    model_type = "minigpt"
+
+    def __init__(
+        self,
+        vocab_size: int = 0,
+        block_size: int | None = None,
+        n_layer: int | None = None,
+        n_head: int | None = None,
+        n_embd: int | None = None,
+        dropout: float = 0.0,
+        bias: bool = True,
+        max_position_embeddings: int | None = None,
+        num_hidden_layers: int | None = None,
+        num_attention_heads: int | None = None,
+        num_key_value_heads: int | None = None,
+        hidden_size: int | None = None,
+        tie_word_embeddings: bool = True,
+        **kwargs,
+    ) -> None:
+        block_size = _resolve_alias(
+            "block_size", block_size, "max_position_embeddings", max_position_embeddings, 64
+        )
+        n_layer = _resolve_alias("n_layer", n_layer, "num_hidden_layers", num_hidden_layers, 2)
+        n_head = _resolve_alias("n_head", n_head, "num_attention_heads", num_attention_heads, 4)
+        n_embd = _resolve_alias("n_embd", n_embd, "hidden_size", hidden_size, 128)
+        if num_key_value_heads is not None and num_key_value_heads != n_head:
+            raise ValueError("MiniGPT uses multi-head attention, so num_key_value_heads must equal n_head")
+        if n_embd % n_head != 0:
+            raise ValueError("n_embd must be divisible by n_head")
+
+        super().__init__(tie_word_embeddings=tie_word_embeddings, **kwargs)
+        self.vocab_size = vocab_size
+        self.block_size = block_size
+        self.max_position_embeddings = block_size
+        self.n_layer = n_layer
+        self.num_hidden_layers = n_layer
+        self.n_head = n_head
+        self.num_attention_heads = n_head
+        self.num_key_value_heads = n_head
+        self.n_embd = n_embd
+        self.hidden_size = n_embd
+        self.head_dim = n_embd // n_head
+        self.dropout = dropout
+        self.bias = bias
+
+
+@dataclass(frozen=True)
+class MiniGPTCharTokenizer:
+    stoi: dict[str, int]
+    itos: list[str]
+    unk_token: str = "<unk>"
+
+    @classmethod
+    def from_pretrained(cls, model_path: str) -> "MiniGPTCharTokenizer":
+        tokenizer_path = Path(model_path) / "tokenizer.json"
+        payload = json.loads(tokenizer_path.read_text(encoding="utf-8"))
+        tokenizer = cls(
+            stoi={str(token): int(token_id) for token, token_id in payload["stoi"].items()},
+            itos=[str(token) for token in payload["itos"]],
+            unk_token=str(payload.get("unk_token", "<unk>")),
+        )
+        if tokenizer.unk_token not in tokenizer.stoi:
+            raise ValueError(f"Unknown token {tokenizer.unk_token!r} is missing from {tokenizer_path}")
+        if len(tokenizer.stoi) != len(tokenizer.itos):
+            raise ValueError(f"Inconsistent character vocabulary in {tokenizer_path}")
+        return tokenizer
+
+    @property
+    def eos_token_id(self) -> None:
+        return None
+
+    @property
+    def vocab_size(self) -> int:
+        return len(self.itos)
+
+    def encode(self, text: str, **_) -> list[int]:
+        unknown_id = self.stoi[self.unk_token]
+        return [self.stoi.get(character, unknown_id) for character in text]
+
+    def decode(self, token_ids: list[int], **_) -> str:
+        pieces = []
+        for token_id in token_ids:
+            token = self.itos[int(token_id)]
+            pieces.append("?" if token == self.unk_token else token)
+        return "".join(pieces)
+
+
+def load_minigpt_tokenizer(model_path: str):
+    config_path = Path(model_path) / "tokenizer_config.json"
+    if config_path.is_file():
+        payload = json.loads(config_path.read_text(encoding="utf-8"))
+        if payload.get("tokenizer_class") == "CharTokenizer":
+            return MiniGPTCharTokenizer.from_pretrained(model_path)
+    return AutoTokenizer.from_pretrained(model_path, use_fast=True)
+
+
+class MiniGPTAttention(nn.Module):
+
+    def __init__(self, config: MiniGPTConfig) -> None:
+        super().__init__()
+        tp_size = dist.get_world_size()
+        if config.n_head % tp_size != 0:
+            raise ValueError(f"n_head={config.n_head} must be divisible by tensor_parallel_size={tp_size}")
+        self.num_heads = config.n_head // tp_size
+        self.head_dim = config.head_dim
+        self.q_size = self.num_heads * self.head_dim
+        self.c_attn = QKVParallelLinear(
+            config.n_embd,
+            self.head_dim,
+            config.n_head,
+            config.n_head,
+            bias=config.bias,
+        )
+        self.c_proj = RowParallelLinear(config.n_embd, config.n_embd, bias=config.bias)
+        self.attn = Attention(
+            num_heads=self.num_heads,
+            head_dim=self.head_dim,
+            scale=self.head_dim**-0.5,
+            num_kv_heads=self.num_heads,
+        )
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        qkv = self.c_attn(hidden_states)
+        q, k, v = qkv.split([self.q_size, self.q_size, self.q_size], dim=-1)
+        q = q.view(-1, self.num_heads, self.head_dim)
+        k = k.view(-1, self.num_heads, self.head_dim)
+        v = v.view(-1, self.num_heads, self.head_dim)
+        output = self.attn(q, k, v)
+        return self.c_proj(output.flatten(1, -1))
+
+
+class MiniGPTMLP(nn.Module):
+
+    def __init__(self, config: MiniGPTConfig) -> None:
+        super().__init__()
+        intermediate_size = 4 * config.n_embd
+        self.net = nn.Sequential(
+            ColumnParallelLinear(config.n_embd, intermediate_size, bias=config.bias),
+            nn.GELU(),
+            RowParallelLinear(intermediate_size, config.n_embd, bias=config.bias),
+        )
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        return self.net(hidden_states)
+
+
+class MiniGPTBlock(nn.Module):
+
+    def __init__(self, config: MiniGPTConfig) -> None:
+        super().__init__()
+        self.ln_1 = nn.LayerNorm(config.n_embd, bias=config.bias)
+        self.attn = MiniGPTAttention(config)
+        self.ln_2 = nn.LayerNorm(config.n_embd, bias=config.bias)
+        self.mlp = MiniGPTMLP(config)
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        hidden_states = hidden_states + self.attn(self.ln_1(hidden_states))
+        hidden_states = hidden_states + self.mlp(self.ln_2(hidden_states))
+        return hidden_states
+
+
+@register_model(
+    model_type="minigpt",
+    architectures=("MiniGPTForCausalLM",),
+    config_class=MiniGPTConfig,
+    tokenizer_loader=load_minigpt_tokenizer,
+)
+class MiniGPTForCausalLM(nn.Module):
+
+    def __init__(self, config: MiniGPTConfig) -> None:
+        super().__init__()
+        tp_size = dist.get_world_size()
+        if config.vocab_size % tp_size != 0:
+            raise ValueError(
+                f"vocab_size={config.vocab_size} must be divisible by tensor_parallel_size={tp_size}"
+            )
+        self.token_embedding = VocabParallelEmbedding(config.vocab_size, config.n_embd)
+        self.position_embedding = nn.Embedding(config.block_size, config.n_embd)
+        self.blocks = nn.ModuleList([MiniGPTBlock(config) for _ in range(config.n_layer)])
+        self.ln_f = nn.LayerNorm(config.n_embd, bias=config.bias)
+        self.lm_head = ParallelLMHead(config.vocab_size, config.n_embd)
+        if config.tie_word_embeddings:
+            self.lm_head.weight.data = self.token_embedding.weight.data
+
+    def forward(self, input_ids: torch.Tensor, positions: torch.Tensor) -> torch.Tensor:
+        hidden_states = self.token_embedding(input_ids) + self.position_embedding(positions)
+        for block in self.blocks:
+            hidden_states = block(hidden_states)
+        return self.ln_f(hidden_states)
+
+    def compute_logits(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        return self.lm_head(hidden_states)

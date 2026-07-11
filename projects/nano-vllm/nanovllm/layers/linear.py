@@ -106,12 +106,28 @@ class QKVParallelLinear(ColumnParallelLinear):
         tp_size = dist.get_world_size()
         total_num_kv_heads = total_num_kv_heads or total_num_heads
         self.head_size = head_size
+        self.total_num_heads = total_num_heads
+        self.total_num_kv_heads = total_num_kv_heads
         self.num_heads = divide(total_num_heads, tp_size)
         self.num_kv_heads = divide(total_num_kv_heads, tp_size)
         output_size = (total_num_heads + 2 * total_num_kv_heads) * self.head_size
         super().__init__(hidden_size, output_size, bias)
 
-    def weight_loader(self, param: nn.Parameter, loaded_weight: torch.Tensor, loaded_shard_id: str):
+    def weight_loader(
+        self,
+        param: nn.Parameter,
+        loaded_weight: torch.Tensor,
+        loaded_shard_id: str | None = None,
+    ):
+        if loaded_shard_id is None:
+            shard_sizes = [
+                self.total_num_heads * self.head_size,
+                self.total_num_kv_heads * self.head_size,
+                self.total_num_kv_heads * self.head_size,
+            ]
+            for shard_id, shard in zip(("q", "k", "v"), loaded_weight.split(shard_sizes, self.tp_dim)):
+                self.weight_loader(param, shard, shard_id)
+            return
         param_data = param.data
         assert loaded_shard_id in ["q", "k", "v"]
         if loaded_shard_id == "q":
