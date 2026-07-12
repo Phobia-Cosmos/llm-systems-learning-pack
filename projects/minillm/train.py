@@ -8,7 +8,7 @@ import torch
 
 from minillm import GPTConfig, MiniGPT
 from minillm.data import get_batch, read_text, split_train_val
-from minillm.tokenizer_registry import build_tokenizer, tokenizer_to_checkpoint_payload
+from minillm.tokenizer_registry import SUPPORTED_TOKENIZERS, build_tokenizer, tokenizer_to_checkpoint_payload
 
 
 def parse_args() -> argparse.Namespace:
@@ -32,11 +32,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lr", type=float, default=3e-4)
     parser.add_argument("--seed", type=int, default=1337)
     parser.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda", "mps"])
-    parser.add_argument("--tokenizer", default="char", choices=["char", "byte-bpe"])
-    parser.add_argument("--tokenizer-path", default=None, help="Load an existing tokenizer.json for tokenizer variants.")
-    parser.add_argument("--tokenizer-output-dir", default="tokenizer_variants/byte_bpe")
+    parser.add_argument("--tokenizer", default="char", choices=SUPPORTED_TOKENIZERS)
+    parser.add_argument(
+        "--tokenizer-path",
+        default=None,
+        help="Existing tokenizer directory/repo, tokenizer.json, or tokenizer.model depending on the selected type.",
+    )
+    parser.add_argument(
+        "--tokenizer-output-dir",
+        default=None,
+        help="Where a newly trained Byte-BPE/SentencePiece tokenizer is saved.",
+    )
     parser.add_argument("--tokenizer-vocab-size", type=int, default=512)
     parser.add_argument("--retrain-tokenizer", action="store_true")
+    parser.add_argument("--trust-remote-code", action="store_true")
     return parser.parse_args()
 
 
@@ -99,6 +108,7 @@ def main() -> None:
         tokenizer_output_dir=args.tokenizer_output_dir,
         tokenizer_vocab_size=args.tokenizer_vocab_size,
         retrain_tokenizer=args.retrain_tokenizer,
+        trust_remote_code=args.trust_remote_code,
     )
     token_ids = tokenizer.encode(text)
     train_data, val_data = split_train_val(token_ids)

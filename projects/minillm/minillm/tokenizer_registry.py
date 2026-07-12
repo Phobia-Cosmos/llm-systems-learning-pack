@@ -1,26 +1,26 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Protocol
 
 from .tokenizer import CharTokenizer
-from .tokenizer_variants import HFByteBPETokenizer
+from .tokenizer_base import MiniTokenizer
 
-# TODO:这个文件中还是需要负责训练的是吗？
+# 问题（已回答）：registry 文件需要负责训练吗？
+# 回答：它只负责选择、构造、加载和序列化 tokenizer；byte-BPE 不存在时可调用其 trainer 生成词表，
+# 但不会训练 MiniGPT 模型参数，模型训练仍在 train.py。
 
-# TODO:为什么要定义这个函数？是不是我们后续的分词器都要有这些函数？这是标准的HF格式吗？为什么是Protocol？
-class MiniTokenizer(Protocol):
-    @property
-    def vocab_size(self) -> int: ...
-
-    def encode(self, text: str) -> list[int]: ...
-
-    def decode(self, ids: list[int]) -> str: ...
-
-    def to_dict(self) -> dict: ...
+SUPPORTED_TOKENIZERS = (
+    "char",
+    "byte-bpe",
+    "hf-auto",
+    "sentencepiece-bpe",
+    "sentencepiece-unigram",
+)
 
 
-# TODO:def是定义一个函数吗？全局函数？第三个参数*是什么？vocab_size是不变的吗？
+# 问题（已回答）：def、全局函数、* 和 tokenizer_vocab_size 分别是什么？
+# 回答：def 在模块顶层定义可导入的全局函数；* 之后的参数必须按名字传入，避免多个可选参数位置混淆。
+# tokenizer_vocab_size 是训练词表时的目标上限/超参数，不是永远固定；一旦模型开始训练则必须固定并与 embedding 行数一致。
 def build_tokenizer(
     tokenizer_name: str,
     text: str,
@@ -30,28 +30,64 @@ def build_tokenizer(
     tokenizer_output_dir: str | None = None,
     tokenizer_vocab_size: int = 512,
     retrain_tokenizer: bool = False,
+    trust_remote_code: bool = False,
 ) -> MiniTokenizer:
     if tokenizer_name == "char":
         return CharTokenizer.from_text(text)
 
     if tokenizer_name == "byte-bpe":
-        # TODO:为什么这里是只有一个if能选择？
+        from .tokenizer_variants import HFByteBPETokenizer
+
+        output_dir = Path(tokenizer_output_dir or "tokenizer_variants/byte_bpe")
+
+        # 问题（已回答）：为什么这里用 if/elif/else 选择路径？
+        # 回答：三个来源按优先级互斥：显式 tokenizer_path 最高，其次 output_dir 下的默认文件，最后项目默认路径；
+        # 一次只能加载一个 tokenizer.json，所以命中后无需继续判断。
         if tokenizer_path is not None:
             path = Path(tokenizer_path)
-        elif tokenizer_output_dir is not None:
-            path = Path(tokenizer_output_dir) / "tokenizer.json"
         else:
-            path = Path("tokenizer_variants") / "byte_bpe" / "tokenizer.json"
+            path = output_dir / "tokenizer.json"
 
         if path.exists() and not retrain_tokenizer:
             return HFByteBPETokenizer.from_file(path)
 
         if training_file is None:
-            # TODO:training_file是什么？为什么一定需要这个？这个文件中是什么 和传统的char训练的corpus有和不同吗？
+            # 问题（已回答）：training_file 是什么，为什么 Byte-BPE 训练需要它？
+            # 回答：它是用于统计 byte/subword 频率并学习 BPE merge 的纯文本语料路径；内容可以与 CharTokenizer/模型预训练 corpus 相同。
+            # CharTokenizer 只需 text 中不同字符即可建表；BPE trainer 还需反复统计片段频率，因此接口接收文件。
             raise ValueError("training_file is required when training a byte-bpe tokenizer")
         tokenizer = HFByteBPETokenizer.train([training_file], vocab_size=tokenizer_vocab_size)
-        if tokenizer_output_dir is not None:
-            tokenizer.save(tokenizer_output_dir)
+        tokenizer.save_pretrained(output_dir)
+        return tokenizer
+
+    if tokenizer_name == "hf-auto":
+        from .tokenizer_variants import HFTokenizerAdapter
+
+        if tokenizer_path is None:
+            raise ValueError("--tokenizer-path is required for --tokenizer hf-auto")
+        return HFTokenizerAdapter.from_pretrained(
+            tokenizer_path,
+            trust_remote_code=trust_remote_code,
+        )
+
+    if tokenizer_name in {"sentencepiece-bpe", "sentencepiece-unigram"}:
+        from .tokenizer_variants import SentencePieceTokenizer
+
+        model_type = tokenizer_name.removeprefix("sentencepiece-")
+        output_dir = Path(tokenizer_output_dir or f"tokenizer_variants/sentencepiece_{model_type}")
+        path = Path(tokenizer_path) if tokenizer_path is not None else output_dir / "tokenizer.model"
+        if path.is_dir():
+            path = path / "tokenizer.model"
+        if path.exists() and not retrain_tokenizer:
+            return SentencePieceTokenizer.from_file(path, model_type=model_type)
+        if training_file is None:
+            raise ValueError("training_file is required when training a SentencePiece tokenizer")
+        tokenizer = SentencePieceTokenizer.train(
+            [training_file],
+            model_type=model_type,
+            vocab_size=tokenizer_vocab_size,
+        )
+        tokenizer.save_pretrained(output_dir)
         return tokenizer
 
     raise ValueError(f"Unsupported tokenizer {tokenizer_name!r}")
@@ -67,7 +103,17 @@ def tokenizer_from_checkpoint(checkpoint: dict) -> MiniTokenizer:
     if tokenizer_type == "char":
         return CharTokenizer.from_dict(payload)
     if tokenizer_type == "byte-bpe":
+        from .tokenizer_variants import HFByteBPETokenizer
+
         return HFByteBPETokenizer.from_dict(payload)
+    if tokenizer_type == "hf-auto":
+        from .tokenizer_variants import HFTokenizerAdapter
+
+        return HFTokenizerAdapter.from_dict(payload)
+    if tokenizer_type in {"sentencepiece-bpe", "sentencepiece-unigram"}:
+        from .tokenizer_variants import SentencePieceTokenizer
+
+        return SentencePieceTokenizer.from_dict(payload)
 
     raise ValueError(f"Unsupported tokenizer type in checkpoint: {tokenizer_type!r}")
 

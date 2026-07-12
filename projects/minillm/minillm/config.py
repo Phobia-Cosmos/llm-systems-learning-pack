@@ -2,7 +2,9 @@ from dataclasses import dataclass
 
 
 @dataclass
-# TODO:为什么这几个属性会被赋值成这些值？这里的layer指的是transformer还是transformer+mlp？还有block size指代的是什么？
+# 问题（已回答）：这些默认值为何这样设置，layer 和 block_size 指什么？
+# 回答：它们是便于 CPU/单卡教学的小模型超参数，不是固定标准。n_layer 表示完整 TransformerBlock 数量，
+# 每个 block 包含 attention、MLP、两次 norm 和残差；block_size 是单条序列最多处理的 token 数/上下文窗口。
 class GPTConfig:
     vocab_size: int
     block_size: int = 64

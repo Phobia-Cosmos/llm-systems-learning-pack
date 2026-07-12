@@ -29,14 +29,20 @@ class CausalSelfAttention(nn.Module):
         # 后面再 split 成 q/k/v。这样等价于三个 Linear，但更紧凑。c_proj 是 attention 输出后的输出投影 Wo，
         # 把多个 head 拼回来的 n_embd 维结果再混合一次，送回残差主干。Linear 的本质是 y = xW^T + b，
         # 这里输入最后一维是 n_embd，所以 in_features=n_embd；QKV 总共三份，所以 out_features=3*n_embd。
-        # TODO:为什么可以一次性生成 Q、K、V 的线性层？这里token向量维度是多少？为什么要投影到3倍？为什么这个在论文中没有提到这个概念？紧凑有什么好处吗？多个head返回的结果混合原理是什么？残差主干指的是什么？
-        # TODO:请你帮我把网络的结构画出来。proj针对每一个qkv都要做投影还是？
+        # 问题（已回答）：为什么融合 QKV、投影到 3 倍，多个 head 和残差主干是什么？
+        # 回答：输入 token 向量最后一维是 n_embd；一个 Linear 输出 3*n_embd 再切三段，数学上等价于论文中独立的 Wq/Wk/Wv。
+        # 论文写数学结构，融合只是工程实现，可减少 kernel launch/读输入次数。各 head 输出拼成 n_embd 后由 c_proj 混合；残差主干是持续传递的 x。
+        # 问题（已回答）：attention 结构怎样，c_proj 是否分别投影 Q/K/V？
+        # 回答：x -> c_attn -> Q,K,V -> 分头 -> softmax(QK^T/sqrt(d))V -> 拼头 -> c_proj -> residual。
+        # c_attn 分别产生 Q/K/V；c_proj 只作用于 attention 聚合并拼头后的结果，不再分别处理三者。
         self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
         self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
         # 问题（已回答）:Dropout是一个函数吗？
         # 回答：nn.Dropout 是一个 Module，不只是普通函数。训练时它按概率随机把部分元素置 0 并缩放剩余元素，
         # 用来防止过拟合；eval() 时它自动关闭，直接返回输入。
-        # TODO:为什么要针对atten和residual同时都要做？
+        # 问题（已回答）：为什么 attention weights 和 residual 输出各有 dropout？
+        # 回答：attn_dropout 随机丢注意力连接，resid_dropout 随机丢分支输出特征，正则化位置和对象不同；
+        # 两者是经典 Transformer 设计但不是推理必需，model.eval() 时都会关闭。
         self.attn_dropout = nn.Dropout(config.dropout)
         self.resid_dropout = nn.Dropout(config.dropout)
         # 问题（已回答）:这个是什么？内部生成一个2d矩阵？然后进行什么运算？为什么要有mask？这个mask的作用是什么？register_buffer又是什么？为什么view有四个参数？persistent代表什么意思？
@@ -47,7 +53,9 @@ class CausalSelfAttention(nn.Module):
         # [batch, head, seq, seq] 广播对齐；前两个 1 分别对应 batch 和 head 维。persistent=False 表示不把这个 mask 存进 state_dict，
         # 因为它可以由 block_size 重新生成，不属于训练得到的权重。
         mask = torch.tril(torch.ones(config.block_size, config.block_size))
-        # TODO：为什么要生成张量？score是什么？state_dict又是什么？代码中没有出现这个属性呀？
+        # 问题（已回答）：为什么 mask 是张量，scores 和 state_dict 是什么？
+        # 回答：mask 要与 [B,H,T,T] scores 在 GPU 上广播比较，所以用 Tensor；scores 是每个 query-key 对的相似度。
+        # state_dict() 是 nn.Module 继承的方法，不需在本类声明，返回已注册参数和 persistent buffer；该 mask 设置为不持久化。
         self.register_buffer("causal_mask", mask.view(1, 1, config.block_size, config.block_size), persistent=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -66,7 +74,9 @@ class CausalSelfAttention(nn.Module):
         # 回答：这一步把 [B,T,C] 拆成多头形式 [B,T,H,D]，其中 H=n_head、D=head_dim，然后转成 [B,H,T,D]。
         # 这样每个 head 可以独立计算 Attention(Q,K,V)=softmax(QK^T/sqrt(D))V。view 的四个参数就是目标 shape。
         # transpose(1,2) 把 head 维提前，是为了后续矩阵乘法能在每个 batch、每个 head 上并行计算。
-        # TODO：转置后这个矩阵变成什么样子了？transpose函数的作用是什么 为什么可以对矩阵内部进行使用？
+        # 问题（已回答）：transpose 后形状如何，为什么 Tensor 能调用它？
+        # 回答：[B,T,H,D] 经 transpose(1,2) 变为 [B,H,T,D]，交换两个维度的视图而不逐元素搬运。
+        # q/k/v 都是 torch.Tensor 实例，transpose 是 Tensor 自带方法。
         q = q.view(batch, seq_len, self.n_head, self.head_dim).transpose(1, 2)
         k = k.view(batch, seq_len, self.n_head, self.head_dim).transpose(1, 2)
         v = v.view(batch, seq_len, self.n_head, self.head_dim).transpose(1, 2)
@@ -74,14 +84,18 @@ class CausalSelfAttention(nn.Module):
         # 问题（已回答）:为什么转置还可以是负数？@是什么意思？
         # 回答：负数维度是从后往前数，-1 是最后一维，-2 是倒数第二维；k.transpose(-2,-1) 把 [B,H,T,D] 变成 [B,H,D,T]。
         # @ 是 Python 的矩阵乘法运算符，对张量来说会做 batch matrix multiply。这里计算 QK^T，得到 [B,H,T,T] 的注意力分数。
-        # TODO：注意力分数不是Q K V计算出来的吗,为什么会和[B,H,T,T] 的注意力分数相关？
+        # 问题（已回答）：注意力分数为何只由 Q/K 得到，形状为何是 [B,H,T,T]？
+        # 回答：QK^T 比较每个 query 位置与每个 key 位置，因此两个 T 维形成所有位置对；V 不参与“匹配打分”，
+        # softmax 后的 [B,H,T,T] 权重再乘 V，才得到汇总内容 [B,H,T,D]。
         scores = (q @ k.transpose(-2, -1)) / math.sqrt(self.head_dim)
 
         # 问题（已回答）:这里又是在做什么？这个函数的作用是什么？原理？公式是什么？
         # 回答：masked_fill 把 mask 为 True 的位置替换成指定值。这里先找 causal_mask 中为 0 的未来位置，
         # 再把对应 scores 设为 -inf。softmax(-inf)=0，所以未来 token 的注意力权重会变成 0。
         # 数学上是 softmax((QK^T / sqrt(d)) + mask)，其中 mask 的未来位置是 -inf。
-        # TODO：masked_fill是nn内置的函数是吗？一定要现有mask才能使用吧？这里的F是什么？
+        # 问题（已回答）：masked_fill、mask 和 F 分别是什么？
+        # 回答：masked_fill 是 Tensor 方法，不是 nn.Module；它需要同形或可广播的布尔条件张量，这里条件来自 causal_mask。
+        # F 是 torch.nn.functional 别名，提供无状态函数形式的 softmax、cross_entropy 等操作。
         scores = scores.masked_fill(self.causal_mask[:, :, :seq_len, :seq_len] == 0, float("-inf"))
         weights = F.softmax(scores, dim=-1)
 
@@ -95,12 +109,16 @@ class CausalSelfAttention(nn.Module):
         # 回答：transpose 后张量的内存步长可能不是连续的，view 要求按连续内存解释 shape。
         # contiguous 会拷贝/整理成连续内存。这里 view 把 [B,T,H,D] 重新拼回 [B,T,C]，让多头结果回到原 embedding 维度。
 
-        # TODO：为什么transpose 后张量的内存步长可能不是连续的？
+        # 问题（已回答）：为什么 transpose 后内存可能不连续？
+        # 回答：transpose 通常只交换 shape/stride 元数据，底层元素排列未移动；新逻辑维度的相邻元素在内存中可能不相邻。
+        # contiguous() 必要时复制成连续布局，之后 view 才能按新顺序安全重解释。
         y = y.transpose(1, 2).contiguous().view(batch, seq_len, channels)
         # 问题（已回答）:这里是在计算残差吗？
         # 回答：这里还不是残差相加，只是在计算 attention 分支输出。真正的残差在 TransformerBlock.forward 里：
         # x = x + self.attn(self.ln_1(x))。这里返回的是要被加回主干的那一支。
-        # TODO：残差是什么以及为什么需要残差？
+        # 问题（已回答）：残差连接是什么，为什么需要？
+        # 回答：残差是 x + F(x)，让原信息和梯度有直接通路；深层网络即使某分支暂时学不好也可接近恒等映射，
+        # 从而缓解梯度消失和深层优化困难。
         return self.resid_dropout(self.c_proj(y))
 
     def forward_with_cache(
@@ -145,7 +163,9 @@ class MLP(nn.Module):
         # Linear 是最常见选择，现代 LLM 也常用 SwiGLU/GEGLU 这类门控 MLP，不是只能用普通 Linear+GELU。
         # GELU 是平滑激活函数，引入非线性；如果只有线性层叠加，整体仍等价于一个线性变换。
         # Dropout 训练时随机丢一部分激活，降低 toy 语料上的过拟合。
-        # TODO：为什么是变为4而不是其他的数量的embed？线性层后面一定要接激活函数吗？为什么后一个linear使用的是Dropout而不是激活函数了？
+        # 问题（已回答）：为什么 MLP 扩 4 倍，激活和最后 Dropout 如何安排？
+        # 回答：4 倍是原始 Transformer/GPT 的经验容量比，不是定律，现代 SwiGLU 常用约 8/3 等比例。
+        # 两个 Linear 之间需非线性以提升表达能力；第二个 Linear 负责投影回 n_embd 供残差相加，随后 Dropout 正则化分支输出，无需再激活。
         self.net = nn.Sequential(
             nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias),
             nn.GELU(),
@@ -197,7 +217,9 @@ class MiniGPT(nn.Module):
     def __init__(self, config: GPTConfig):
         super().__init__()
         self.config = config
-        # TODO：各个参数的意义是什么？为什么token和position不一致？
+        # 问题（已回答）：两个 Embedding 参数为何不同？
+        # 回答：token_embedding 有 vocab_size 行，每行代表一种 token；position_embedding 有 block_size 行，每行代表一个位置；
+        # 两者行数语义不同但列数同为 n_embd，所以查表后分别得到 [B,T,C] 和 [T,C]，可以相加。
         self.token_embedding = nn.Embedding(config.vocab_size, config.n_embd)
         self.position_embedding = nn.Embedding(config.block_size, config.n_embd)
         self.drop = nn.Dropout(config.dropout)
@@ -207,10 +229,14 @@ class MiniGPT(nn.Module):
         # ln_f 是所有 Transformer block 之后的最终归一化，帮助输出分布稳定，再交给 lm_head 预测词表 logits。
         self.ln_f = nn.LayerNorm(config.n_embd, bias=config.bias)
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
-        # TODO：为什么token embedding会有默认的weight 我们传入了吗？
+        # 问题（已回答）：nn.Embedding 的 weight 从哪里来？
+        # 回答：构造 nn.Embedding(num_embeddings, embedding_dim) 时模块自动创建形状 [V,C] 的 nn.Parameter；
+        # 我们没有传具体数值，随后 self.apply(_init_weights) 初始化它，训练时 optimizer 更新它。
         self.lm_head.weight = self.token_embedding.weight
 
-        # TODO：这个是在调用谁的函数？那里定义的？nn.Module？
+        # 问题（已回答）：self.apply 调用谁，在哪里定义？
+        # 回答：apply 是 nn.Module 方法，会递归遍历当前模块及全部子模块，并对每个模块调用 _init_weights，
+        # 因此所有 Linear/Embedding 都能按统一规则初始化。
         self.apply(self._init_weights)
 
     def _init_weights(self, module: nn.Module) -> None:
@@ -218,7 +244,10 @@ class MiniGPT(nn.Module):
         # 回答：神经网络不能把权重全初始化成 0，否则不同神经元会学到完全相同的东西。
         # 小方差正态分布是 GPT 系列常见的简单初始化，让初始激活和梯度规模比较稳定。
         # 真实大模型还会根据层数、残差分支做更精细的缩放初始化。
-        # TODO：为什么初始化为0就会学到相同的内容？这里初始化的缩放原理是什么？为什么针对不同的层 初始化方式不同？为什么MLP不初始化？为什么激活函数不初始化？
+        # 问题（已回答）：零初始化、缩放和不同层初始化如何理解？
+        # 回答：同层神经元若权重全同，前向和梯度也相同，无法分工；小随机值打破对称并控制激活/梯度方差。
+        # MLP 内的 Linear 会被 apply 递归命中，已经初始化；GELU/Dropout 没有可训练 weight，因此无需初始化。
+        # 这里只按模块类型简化处理，深层大模型常对残差输出再按层数缩放。
         if isinstance(module, nn.Linear):
             nn.init.normal_(module.weight, mean=0.0, std=0.02)
             if module.bias is not None:

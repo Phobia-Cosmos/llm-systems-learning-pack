@@ -5,6 +5,8 @@
 ## 它包含什么
 
 - `CharTokenizer`: 最小字符级 tokenizer。
+- `HFByteBPETokenizer`: 可训练的 Byte-level BPE 教学实现。
+- `HFTokenizerAdapter`: 复用标准 Hugging Face fast tokenizer。
 - `MiniGPT`: decoder-only Transformer。
 - `CausalSelfAttention`: 带 causal mask 的多头自注意力。
 - `TransformerBlock`: LayerNorm、attention、MLP、残差连接。
@@ -51,6 +53,31 @@ python train.py --device cpu --max-steps 100 --n-layer 1 --n-head 2 --n-embd 64 
 
 ```bash
 python train.py --device cuda --max-steps 1000
+```
+
+选择 tokenizer：
+
+```bash
+# 默认字符 tokenizer
+python train.py --tokenizer char
+
+# 项目内训练/保存的 Byte-level BPE
+python train.py --tokenizer byte-bpe --tokenizer-output-dir tokenizer_variants/byte_bpe
+
+# 导入任意标准 HF fast tokenizer
+python train.py \
+  --tokenizer hf-auto \
+  --tokenizer-path tokenizer_variants/byte_bpe
+
+# 独立训练 SentencePiece BPE 或 Unigram
+python train.py --tokenizer sentencepiece-bpe --tokenizer-vocab-size 512
+python train.py --tokenizer sentencepiece-unigram --tokenizer-vocab-size 512
+```
+
+公共接口、SentencePiece 论文与技术演进见：
+
+```text
+docs/tokenizer_interface_hf_adapter_and_evolution.md
 ```
 
 训练完成后会保存：
@@ -122,7 +149,7 @@ python generate.py --prompt "MiniGPT" --max-new-tokens 40 --greedy --kv-cache
 
 建议按这个顺序改：
 
-1. 把 `CharTokenizer` 换成 BPE/SentencePiece tokenizer。
+1. 对比已实现的 Char、Byte-BPE、HF adapter，并继续做 SentencePiece BPE/Unigram 实验。
 2. 把 `position_embedding` 换成 RoPE。
 3. 把 `LayerNorm + GELU MLP` 换成 `RMSNorm + SwiGLU`。
 4. 继续完善 KV cache：当前已有教学版 `--kv-cache`，下一步支持 RoPE 和更长上下文。

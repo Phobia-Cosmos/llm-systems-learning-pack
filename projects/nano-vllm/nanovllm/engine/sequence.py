@@ -6,15 +6,18 @@ from nanovllm.sampling_params import SamplingParams
 
 
 class SequenceStatus(Enum):
-    # TODO：auto()的作用是什么？
+    # 问题（已回答）：Enum.auto() 的作用是什么？
+    # 回答：自动为枚举成员生成唯一值；业务代码只关心状态身份，不依赖具体整数。
     WAITING = auto()
     RUNNING = auto()
     FINISHED = auto()
 
-# TODO：这个是用来存储什么内容的？kvcache吗？
+# 问题（已回答）：Sequence 存储什么，是 KV cache 吗？
+# 回答：它保存请求 token、采样参数、状态和 KV block 映射元数据；真正 K/V 张量在 ModelRunner 的 GPU cache 池中。
 class Sequence:
     block_size = 256
-    # TODO：这个是在记录什么数字？next可以调用count是吗？
+    # 问题（已回答）：counter 和 next() 在记录什么？
+    # 回答：itertools.count() 是递增迭代器；每次 next(Sequence.counter) 取得新整数作为唯一 seq_id。
     counter = count()
 
     def __init__(self, token_ids: list[int], sampling_params = SamplingParams()):
@@ -23,9 +26,12 @@ class Sequence:
         self.token_ids = copy(token_ids)
         self.last_token = token_ids[-1]
         self.num_tokens = len(self.token_ids)
-        # TODO：为什么还要多一个提示token？和num tokens有何区别？
+        # 问题（已回答）：为什么同时记录 num_prompt_tokens 和 num_tokens？
+        # 回答：前者初始化后固定，用来分隔 prompt；后者随生成增长，两者之差就是 completion token 数。
         self.num_prompt_tokens = len(token_ids)
-        # TODO：cache token存储在哪里？block_table是用来存什么的？num_scheduled_tokens？
+        # 问题（已回答）：cached tokens、block_table 和 num_scheduled_tokens 分别是什么？
+        # 回答：K/V 存在全局 GPU cache 池；num_cached_tokens 是可复用前缀长度；block_table 映射物理块；
+        # num_scheduled_tokens 是 scheduler 本轮准备计算的 token 数。
         self.num_cached_tokens = 0
         self.num_scheduled_tokens = 0
         self.is_prefill = True
@@ -56,7 +62,9 @@ class Sequence:
     def completion_token_ids(self):
         return self.token_ids[self.num_prompt_tokens:]
 
-    # TODO：为什么针对不同的block需要不同的处理？难道block不满是无法处理？
+    # 问题（已回答）：为什么按 block 计算，最后一块不满能处理吗？
+    # 回答：Paged KV cache 固定大小分配；向上取整使不满的最后一块也占一个物理块，未使用槽位空闲即可。
+    # 固定块便于分配、回收、前缀共享并减少显存碎片。
     @property
     def num_blocks(self):
         return (self.num_tokens + self.block_size - 1) // self.block_size
@@ -74,7 +82,9 @@ class Sequence:
         self.last_token = token_id
         self.num_tokens += 1
 
-    # TODO：这个是什么意思？
+    # 问题（已回答）：__getstate__ 是什么？
+    # 回答：pickle 序列化时调用它。prefill 传完整 token_ids，decode 只传 last_token 和调度元数据，
+    # 可减少跨进程共享内存的数据量；__setstate__ 负责恢复。
     def __getstate__(self):
         last_state = self.last_token if not self.is_prefill else self.token_ids
         return (self.num_tokens, self.num_prompt_tokens, self.num_cached_tokens, self.num_scheduled_tokens, self.block_table, last_state)

@@ -10,15 +10,19 @@ from typing import Callable
 from torch import nn
 from transformers import AutoTokenizer, PretrainedConfig
 
-# TODO：这个是需要我们自己生成还是？
+# 问题（已回答）：TokenizerLoader 需要自己生成吗？
+# 回答：它只是类型别名，表示“模型目录 -> tokenizer”的可调用接口；特殊模型自行提供 loader，普通模型用 AutoTokenizer。
 TokenizerLoader = Callable[[str], object]
 
-# TODO：frozen是什么意思？
+# 问题（已回答）：dataclass(frozen=True) 的 frozen 是什么？
+# 回答：实例创建后字段不可重新赋值，使注册记录只读，避免运行中误改映射。
 @dataclass(frozen=True)
 class ModelSpec:
     model_type: str
     architectures: tuple[str, ...]
-    # TODO：这里定义type的作用是什么？为什么model class是nn.Module？
+    # 问题（已回答）：type[...] 表示什么，model_class 为什么是 nn.Module？
+    # 回答：type[PretrainedConfig] 表示类对象而非实例；model_class 必须是 nn.Module 子类，
+    # 因为 engine 依赖其参数注册、device/dtype、state_dict 和 forward 约定。
     config_class: type[PretrainedConfig]
     model_class: type[nn.Module]
     tokenizer_loader: TokenizerLoader | None = None
@@ -27,7 +31,9 @@ class ModelSpec:
 _MODEL_SPECS: list[ModelSpec] = []
 _builtins_loaded = False
 
-# TODO：为什么要在函数内部定义def？为什么返回的是一个decorator？
+# 问题（已回答）：为什么内部定义 decorator 并返回它？
+# 回答：这是带参数装饰器：register_model(...) 先保存元数据并返回 decorator，Python 再把模型类传给它；
+# decorator 登记 ModelSpec 后原样返回模型类。
 def register_model(
     *,
     model_type: str,
@@ -55,19 +61,22 @@ def register_model(
 
     return decorator
 
-# TODO：这里是把符合的model全部列出来是吗？
+# 问题（已回答）：_load_builtin_models 是列出所有模型吗？
+# 回答：它扫描并 import 内置模型模块；import 会执行 @register_model 填充 registry，但不会加载权重或实例化所有模型。
 def _load_builtin_models() -> None:
     global _builtins_loaded
     if _builtins_loaded:
         return
     models_package = importlib.import_module("nanovllm.models")
-    # TODO：为什么要判断module name符合的的条件？
+    # 问题（已回答）：为什么过滤模块名？
+    # 回答：下划线模块通常是内部实现，registry 自身也不能递归导入；这里只加载公开模型模块。
     for module in pkgutil.iter_modules(models_package.__path__):
         if not module.name.startswith("_") and module.name != "registry":
             importlib.import_module(f"{models_package.__name__}.{module.name}")
     _builtins_loaded = True
 
-# TODO：为什么要匹配model type和architectures？
+# 问题（已回答）：为什么同时匹配 model_type 和 architectures？
+# 回答：不同 HF/自定义 config 可能只可靠填写其中一个；双通道提高兼容性，多重命中则报歧义以避免选错实现。
 def _resolve_model(model_type: str | None, architectures: list[str] | tuple[str, ...] | None) -> ModelSpec:
     _load_builtin_models()
     architecture_set = set(architectures or ())
@@ -117,7 +126,8 @@ def load_tokenizer(model_path: str, config: PretrainedConfig):
     spec = _resolve_model(getattr(config, "model_type", None), getattr(config, "architectures", None))
     if spec.tokenizer_loader is not None:
         return spec.tokenizer_loader(model_path)
-    # TODO：这里是使用默认的分词器是吗？
+    # 问题（已回答）：这里使用默认分词器吗？
+    # 回答：是。未注册专用 loader 时用 HF AutoTokenizer 加载 fast tokenizer；字符词表等非标准格式需专用 loader。
     return AutoTokenizer.from_pretrained(model_path, use_fast=True)
 
 

@@ -19,26 +19,36 @@ class ModelRunner:
         hf_config = config.hf_config
         self.block_size = config.kvcache_block_size
         self.enforce_eager = config.enforce_eager
-        # TODO：这里为什么要配置rank以及rank是否为0为什么很重要？
+        # 问题（已回答）：为什么配置 rank，rank 0 为什么重要？
+        # 回答：rank 是 tensor-parallel 进程编号，每个 rank 负责一张 GPU 和一片模型参数；rank 0 还是协调者，
+        # 负责接收 engine 请求、写共享内存并唤醒其他 rank，最终返回采样结果。
         self.world_size = config.tensor_parallel_size
         self.rank = rank
         self.event = event
 
-        # TODO：nccl是什么？为什么要使用tcp连接？set_device作用是什么？default_dtype是什么？
+        # 问题（已回答）：NCCL、TCP rendezvous、set_device 和 default_dtype 分别是什么？
+        # 回答：NCCL 是 NVIDIA GPU 集合通信后端；tcp://localhost:2333 只用于进程会合和交换初始化信息，
+        # 真正 GPU 数据通信由 NCCL 完成。set_device(rank) 绑定当前 GPU；default_dtype 是新建浮点参数的默认类型。
         dist.init_process_group("nccl", "tcp://localhost:2333", world_size=self.world_size, rank=rank)
         torch.cuda.set_device(rank)
         default_dtype = torch.get_default_dtype()
-        # TODO：为什么要传入第三个参数？
+        # 问题（已回答）：嵌套 getattr 为什么传第三个参数？
+        # 回答：getattr(obj, name, default) 的第三项是属性不存在时的默认值；优先读 dtype，缺失时回退到
+        # torch_dtype，再缺失就得到 None，从而兼容不同 Transformers config 命名。
         model_dtype = getattr(hf_config, "dtype", getattr(hf_config, "torch_dtype", None))
         if isinstance(model_dtype, str):
-            # TODO：这是什么？
+            # 问题（已回答）：为什么字符串 dtype 要 getattr(torch, model_dtype)？
+            # 回答：config JSON 可能保存 "float16"/"bfloat16" 字符串；这里把它解析成 torch.float16 等 dtype 对象。
             model_dtype = getattr(torch, model_dtype)
         if model_dtype is not None:
             torch.set_default_dtype(model_dtype)
-        # TODO：为什么要先设置rank在设置device？
+        # 问题（已回答）：rank、CUDA device 和 default device 的关系是什么？
+        # 回答：rank 先确定进程负责哪张卡，set_device(rank) 绑定当前 CUDA 卡；set_default_device("cuda")
+        # 再让模型构造期间未显式指定 device 的参数直接创建在该卡上，避免先在 CPU 建模再搬运。
         torch.set_default_device("cuda")
         self.model = create_model(hf_config)
-        # TODO：？？是什么？
+        # 问题（已回答）：next(self.model.parameters()).dtype 在取什么？
+        # 回答：它读取模型第一个参数的实际 dtype，作为 KV cache dtype 和 cache block 字节数计算依据。
         self.model_dtype = next(self.model.parameters()).dtype
         load_model(self.model, config.model)
         self.sampler = Sampler()
@@ -78,25 +88,32 @@ class ModelRunner:
 
     def read_shm(self):
         assert self.world_size > 1 and self.rank > 0
-        # TODO：为什么要wait？
+        # 问题（已回答）：worker 为什么要 event.wait()？
+        # 回答：非零 rank 阻塞等待 rank 0 写完共享内存，避免空轮询占满 CPU 或读到半写数据。
         self.event.wait()
         n = int.from_bytes(self.shm.buf[0:4], "little")
         method_name, *args = pickle.loads(self.shm.buf[4:n+4])
-        # TODO：为什么要clear？
+        # 问题（已回答）：读取后为什么 clear Event？
+        # 回答：Event 是电平触发；clear() 将通知状态复位，下一轮 worker 才会再次等待新命令。
         self.event.clear()
         return method_name, args
 
-    # TODO：这个函数作用是什么？
+    # 问题（已回答）：write_shm 的作用是什么？
+    # 回答：rank 0 把“方法名和参数”序列化到共享内存，并通知其他 TP rank 执行同一方法。
     def write_shm(self, method_name, *args):
         assert self.world_size > 1 and self.rank == 0
-        # TODO：这里是在做什么？dump出来的是什么？
+        # 问题（已回答）：pickle.dumps 输出什么？
+        # 回答：它把 [method_name, *args] Python 对象序列化成 bytes，便于写入 SharedMemory。
         data = pickle.dumps([method_name, *args])
         n = len(data)
-        # TODO：前5个是什么？这里为什么要这样把buf这样划分？
+        # 问题（已回答）：buf 前面保存什么，为什么分两段？
+        # 回答：前 4 字节保存 payload 长度 n，后面的 [4:4+n] 保存 pickle 数据；接收端先读固定长度头，
+        # 才知道后续读取多少字节。这里不是 5 字节，切片右端 n+4 不包含自身。
         self.shm.buf[0:4] = n.to_bytes(4, "little")
         self.shm.buf[4:n+4] = data
         for event in self.event:
-            # TODO：set的作用是什么？
+            # 问题（已回答）：event.set() 做什么？
+            # 回答：把 Event 置为已通知，使阻塞在 wait() 的 worker 立即醒来读取命令。
             event.set()
 
     def call(self, method_name, *args):
@@ -107,11 +124,14 @@ class ModelRunner:
 
     def warmup_model(self):
         torch.cuda.empty_cache()
-        # TODO：这个是什么意思？
+        # 问题（已回答）：reset_peak_memory_stats() 的作用是什么？
+        # 回答：清零 CUDA allocator 峰值统计；随后 warmup 得到模型执行峰值，用于更准确计算剩余 KV cache 空间。
         torch.cuda.reset_peak_memory_stats()
         max_num_batched_tokens, max_model_len = self.config.max_num_batched_tokens, self.config.max_model_len
         seq_len = min(max_num_batched_tokens, max_model_len)
-        # TODO：seq的作用是什么？为什么需要num_seqs个Sequence？
+        # 问题（已回答）：warmup 为什么构造多个 Sequence？
+        # 回答：Sequence 封装一条请求。构造 num_seqs 条最大形状假请求可触发 kernel/JIT/临时显存分配，
+        # 避免第一次真实请求承担这些开销。
         num_seqs = min(max_num_batched_tokens // seq_len, self.config.max_num_seqs)
         seqs = [Sequence([0] * seq_len) for _ in range(num_seqs)]
         for seq in seqs:

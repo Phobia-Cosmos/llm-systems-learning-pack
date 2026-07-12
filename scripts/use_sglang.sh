@@ -19,7 +19,9 @@ fi
 if [ -x "$CUDA_HOME/bin/nvcc" ]; then
   export FLASHINFER_NVCC="${FLASHINFER_NVCC:-$CUDA_HOME/bin/nvcc}"
 fi
-# TODO:这里是在判断什么？为什么还要单独判断so文件？
+# 问题（已回答）：这里判断什么，为什么单独处理 .so？
+# 回答：仅当 CUDA_HOME 指向 pip wheel 内的 cu13 toolkit 时才补兼容软链接；某些编译器查 lib64 和无版本名
+# libcudart.so，而 wheel 只提供 lib/ 与 libcudart.so.13。系统 /usr/local/cuda 已有标准布局，不应修改。
 if [ "$CUDA_HOME" = "$SGLANG_VENV/lib/python3.12/site-packages/nvidia/cu13" ]; then
   if [ -d "$CUDA_HOME/lib" ] && [ ! -e "$CUDA_HOME/lib64" ]; then
     ln -s lib "$CUDA_HOME/lib64"

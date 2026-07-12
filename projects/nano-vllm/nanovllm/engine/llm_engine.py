@@ -20,11 +20,15 @@ class LLMEngine:
         config = Config(model, **config_kwargs)
         self.max_model_len = config.max_model_len
         Sequence.block_size = config.kvcache_block_size
-        # TODO：这两个数组的作用是什么？mp.get_context("spawn")的作用是什么？spawn是context的名称吗？event的作用是什么？
+        # 问题（已回答）：这两个数组、spawn context 和 Event 分别做什么？
+        # 回答：ps 保存 tensor-parallel worker 进程，events 保存主进程通知各 worker 的同步事件。
+        # spawn 是 multiprocessing 的启动方式：每个子进程启动全新 Python 解释器，CUDA 场景比 fork 更安全。
+        # Event 是跨进程信号；rank 0 写好共享内存命令后 set() 唤醒其他 rank。
         self.ps = []
         self.events = []
         ctx = mp.get_context("spawn")
-        # TODO：这个循环中只是声明定义还没有start是吗？
+        # 问题（已回答）：循环里只是定义进程，还没有启动吗？
+        # 回答：ctx.Process(...) 只构造进程对象；紧接着 process.start() 已真正启动子进程并执行 ModelRunner。
         for i in range(1, config.tensor_parallel_size):
             event = ctx.Event()
             process = ctx.Process(target=ModelRunner, args=(config, i, event))
@@ -33,14 +37,19 @@ class LLMEngine:
             self.events.append(event)
         self.model_runner = ModelRunner(config, 0, self.events)
         self.tokenizer = load_tokenizer(config.model, config.hf_config)
-        # TODO：所以分词器中需要有eos_token_id是吗？
+        # 问题（已回答）：分词器需要 eos_token_id 吗？
+        # 回答：engine 需要统一读取它来判断生成何时结束。没有 EOS 的教学 tokenizer 可返回 None/-1，
+        # 调用方再用 ignore_eos=True 或 max_tokens 作为停止条件。
         config.eos = self.tokenizer.eos_token_id
         self.scheduler = Scheduler(config)
+        self._exited = False
         atexit.register(self.exit)
 
     def exit(self):
+        if self._exited:
+            return
+        self._exited = True
         self.model_runner.call("exit")
-        del self.model_runner
         for p in self.ps:
             p.join()
 
