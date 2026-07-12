@@ -3,13 +3,37 @@ from torch import nn
 import triton
 import triton.language as tl
 
-try:
-    from flash_attn import flash_attn_varlen_func, flash_attn_with_kvcache
-except ImportError:
-    flash_attn_varlen_func = None
-    flash_attn_with_kvcache = None
-
 from nanovllm.utils.context import get_context
+
+
+flash_attn_varlen_func = None
+flash_attn_with_kvcache = None
+_flash_attn_backend = None
+
+
+def load_flash_attn_backend():
+    global flash_attn_varlen_func, flash_attn_with_kvcache, _flash_attn_backend
+    if _flash_attn_backend is not None:
+        return
+    try:
+        from flash_attn import flash_attn_varlen_func as varlen_func
+        from flash_attn import flash_attn_with_kvcache as kvcache_func
+
+        flash_attn_varlen_func = varlen_func
+        flash_attn_with_kvcache = kvcache_func
+        _flash_attn_backend = "flash_attn"
+        return
+    except ImportError:
+        pass
+
+    try:
+        from vllm.vllm_flash_attn import flash_attn_varlen_func as varlen_func
+
+        flash_attn_varlen_func = varlen_func
+        _flash_attn_backend = "vllm"
+        return
+    except ImportError:
+        _flash_attn_backend = "torch"
 
 
 @triton.jit
@@ -113,6 +137,7 @@ class Attention(nn.Module):
         return torch.cat(outputs, dim=0)
 
     def forward(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor):
+        load_flash_attn_backend()
         context = get_context()
         k_cache, v_cache = self.k_cache, self.v_cache
         if k_cache.numel() and v_cache.numel():
@@ -126,10 +151,24 @@ class Attention(nn.Module):
                                        max_seqlen_q=context.max_seqlen_q, cu_seqlens_q=context.cu_seqlens_q,
                                        max_seqlen_k=context.max_seqlen_k, cu_seqlens_k=context.cu_seqlens_k,
                                        softmax_scale=self.scale, causal=True, block_table=context.block_tables)
-        else:    # decode
-            if flash_attn_with_kvcache is None:
-                return self.torch_decode(q)
+        elif flash_attn_with_kvcache is not None:    # decode with upstream flash-attn
             o = flash_attn_with_kvcache(q.unsqueeze(1), k_cache, v_cache,
-                                        cache_seqlens=context.context_lens, block_table=context.block_tables, 
+                                        cache_seqlens=context.context_lens, block_table=context.block_tables,
                                         softmax_scale=self.scale, causal=True)
+        elif _flash_attn_backend == "vllm":    # decode with vLLM's bundled FlashAttention
+            cu_seqlens_q = torch.arange(q.size(0) + 1, dtype=torch.int32, device=q.device)
+            o = flash_attn_varlen_func(
+                q,
+                k_cache,
+                v_cache,
+                max_seqlen_q=1,
+                cu_seqlens_q=cu_seqlens_q,
+                max_seqlen_k=context.block_tables.size(1) * k_cache.size(1),
+                seqused_k=context.context_lens,
+                softmax_scale=self.scale,
+                causal=True,
+                block_table=context.block_tables,
+            )
+        else:
+            return self.torch_decode(q)
         return o

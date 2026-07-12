@@ -22,6 +22,8 @@ A lightweight vLLM implementation built from scratch.
 pip install git+https://github.com/GeeeekExplorer/nano-vllm.git
 ```
 
+Install `nano-vllm[flash-attn]` to use an independently installed FlashAttention package. When nano-vLLM shares an environment with a CUDA-enabled vLLM wheel, it can reuse vLLM's bundled FlashAttention extension instead.
+
 ## Model Download
 
 To download the model weights manually, use the following command:
