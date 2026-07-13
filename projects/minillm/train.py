@@ -29,6 +29,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--n-head", type=int, default=4)
     parser.add_argument("--n-embd", type=int, default=128)
     parser.add_argument("--dropout", type=float, default=0.1)
+    parser.add_argument("--position-encoding", default="learned", choices=["learned", "rope"])
+    parser.add_argument("--rope-theta", type=float, default=10000.0)
     parser.add_argument("--lr", type=float, default=3e-4)
     parser.add_argument("--seed", type=int, default=1337)
     parser.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda", "mps"])
@@ -120,6 +122,8 @@ def main() -> None:
         n_head=args.n_head,
         n_embd=args.n_embd,
         dropout=args.dropout,
+        position_encoding=args.position_encoding,
+        rope_theta=args.rope_theta,
     )
     model = MiniGPT(config).to(device)
     # 问题（已回答）:为什么要使用一个优化器，这个优化器的作用是什么？难道MiniGPT不能完成任务吗？

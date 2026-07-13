@@ -82,7 +82,7 @@ MiniLLM 当前代码里有没有 KV cache？
 
 ### 回答
 
-当前没有。
+当前已经有，同时保留无 cache 的基线实现。
 
 MiniLLM 的 `generate()` 每生成一个 token，都会取最近 `block_size` 个 token，然后重新跑一次完整 forward：
 
@@ -92,16 +92,16 @@ logits, _ = self(idx_cond)
 logits = logits[:, -1, :]
 ```
 
-这段逻辑在 `minillm/model.py` 的 `MiniGPT.generate()` 中。它更容易理解，但效率不高。
+这段逻辑仍在 `minillm/model.py` 的 `MiniGPT.generate()` 中，作为容易理解的无 cache 基线。`MiniGPT.generate_with_kv_cache()` 则执行 prompt prefill，并在后续步骤只输入最新 token、复用每层历史 K/V。
 
-如果有 KV cache，生成逻辑会变成：
+当前 KV cache 生成逻辑是：
 
 1. 第一步对完整 prompt 做 prefill，得到所有层的 past key/value。
 2. 后续每一步只输入最新 token。
 3. 每层 attention 复用过去的 key/value。
 4. 每生成一个 token，就把新的 key/value 追加到 cache。
 
-教学项目一开始不加 KV cache 是合理的。因为 KV cache 会让 attention 的 forward 签名、shape、mask、position 处理都变复杂。
+保留两条路径便于直接比较：无 cache 版本结构简单；KV cache 版本展示 attention forward、shape、mask、position 和缓存生命周期为何更复杂。
 
 ## 4. torch.Tensor 是什么
 

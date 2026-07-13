@@ -7,6 +7,7 @@ from unittest.mock import patch
 import torch
 
 from nanovllm.layers.linear import QKVParallelLinear
+from nanovllm.layers.rotary_embedding import get_rope
 from nanovllm.models.minigpt import MiniGPTCharTokenizer, MiniGPTConfig
 from nanovllm.models.registry import create_model, load_model_config, load_tokenizer, supported_model_types
 
@@ -28,6 +29,8 @@ class MiniGPTConfigTests(unittest.TestCase):
         self.assertEqual(config.num_key_value_heads, 4)
         self.assertEqual(config.hidden_size, 128)
         self.assertEqual(config.head_dim, 32)
+        self.assertEqual(config.position_encoding, "learned")
+        self.assertEqual(config.rope_theta, 10000.0)
 
     def test_conflicting_aliases_are_rejected(self):
         with self.assertRaisesRegex(ValueError, "Conflicting n_layer"):
@@ -90,6 +93,23 @@ class MiniGPTRegistryTests(unittest.TestCase):
         self.assertIn("minigpt", supported_model_types())
         self.assertIn("qwen3", supported_model_types())
 
+    def test_registry_builds_rope_model_without_absolute_position_weight(self):
+        payload = json.loads((self.model_path / "config.json").read_text(encoding="utf-8"))
+        payload["position_encoding"] = "rope"
+        payload["rope_theta"] = 10000.0
+        (self.model_path / "config.json").write_text(json.dumps(payload), encoding="utf-8")
+
+        config = load_model_config(str(self.model_path))
+        with (
+            patch("torch.distributed.get_world_size", return_value=1),
+            patch("torch.distributed.get_rank", return_value=0),
+        ):
+            model = create_model(config)
+
+        self.assertIsNone(model.position_embedding)
+        self.assertNotIn("position_embedding.weight", model.state_dict())
+        self.assertIsNotNone(model.blocks[0].attn.rotary)
+
     def test_registry_loads_minillm_character_tokenizer(self):
         (self.model_path / "tokenizer_config.json").write_text(
             json.dumps({"tokenizer_class": "CharTokenizer"}), encoding="utf-8"
@@ -138,6 +158,24 @@ class FusedQKVLoaderTests(unittest.TestCase):
         expected_rows = torch.tensor([2, 3, 6, 7, 10, 11])
         torch.testing.assert_close(layer.weight, loaded_weight[expected_rows])
         torch.testing.assert_close(layer.bias, loaded_bias[expected_rows])
+
+
+class RotaryEmbeddingTests(unittest.TestCase):
+
+    def test_flattened_rope_preserves_norm_and_position_zero(self):
+        rope = get_rope(head_size=8, rotary_dim=8, max_position=16, base=10000.0)
+        query = torch.randn(5, 2, 8)
+        key = torch.randn(5, 2, 8)
+        rotated_query, rotated_key = rope(torch.arange(5), query, key)
+
+        torch.testing.assert_close(rotated_query[0], query[0])
+        torch.testing.assert_close(rotated_key[0], key[0])
+        torch.testing.assert_close(
+            rotated_query.float().norm(dim=-1),
+            query.float().norm(dim=-1),
+            rtol=1e-5,
+            atol=1e-5,
+        )
 
 
 if __name__ == "__main__":

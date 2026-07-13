@@ -23,6 +23,7 @@ from vllm.model_executor.layers.linear import (
 )
 from vllm.model_executor.layers.logits_processor import LogitsProcessor
 from vllm.model_executor.layers.quantization import QuantizationConfig
+from vllm.model_executor.layers.rotary_embedding import get_rope
 from vllm.model_executor.layers.vocab_parallel_embedding import (
     ParallelLMHead,
     VocabParallelEmbedding,
@@ -54,6 +55,17 @@ def _intermediate_size(config) -> int:
     return getattr(config, "intermediate_size", 4 * _hidden_size(config))
 
 
+def _uses_rope(config) -> bool:
+    return getattr(config, "position_encoding", "learned") == "rope"
+
+
+def _map_checkpoint_name(name: str) -> str:
+    """Map MiniLLM state-dict names to this backend's module names."""
+    return name.replace(".mlp.net.0.", ".mlp.fc_in.").replace(
+        ".mlp.net.2.", ".mlp.fc_out."
+    )
+
+
 class MiniGPTAttention(nn.Module):
     def __init__(
         self,
@@ -82,6 +94,16 @@ class MiniGPTAttention(nn.Module):
             quant_config=quant_config,
             prefix=f"{prefix}.c_proj",
         )
+        self.rotary_emb = (
+            get_rope(
+                self.head_dim,
+                max_position=_first_attr(config, "max_position_embeddings", "block_size"),
+                is_neox_style=True,
+                rope_parameters={"rope_theta": getattr(config, "rope_theta", 10000.0)},
+            )
+            if _uses_rope(config)
+            else None
+        )
         self.attn = Attention(
             total_num_heads,
             self.head_dim,
@@ -91,9 +113,11 @@ class MiniGPTAttention(nn.Module):
             prefix=f"{prefix}.attn",
         )
 
-    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+    def forward(self, positions: torch.Tensor, hidden_states: torch.Tensor) -> torch.Tensor:
         qkv, _ = self.c_attn(hidden_states)
         q, k, v = qkv.chunk(chunks=3, dim=-1)
+        if self.rotary_emb is not None:
+            q, k = self.rotary_emb(positions, q, k)
         hidden_states = self.attn(q, k, v)
         hidden_states, _ = self.c_proj(hidden_states)
         return hidden_states
@@ -146,8 +170,8 @@ class MiniGPTBlock(nn.Module):
         self.ln_2 = nn.LayerNorm(hidden_size, eps=getattr(config, "layer_norm_epsilon", 1e-5))
         self.mlp = MiniGPTMLP(config, quant_config, prefix=f"{prefix}.mlp")
 
-    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        hidden_states = hidden_states + self.attn(self.ln_1(hidden_states))
+    def forward(self, positions: torch.Tensor, hidden_states: torch.Tensor) -> torch.Tensor:
+        hidden_states = hidden_states + self.attn(positions, self.ln_1(hidden_states))
         hidden_states = hidden_states + self.mlp(self.ln_2(hidden_states))
         return hidden_states
 
@@ -167,9 +191,13 @@ class MiniGPTModel(nn.Module):
             quant_config=quant_config,
             prefix=f"{prefix}.token_embedding",
         )
-        self.position_embedding = nn.Embedding(
-            _first_attr(config, "max_position_embeddings", "block_size"),
-            hidden_size,
+        self.position_embedding = (
+            None
+            if _uses_rope(config)
+            else nn.Embedding(
+                _first_attr(config, "max_position_embeddings", "block_size"),
+                hidden_size,
+            )
         )
         self.blocks = nn.ModuleList(
             [
@@ -198,15 +226,18 @@ class MiniGPTModel(nn.Module):
         if inputs_embeds is None:
             assert input_ids is not None
             inputs_embeds = self.embed_input_ids(input_ids)
-        hidden_states = inputs_embeds + self.position_embedding(positions)
+        hidden_states = inputs_embeds
+        if self.position_embedding is not None:
+            hidden_states = hidden_states + self.position_embedding(positions)
         for block in self.blocks:
-            hidden_states = block(hidden_states)
+            hidden_states = block(positions, hidden_states)
         return self.ln_f(hidden_states)
 
     def load_weights(self, weights: Iterable[tuple[str, torch.Tensor]]) -> set[str]:
         params_dict = dict(self.named_parameters(remove_duplicate=False))
         loaded_params: set[str] = set()
         for name, loaded_weight in weights:
+            name = _map_checkpoint_name(name)
             if name not in params_dict:
                 continue
             param = params_dict[name]
@@ -252,6 +283,7 @@ class MiniGPTForCausalLM(nn.Module):
         params_dict = dict(self.named_parameters(remove_duplicate=False))
         loaded_params: set[str] = set()
         for name, tensor in weights:
+            name = _map_checkpoint_name(name)
             candidates = [name]
             if not name.startswith("model.") and not name.startswith("lm_head."):
                 candidates.append("model." + name)

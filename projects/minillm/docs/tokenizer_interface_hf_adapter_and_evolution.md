@@ -137,7 +137,7 @@ python train.py --tokenizer hf-auto --tokenizer-path /path/to/tokenizer
   -> token ids [B,T]
   -> token embedding
   -> hidden states [B,T,C]
-  -> position encoding（当前 learned absolute；未来可选 RoPE）
+  -> position encoding（learned absolute 或 RoPE）
   -> attention / Transformer blocks
 ```
 
@@ -157,7 +157,7 @@ embedding.weight: [vocab_size, hidden_size]
 
 ### 位置编码
 
-告诉 attention token 在什么位置。当前 MiniLLM 使用 learned absolute position embedding；RoPE 属于这一层，与 Char/BPE/SentencePiece 无关。
+告诉 attention token 在什么位置。MiniLLM 可选择 learned absolute position embedding 或 RoPE；它属于模型结构层，与 Char/BPE/SentencePiece 无关。
 
 ## 6. 为什么推理引擎也要实现 embedding
 
@@ -230,11 +230,11 @@ embedding/lm_head 权重行
 
 主流生产 LLM 目前仍大量使用固定 subword/byte-level BPE，因为训练、缓存、服务和生态最成熟；研究则在尝试减少固定 tokenizer 对语言、拼写、数字、代码和多模态数据带来的偏差。
 
-## 9. 下一步与 RoPE 的边界
+## 9. Tokenizer 与 RoPE 的边界
 
-Tokenizer 本轮已形成独立稳定层。下一步可分两条实验线：
+Tokenizer 已形成独立稳定层，RoPE 也已作为独立模型配置实现。后续继续分两条实验线：
 
 1. Tokenizer 研究线：对比已实现的 SentencePiece BPE/Unigram，并继续做 subword regularization、压缩率与多语言公平性。
-2. 模型结构线：learned absolute position 与 RoPE 对比。
+2. 模型结构线：对比 learned absolute position 与已实现的 RoPE，再继续 RMSNorm/SwiGLU/GQA。
 
-RoPE 实现时不修改 tokenizer 接口；只修改模型 config、Q/K 旋转、KV-cache position 和各推理引擎的 MiniGPT backend。
+RoPE 没有修改 tokenizer 接口；实际改动位于模型 config、Q/K 旋转、KV-cache position 和各推理引擎的 MiniGPT backend。

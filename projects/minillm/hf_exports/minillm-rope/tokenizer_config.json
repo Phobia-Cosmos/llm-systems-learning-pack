@@ -1,0 +1,10 @@
+{
+  "tokenizer_class": "PreTrainedTokenizerFast",
+  "model_max_length": 128,
+  "unk_token": "<unk>",
+  "pad_token": "<pad>",
+  "bos_token": "<bos>",
+  "eos_token": "<eos>",
+  "chat_template": "{% for message in messages %}{{ '<|' + message['role'] + '|>' }}\n{{ message['content'] }}\n{% endfor %}{% if add_generation_prompt %}{{ '<|assistant|>' }}\n{% endif %}",
+  "note": "MiniLLM Byte-level BPE tokenizer variant for learning; not tied to existing CharTokenizer checkpoints."
+}

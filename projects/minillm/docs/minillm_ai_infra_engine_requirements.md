@@ -13,32 +13,34 @@
 | generation config | `generation_config.json` | 默认 temperature/top-k/top-p/max tokens 等生成参数 |
 | serving/runtime | vLLM/SGLang/nano-vLLM/server | 负责 batching、KV cache、scheduler、API |
 
-MiniLLM 当前具备 tokenizer、config、weights、PyTorch model code、HF-like export、nano-vLLM 教学后端、mini-sglang 教学服务层。
+MiniLLM 当前具备 tokenizer、config、weights、PyTorch model code、learned/RoPE 位置编码、HF-like export、nano-vLLM/vLLM 后端和 mini-sglang 教学服务层。
 
 ## 2. 当前 MiniLLM 的结构
 
 当前 checkpoint 配置：
 
 ```text
-vocab_size = 339
+vocab_size = 512
 block_size = 128
 n_layer    = 2
 n_head     = 4
 n_embd     = 128
 dropout    = 0.1
 bias       = True
+position_encoding = rope
+rope_theta = 10000
 ```
 
 结构图：
 
 ```mermaid
 flowchart TD
-    A["文本 prompt"] --> B["CharTokenizer.encode"]
+    A["文本 prompt"] --> B["Byte-BPE tokenizer.encode"]
     B --> C["input_ids: [B,T]"]
     C --> D["token_embedding: vocab -> n_embd"]
-    C --> E["position_embedding: position -> n_embd"]
-    D --> F["相加 + dropout"]
-    E --> F
+    C --> E["positions -> RoPE(Q,K)"]
+    D --> F["dropout"]
+    E --> G0
     F --> G0["TransformerBlock 0"]
     G0 --> G1["TransformerBlock 1"]
     G1 --> H["ln_f"]
@@ -65,9 +67,9 @@ flowchart TD
 
 | 层 | 当前实现 | 作用 |
 | --- | --- | --- |
-| CharTokenizer | 字符级 tokenizer | 最小教学 tokenizer，每个字符一个 token |
-| token_embedding | `nn.Embedding(339,128)` | 把离散 token id 变成连续向量 |
-| position_embedding | `nn.Embedding(128,128)` | 注入位置信息；当前是 learned absolute position |
+| Byte-BPE tokenizer | 512 token 词表 | 把文本切成 byte/subword token；仍可切回 Char/SentencePiece/HF adapter |
+| token_embedding | `nn.Embedding(512,128)` | 把离散 token id 变成连续向量 |
+| RoPE | Q/K half-split rotation | 用相位旋转注入位置；旧 checkpoint 仍支持 learned absolute position |
 | CausalSelfAttention | MHA, 4 heads | 让每个 token 从历史上下文取信息，mask 防止看未来 |
 | MLP | 4x hidden GELU MLP | 每个位置独立做非线性特征变换 |
 | LayerNorm | pre-norm + final norm | 稳定激活和训练 |
@@ -205,8 +207,8 @@ runtime forward:
 
 | 引擎 | 当前状态 | 接入模型需要什么 | 高性能在哪里实现 |
 | --- | --- | --- | --- |
-| nano-vLLM | 已有 MiniGPT 教学后端 | config 分支、MiniGPTForCausalLM、tokenizer、weight loader | `nanovllm/models/minigpt.py` 后续要接 paged KV cache |
-| vLLM | 本轮新增 MiniGPT registry + native skeleton | `model_executor/models/minigpt.py`、registry、config registry、HF tokenizer/weights | vLLM `Attention`、KV cache、scheduler、CUDA graph、quant layers |
+| nano-vLLM | MiniGPT 后端已验证 learned/RoPE | config 分支、MiniGPTForCausalLM、tokenizer、weight loader | nano-vLLM `Attention`、paged KV cache、scheduler、sampler |
+| vLLM | MiniGPT native backend 已验证 learned/RoPE | `model_executor/models/minigpt.py`、registry、config registry、HF tokenizer/weights | vLLM `Attention`、paged KV cache、scheduler、CUDA graph、quant layers |
 | SGLang | 尚未做 native MiniGPT | `python/sglang/srt/models/minigpt.py`、EntryClass、RadixAttention、ForwardBatch、weight loader | SGLang `RadixAttention`、prefix cache、scheduler、FlashInfer |
 | mini-sglang | 本轮新增教学服务 | 直接加载 MiniLLM checkpoint，提供 OpenAI-like HTTP API | 目前没有高性能 runtime，只用于学习服务层 |
 
@@ -245,8 +247,8 @@ sglang backend 负责用 SGLang 的高性能 attention/runtime 执行这个结�
 | 引擎 | 验证结果 | 说明 |
 | --- | --- | --- |
 | mini-sglang | 通过 | `/health` 和 `/v1/completions` 已返回 JSON |
-| nano-vLLM | 通过 | `scripts/run_nanovllm_minigpt.py` 已加载 HF-like export 并生成 |
-| vLLM | 通过 | 使用 `/home/undefined/Disk/ai-storage/.venv-vllm`，以 `VLLM_USE_PRECOMPILED=1` 做 editable build；本地源码路径为 `/home/undefined/Desktop/ai/projects/vllm/vllm/__init__.py`；MiniGPT registry、safetensors 加载、KV cache 初始化、Triton attention、FlashInfer sampler、token 生成均已验证 |
+| nano-vLLM | 通过 | `scripts/run_nanovllm_minigpt.py` 已加载 learned/RoPE HF-like export 并生成 |
+| vLLM | 通过 | 本地 editable 源码中的 MiniGPT registry、safetensors、RoPE、paged KV cache、Triton attention 和 token 生成已验证；greedy token IDs 与 native 完全一致 |
 | SGLang | 未实现 native backend | 需要后续新增 `sglang/srt/models/minigpt.py` 并接 RadixAttention |
 
 vLLM 验证口径：
@@ -254,9 +256,9 @@ vLLM 验证口径：
 ```text
 全量从源码编译 CUDA/C++ 扩展：尝试过，但超过 30 分钟未完成。
 当前通过的构建方式：复用已安装 wheel 中的编译扩展，安装本地 Python 源码为 editable package。
-验证模型：/home/undefined/Desktop/ai/projects/minillm/hf_exports/minillm
-验证调用：LLM(..., skip_tokenizer_init=True, dtype="float32", enforce_eager=True)
-验证结果：engine 初始化、权重加载、KV cache 分配、生成 token 全部通过。
+验证模型：/home/undefined/Desktop/ai/projects/minillm/hf_exports/minillm-rope
+验证调用：LLM(..., dtype="float32", enforce_eager=True)
+验证结果：engine 初始化、完整权重加载、RoPE、KV cache 分配和 16 个 greedy token 均通过；输出 token IDs 与 native KV-cache 路径逐项相同。
 ```
 
 ## 10. vLLM / nano-vLLM 外层服务层
@@ -318,7 +320,7 @@ POST /v1/chat/completions
 | 阶段 | 生产要求 | MiniLLM 当前 |
 | --- | --- | --- |
 | 数据 | 大规模清洗、去重、混合配比 | 20k 字符 teaching corpus |
-| tokenizer | BPE/SentencePiece/chat template | 字符 tokenizer |
+| tokenizer | BPE/SentencePiece/chat template | Char、Byte-BPE、SentencePiece、HF adapter；chat template 待完善 |
 | 预训练 | 大规模 next-token training | 已完成 toy pretrain |
 | SFT | prompt/response/loss mask | 未完成 |
 | LoRA | adapter 训练与合并 | 未完成 |
@@ -326,7 +328,7 @@ POST /v1/chat/completions
 | 评估 | ppl、benchmark、回归测试 | 只有简单生成观察 |
 | HF 格式 | PreTrainedModel/save_pretrained | 只有 HF-like |
 | 原生推理 | PyTorch generate/KV cache | 已有 |
-| 推理引擎 | vLLM/SGLang native backend | nano 教学版；vLLM skeleton；SGLang 待实现 |
+| 推理引擎 | vLLM/SGLang native backend | nano-vLLM 与 vLLM 已验证；SGLang 待实现 |
 | 服务层 | OpenAI-compatible API | mini-sglang 教学服务 |
 | 量化 | INT8/INT4/GPTQ/AWQ/QLoRA | 未完成 |
 | 算子优化 | FlashAttention/Triton/CUDA | 未完成 |
@@ -337,17 +339,17 @@ POST /v1/chat/completions
 目标是把 MiniLLM 逐步变成流行 GPT 风格：
 
 1. 字符 tokenizer -> BPE/SentencePiece。
-2. learned position embedding -> RoPE。
+2. learned position embedding -> RoPE：已完成，并保留兼容模式。
 3. LayerNorm -> RMSNorm。
 4. GELU MLP -> SwiGLU。
 5. MHA -> GQA/MQA 可选。
 6. 原生 SFT + loss mask。
 7. LoRA fine-tuning。
 8. 真正 HF `PreTrainedModel`。
-9. nano-vLLM paged KV cache。
-10. vLLM native backend 验证。
+9. nano-vLLM paged KV cache：已接入 MiniGPT attention 路径。
+10. vLLM native backend 验证：已完成 RoPE 与 greedy token 对齐。
 11. SGLang RadixAttention backend。
 12. OpenAI-compatible server。
 13. 量化压缩和 kernel 优化。
 
-当前最应该做的下一步是：先做 SFT 数据格式和 `train_sft.py`，再做 RoPE/RMSNorm/SwiGLU。这样模型结构会越来越接近 Qwen/Llama/Mistral 这类流行 GPT。
+当前最应该做的下一步是：先固定 RoPE+BPE 评测基线，再依次实现可选 RMSNorm、SwiGLU、GQA 和训练 resume/AMP，随后做 SFT loss mask 与 LoRA。详细顺序见 `docs/rope_implementation_and_roadmap.md`。

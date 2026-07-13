@@ -9,6 +9,7 @@
 - `HFTokenizerAdapter`: 复用标准 Hugging Face fast tokenizer。
 - `MiniGPT`: decoder-only Transformer。
 - `CausalSelfAttention`: 带 causal mask 的多头自注意力。
+- learned absolute position 与 RoPE 两种位置编码，可通过配置切换。
 - `TransformerBlock`: LayerNorm、attention、MLP、残差连接。
 - `train.py`: next-token prediction 训练脚本。
 - `generate.py`: 从 checkpoint 采样生成文本。
@@ -53,6 +54,12 @@ python train.py --device cpu --max-steps 100 --n-layer 1 --n-head 2 --n-embd 64 
 
 ```bash
 python train.py --device cuda --max-steps 1000
+```
+
+训练 RoPE 版本：
+
+```bash
+python train.py --device cuda --position-encoding rope --rope-theta 10000
 ```
 
 选择 tokenizer：
@@ -127,7 +134,7 @@ python generate.py --prompt "MiniGPT" --max-new-tokens 40 --greedy --kv-cache
 /home/undefined/Desktop/ai/.venv-sglang/bin/python export_hf_like.py   --checkpoint checkpoints/minillm.pt   --out-dir hf_exports/minillm   --safe-serialization
 ```
 
-这个导出目录用于学习 Hugging Face 文件结构。当前同级 `nano-vllm` 项目已经注册 MiniGPT 后端；原版 vLLM/SGLang 仍需各自实现并注册该架构。
+这个导出目录用于学习 Hugging Face 文件结构。当前同级 `nano-vLLM` 和本地 vLLM 源码都已注册 MiniGPT 后端；原版 SGLang 仍需单独实现 native backend。
 
 ## 这个 LLM 可以做什么
 
@@ -137,7 +144,7 @@ python generate.py --prompt "MiniGPT" --max-new-tokens 40 --greedy --kv-cache
 - 观察 loss 如何下降。
 - 理解 token、embedding、attention、MLP、采样之间的关系。
 - 作为读论文时的实验底座。
-- 后续扩展 LoRA、RoPE、RMSNorm、SwiGLU、量化、RAG、指令微调。
+- 后续扩展 LoRA、RMSNorm、SwiGLU、GQA、量化、RAG、指令微调。
 
 它不适合：
 
@@ -149,16 +156,16 @@ python generate.py --prompt "MiniGPT" --max-new-tokens 40 --greedy --kv-cache
 
 建议按这个顺序改：
 
-1. 对比已实现的 Char、Byte-BPE、HF adapter，并继续做 SentencePiece BPE/Unigram 实验。
-2. 把 `position_embedding` 换成 RoPE。
-3. 把 `LayerNorm + GELU MLP` 换成 `RMSNorm + SwiGLU`。
-4. 继续完善 KV cache：当前已有教学版 `--kv-cache`，下一步支持 RoPE 和更长上下文。
-5. 加 `torch.utils.data.Dataset/DataLoader`，支持大文件和多 worker。
-6. 加验证集 perplexity、生成样例、checkpoint resume。
-7. 加 LoRA，只训练 adapter。
-8. 加 INT8/INT4 量化推理。
-9. 加 instruction tuning 数据格式。
-10. 加 RAG，把外部文档检索结果拼到 prompt。
+1. 固定当前 RoPE + BPE baseline，保留 learned position 兼容模式。
+2. 把 `LayerNorm + GELU MLP` 逐项升级为可选 `RMSNorm + SwiGLU`。
+3. 给 attention 增加 GQA，并保持 MHA 作为对照。
+4. 加 `Dataset/DataLoader`、checkpoint resume、学习率调度和混合精度。
+5. 加验证集 perplexity、生成回归样例和结构化 benchmark。
+6. 完成 SFT loss mask，再加入 LoRA。
+7. 包装为真正的 Transformers `PreTrainedModel`。
+8. 完成 SGLang native backend、OpenAI 服务与并发测试。
+9. 加 INT8/INT4 量化并对比精度、显存、吞吐。
+10. 接入自定义 Triton/CUDA 算子并做端到端 benchmark。
 
 ## 代码入口
 
@@ -170,6 +177,7 @@ python generate.py --prompt "MiniGPT" --max-new-tokens 40 --greedy --kv-cache
 - 生成: `generate.py`
 - KV cache、autograd、训练到推理路线: `docs/kvcache_autograd_training_roadmap.md`
 - 模型结构、推理引擎接入、AI Infra 表格: `docs/minillm_ai_infra_engine_requirements.md`
+- RoPE 原理、实现、验证与后续路线: `docs/rope_implementation_and_roadmap.md`
 
 ### 通过 nano-vLLM 教学后端运行 MiniLLM
 
@@ -184,7 +192,16 @@ python generate.py --prompt "MiniGPT" --max-new-tokens 40 --greedy --kv-cache
 /home/undefined/Desktop/ai/.venv-sglang/bin/python scripts/run_nanovllm_minigpt.py
 ```
 
-当前 MiniGPT 通过独立模型模块注册，走 nano-vLLM 的 `LLM.generate()`、scheduler、sampler、FlashAttention 和 paged KV cache。模型仍使用训练时的 learned absolute position embedding，因此 prompt 与生成 token 总数不能超过导出配置中的 `block_size`。
+当前 MiniGPT 通过独立模型模块注册，走 nano-vLLM 的 `LLM.generate()`、scheduler、sampler、FlashAttention 和 paged KV cache。learned position 与 RoPE export 都可以加载；教学模型的总序列长度仍受训练配置中的 `block_size` 限制。
+
+### 通过 vLLM 运行 RoPE MiniLLM
+
+```bash
+source /home/undefined/Desktop/ai/scripts/use_vllm.sh
+VLLM_USE_FLASHINFER_SAMPLER=0 python scripts/run_vllm_minigpt.py
+```
+
+当前 RoPE checkpoint 的验证输出为 `embedding 是把离散 token id 映射成连续向量的查表过程`。native MiniLLM、native KV cache、nano-vLLM 和 vLLM 使用相同 greedy token 序列。
 
 ### 通过 mini-sglang 教学服务调用 MiniLLM
 

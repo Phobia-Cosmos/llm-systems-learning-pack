@@ -46,6 +46,8 @@ def main() -> None:
         "hidden_size": config.n_embd,
         "dropout": config.dropout,
         "bias": config.bias,
+        "position_encoding": config.position_encoding,
+        "rope_theta": config.rope_theta,
         "tie_word_embeddings": True,
         "torch_dtype": "float16",
     }
@@ -69,8 +71,8 @@ def main() -> None:
         "# MiniLLM HF-like Export\n\n"
         "This directory is useful for learning the Hugging Face model layout. "
         f"Tokenizer type: `{tokenizer_type}`.\n\n"
-        "It can be loaded by the sibling nano-vLLM project's registered MiniGPT backend. "
-        "Other serving engines still need their own MiniGPT implementation and registration.\n"
+        "It can be loaded by the sibling nano-vLLM and vLLM MiniGPT backends. "
+        "Upstream SGLang still needs its own MiniGPT implementation and registration.\n"
     )
     print(f"exported to {out_dir}")
 

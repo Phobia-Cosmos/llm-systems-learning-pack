@@ -135,13 +135,13 @@ KV cache 不保存 Q，一般也不保存 logits。Q 是当前 query，用完即
 - SGLang：RadixAttention/prefix cache 复用公共前缀。
 - 长上下文模型：可能配合 sliding window、chunked attention、prefix cache、offload。
 
-MiniLLM 当前使用 learned absolute position embedding，并且 `position_embedding` 长度等于 `block_size`。所以这次实现的教学 KV cache 路径要求：
+MiniLLM 现在支持 learned absolute position 和 RoPE。当前教学 KV cache 路径对两种模式都要求：
 
 ```text
 prompt_len + max_new_tokens <= block_size
 ```
 
-如果超过 `block_size`，无 cache 版本可以滑动重算最近窗口；但 KV cache 版本不能简单把旧 cache 左移，因为旧 K/V 里已经混入了旧 position embedding。要把这件事做完整，后续最好先把 MiniLLM 改成 RoPE，再做长上下文 KV cache。
+learned 模式超过 `block_size` 时不能简单左移 cache，因为旧 K/V 已混入绝对位置向量。RoPE 模式已经消除了这个结构障碍，但可靠长上下文仍需扩展训练长度、cache eviction/sliding-window 策略和专门评测；仅加入 RoPE 不等于自动获得长上下文能力。
 
 ## 6. 当前 MiniLLM 已经加入的 KV cache 路径
 
@@ -370,9 +370,9 @@ optimizer.step()
 
 除了参数量，差距主要在这些方面：
 
-- tokenizer：MiniLLM 是字符级 tokenizer；真实 LLM 多用 BPE/SentencePiece 子词 tokenizer。
+- tokenizer：MiniLLM 已支持 Char、Byte-BPE、SentencePiece 和 HF adapter；真实 LLM 还会使用大词表、成熟 normalizer/chat template 与大量语料训练 tokenizer。
 - 数据：MiniLLM 使用小教学语料；真实 LLM 使用大规模、多源、清洗、去重、配比的数据。
-- 位置编码：MiniLLM 是 learned absolute position embedding；现代 LLM 多用 RoPE 或变体。
+- 位置编码：MiniLLM 已支持 learned absolute position 与 RoPE；现代 LLM 还常配合 RoPE scaling 和长上下文训练。
 - Norm：MiniLLM 用 LayerNorm；Llama/Qwen/Mistral 常用 RMSNorm。
 - MLP：MiniLLM 用 GELU MLP；现代 LLM 常用 SwiGLU/GEGLU。
 - Attention：MiniLLM 是普通 MHA；现代 LLM 常见 GQA/MQA、FlashAttention、长上下文 attention。
@@ -429,14 +429,14 @@ MiniLLM 当前阶段先补齐原生训练功能：
 对应到当前项目：
 
 1. 数据：`data/tiny_corpus.txt`、`data/teaching_corpus.txt`。
-2. tokenizer：`CharTokenizer`。
+2. tokenizer：Char、Byte-BPE、SentencePiece 或 HF adapter。
 3. 模型：`MiniGPT`。
 4. 预训练：`train.py`。
 5. 推理基线：`generate.py`。
 6. HF-like 导出：`export_hf_like.py`。
 7. nano-vLLM 后端：`projects/nano-vllm/nanovllm/models/minigpt.py`。
 8. KV cache：`generate.py --kv-cache`。
-9. 下一步：LoRA/SFT、真实 HF `PreTrainedModel`、paged KV cache、量化。
+9. 下一步：RMSNorm/SwiGLU/GQA、LoRA/SFT、真实 HF `PreTrainedModel`、SGLang backend、量化。
 
 ## 17. 初学者视角的后续任务规划
 
@@ -452,7 +452,7 @@ MiniLLM 当前阶段先补齐原生训练功能：
 ### 阶段 B：把 MiniLLM 改得更像现代 GPT
 
 - 字符 tokenizer 换成 BPE 或 SentencePiece。
-- learned position embedding 换成 RoPE。
+- learned position embedding 与 RoPE 对照：已完成。
 - LayerNorm 换成 RMSNorm。
 - GELU MLP 换成 SwiGLU。
 - attention 加 GQA/MQA 选项。
@@ -475,9 +475,8 @@ MiniLLM 当前阶段先补齐原生训练功能：
 
 ### 阶段 E：推理引擎
 
-- 当前已经完成：nano-vLLM 能加载 MiniLLM HF-like export 并生成。
-- 下一步：把 nano-vLLM 里的 MiniGPT 从“重算完整上下文”改成“真实 paged KV cache”。
-- 再对比原生 PyTorch、MiniLLM KV cache、nano-vLLM、vLLM、SGLang。
+- 当前已经完成：nano-vLLM 和 vLLM 能加载 MiniLLM learned/RoPE HF-like export，并走各自 KV-cache attention 路径生成。
+- 已对齐原生 PyTorch、MiniLLM KV cache、nano-vLLM 和 vLLM；SGLang native backend 仍待实现。
 - 学 scheduler、continuous batching、prefix cache、CUDA graph、FlashAttention/FlashInfer sampler。
 
 ### 阶段 F：量化和算子优化
@@ -492,10 +491,10 @@ MiniLLM 当前阶段先补齐原生训练功能：
 
 当前最合适的下一批任务是：
 
-1. 给 MiniLLM 的 KV cache 写最小测试和 benchmark。
-2. 把 learned position embedding 换成 RoPE，因为后续长上下文 KV cache 和 vLLM/SGLang 更贴近 RoPE。
-3. 给训练脚本加 checkpoint resume 和 learning rate schedule。
-4. 把 MiniLLM 包成真正 HF `PreTrainedModel`。
-5. 把 nano-vLLM MiniGPT 后端从“教学重算版”升级成“paged KV cache 版”。
+1. 固定当前 RoPE+BPE checkpoint 的 val loss、perplexity、生成和性能基线。
+2. 依次实现可选 RMSNorm、SwiGLU、GQA，每步都做 checkpoint 与引擎回归。
+3. 给训练脚本加 checkpoint resume、warmup/cosine learning rate、AMP 和 gradient accumulation。
+4. 完成 SFT response loss mask 和 LoRA，再包成真正 HF `PreTrainedModel`。
+5. 实现 SGLang native MiniGPT backend，然后进入量化和 Triton/CUDA 算子实验。
 
 这条路线比较稳：先把小模型的每个环节讲清楚、跑通，再把同样概念映射到 vLLM/SGLang/真实大模型。

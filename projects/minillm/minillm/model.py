@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .config import GPTConfig
+from .rope import RotaryEmbedding
 
 # 问题（已回答）:除了这一种attention 还可以使用哪些？为什么注意力也是nn.Module？n_embd和n_head分别代表什么以及为什么有这样的关系？这里的head代表什么意思？head可以无限增加吗？head_dim代表一个head处理多少的embed吗？
 # 回答：这里实现的是 decoder-only GPT 的 causal multi-head self-attention。其他常见 attention 包括 encoder bidirectional self-attention、
@@ -24,6 +25,11 @@ class CausalSelfAttention(nn.Module):
 
         self.n_head = config.n_head
         self.head_dim = config.n_embd // config.n_head
+        self.rotary = (
+            RotaryEmbedding(self.head_dim, config.block_size, config.rope_theta)
+            if config.position_encoding == "rope"
+            else None
+        )
         # 问题（已回答）:c_attn和c_proj是什么？这两个变量的作用是什么在Transformer内？为什么这两个变量内部要如何设置Linear，也要给我解释清楚。
         # 回答：c_attn 是一次性生成 Q、K、V 的线性层，把每个 token 的向量从 n_embd 投影到 3*n_embd，
         # 后面再 split 成 q/k/v。这样等价于三个 Linear，但更紧凑。c_proj 是 attention 输出后的输出投影 Wo，
@@ -58,7 +64,7 @@ class CausalSelfAttention(nn.Module):
         # state_dict() 是 nn.Module 继承的方法，不需在本类声明，返回已注册参数和 persistent buffer；该 mask 设置为不持久化。
         self.register_buffer("causal_mask", mask.view(1, 1, config.block_size, config.block_size), persistent=False)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, positions: torch.Tensor) -> torch.Tensor:
         # 问题（已回答）:这里的x是什么 为什么可以直接通过shape赋值三个变量？三个变量分别代表什么意思？
         # 回答：x 是进入 attention 的隐藏状态张量，shape 是 [batch, seq_len, channels]。
         # Python 支持解包赋值，所以 x.shape 这个三元组可以直接拆成 batch、seq_len、channels。
@@ -80,6 +86,8 @@ class CausalSelfAttention(nn.Module):
         q = q.view(batch, seq_len, self.n_head, self.head_dim).transpose(1, 2)
         k = k.view(batch, seq_len, self.n_head, self.head_dim).transpose(1, 2)
         v = v.view(batch, seq_len, self.n_head, self.head_dim).transpose(1, 2)
+        if self.rotary is not None:
+            q, k = self.rotary(q, k, positions)
 
         # 问题（已回答）:为什么转置还可以是负数？@是什么意思？
         # 回答：负数维度是从后往前数，-1 是最后一维，-2 是倒数第二维；k.transpose(-2,-1) 把 [B,H,T,D] 变成 [B,H,D,T]。
@@ -124,6 +132,7 @@ class CausalSelfAttention(nn.Module):
     def forward_with_cache(
         self,
         x: torch.Tensor,
+        positions: torch.Tensor,
         past_kv: tuple[torch.Tensor, torch.Tensor] | None = None,
     ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
         batch, seq_len, channels = x.shape
@@ -131,6 +140,8 @@ class CausalSelfAttention(nn.Module):
         q = q.view(batch, seq_len, self.n_head, self.head_dim).transpose(1, 2)
         k = k.view(batch, seq_len, self.n_head, self.head_dim).transpose(1, 2)
         v = v.view(batch, seq_len, self.n_head, self.head_dim).transpose(1, 2)
+        if self.rotary is not None:
+            q, k = self.rotary(q, k, positions)
 
         past_len = 0
         if past_kv is not None:
@@ -192,17 +203,18 @@ class TransformerBlock(nn.Module):
         self.ln_2 = nn.LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x + self.attn(self.ln_1(x))
+    def forward(self, x: torch.Tensor, positions: torch.Tensor) -> torch.Tensor:
+        x = x + self.attn(self.ln_1(x), positions)
         x = x + self.mlp(self.ln_2(x))
         return x
 
     def forward_with_cache(
         self,
         x: torch.Tensor,
+        positions: torch.Tensor,
         past_kv: tuple[torch.Tensor, torch.Tensor] | None = None,
     ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
-        attn_out, present_kv = self.attn.forward_with_cache(self.ln_1(x), past_kv)
+        attn_out, present_kv = self.attn.forward_with_cache(self.ln_1(x), positions, past_kv)
         x = x + attn_out
         x = x + self.mlp(self.ln_2(x))
         return x, present_kv
@@ -221,7 +233,11 @@ class MiniGPT(nn.Module):
         # 回答：token_embedding 有 vocab_size 行，每行代表一种 token；position_embedding 有 block_size 行，每行代表一个位置；
         # 两者行数语义不同但列数同为 n_embd，所以查表后分别得到 [B,T,C] 和 [T,C]，可以相加。
         self.token_embedding = nn.Embedding(config.vocab_size, config.n_embd)
-        self.position_embedding = nn.Embedding(config.block_size, config.n_embd)
+        self.position_embedding = (
+            nn.Embedding(config.block_size, config.n_embd)
+            if config.position_encoding == "learned"
+            else None
+        )
         self.drop = nn.Dropout(config.dropout)
         self.blocks = nn.ModuleList([TransformerBlock(config) for _ in range(config.n_layer)])
         # 问题（已回答）:为什么要设置n_embd？ln_f的作用是什么？
@@ -275,10 +291,12 @@ class MiniGPT(nn.Module):
         # token_embedding(idx) 的 shape 是 [B,T,C]，position_embedding(positions) 的 shape 是 [T,C]，PyTorch 会广播成 [B,T,C] 后相加。
         # 含义是“这个 token 是什么”加上“它在第几个位置”。block(x) 调用的是 TransformerBlock.forward，依次执行 LN、attention、残差、MLP。
         positions = torch.arange(seq_len, device=idx.device)
-        x = self.token_embedding(idx) + self.position_embedding(positions)
+        x = self.token_embedding(idx)
+        if self.position_embedding is not None:
+            x = x + self.position_embedding(positions)
         x = self.drop(x)
         for block in self.blocks:
-            x = block(x)
+            x = block(x, positions)
         x = self.ln_f(x)
         # 问题（已回答）:logits是token还是什么？
         # 回答：logits 不是 token，而是每个位置对词表中每个 token 的未归一化分数，shape 是 [B,T,vocab_size]。
@@ -307,13 +325,15 @@ class MiniGPT(nn.Module):
             raise ValueError(f"sequence length {total_len} exceeds block_size {self.config.block_size}")
 
         positions = torch.arange(past_len, total_len, device=idx.device)
-        x = self.token_embedding(idx) + self.position_embedding(positions)
+        x = self.token_embedding(idx)
+        if self.position_embedding is not None:
+            x = x + self.position_embedding(positions)
         x = self.drop(x)
 
         present_key_values: list[tuple[torch.Tensor, torch.Tensor]] = []
         for layer_idx, block in enumerate(self.blocks):
             past_kv = None if past_key_values is None else past_key_values[layer_idx]
-            x, present_kv = block.forward_with_cache(x, past_kv)
+            x, present_kv = block.forward_with_cache(x, positions, past_kv)
             present_key_values.append(present_kv)
 
         x = self.ln_f(x)
@@ -379,8 +399,7 @@ class MiniGPT(nn.Module):
     ) -> torch.Tensor:
         if idx.size(1) + max_new_tokens > self.config.block_size:
             raise ValueError(
-                "MiniLLM uses learned absolute position embeddings, so this teaching KV-cache path "
-                "requires prompt_len + max_new_tokens <= block_size."
+                "The teaching KV-cache path requires prompt_len + max_new_tokens <= block_size."
             )
 
         logits, past_key_values = self.forward_with_cache(idx)

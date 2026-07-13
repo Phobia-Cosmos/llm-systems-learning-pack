@@ -268,30 +268,21 @@ tokenizer.json
 
 ## 9. 当前 MiniLLM 是否实现了 RoPE
 
-没有。
+已经实现，并保留 learned absolute position 作为旧 checkpoint 兼容模式：
 
-当前 MiniLLM 使用的是 learned absolute position embedding：
-
-```python
-self.position_embedding = nn.Embedding(config.block_size, config.n_embd)
-x = self.token_embedding(idx) + self.position_embedding(positions)
+```text
+position_encoding = "learned" | "rope"
+rope_theta = 10000.0
 ```
-
-vLLM 和 nano-vLLM 的 MiniGPT 后端也同样使用 `position_embedding`，不是 RoPE。
 
 RoPE 的特点是：不再把一个位置向量加到 token embedding 上，而是在 attention 内部对 Q/K 做旋转位置编码。也就是说 RoPE 的改动边界主要在 attention：
 
 ```text
-当前:
+learned:
 token_embedding + position_embedding -> Q/K/V
 
 RoPE:
 token_embedding -> Q/K/V -> apply_rotary_pos_emb(Q,K,positions)
 ```
 
-后续如果实现 RoPE，需要同步改：
-
-1. `minillm/model.py`：去掉或可选关闭 `position_embedding`，在 attention 里对 Q/K 加 RoPE。
-2. `config.py`：增加 `position_encoding = "learned" | "rope"`。
-3. `export_hf_like.py`：导出 RoPE 配置字段，例如 `rope_theta`。
-4. `vLLM/nano-vLLM/SGLang` 后端：同步实现同样的 Q/K rotary 逻辑，否则权重结构和 forward 不一致。
+已同步完成 MiniLLM、nano-vLLM 和 vLLM MiniGPT backend。`mini-sglang` 直接加载 MiniLLM checkpoint，因此也能运行 RoPE；上游 SGLang native backend 尚未实现。实现与验证细节见 `docs/rope_implementation_and_roadmap.md`。

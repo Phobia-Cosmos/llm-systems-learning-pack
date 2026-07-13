@@ -214,10 +214,10 @@ Mini-SGLang 路线可以这样做：
 
 当前已经把 MiniLLM 接成了 nano-vLLM 的一个最小教学后端：
 
-- `projects/nano-vllm/nanovllm/models/minigpt.py`：新增 `MiniGPTForCausalLM` 和 `MiniGPTCharTokenizer`。
-- `projects/nano-vllm/nanovllm/config.py`：识别 `config.json` 里的 `model_type = "minigpt"`。
-- `projects/nano-vllm/nanovllm/engine/model_runner.py`：根据 `model_type` 选择 Qwen3 或 MiniGPT。
-- `projects/nano-vllm/nanovllm/engine/llm_engine.py`：MiniGPT 使用项目自己的字符 tokenizer。
+- `projects/nano-vllm/nanovllm/models/minigpt.py`：包含 `MiniGPTForCausalLM`、learned/RoPE position、tokenizer loader 和权重 loader。
+- `projects/nano-vllm/nanovllm/models/registry.py`：根据 `model_type/architectures` 选择 MiniGPT 或其他模型。
+- `projects/nano-vllm/nanovllm/engine/model_runner.py`：通过 registry 构造对应模型后端。
+- `projects/nano-vllm/nanovllm/engine/llm_engine.py`：通过模型注册信息加载 Char 或标准 HF tokenizer。
 - `projects/minillm/scripts/run_nanovllm_minigpt.py`：提供一条可直接运行的验证入口。
 
 运行方式：
@@ -227,6 +227,6 @@ cd /home/undefined/Desktop/ai/projects/minillm
 /home/undefined/Desktop/ai/.venv-sglang/bin/python scripts/run_nanovllm_minigpt.py
 ```
 
-这条链路会加载 `hf_exports/minillm/config.json`、`model.safetensors`、`tokenizer.json`，然后通过 nano-vLLM 的 `LLM.generate()` 生成文本。
+这条链路会加载 learned 或 RoPE HF-like export 的 `config.json`、`model.safetensors`、tokenizer 文件，然后通过 nano-vLLM 的 `LLM.generate()` 生成文本。
 
-需要明确的是：这个后端当前是“正确性优先”的教学实现。它复用了 nano-vLLM 的请求队列、scheduler、block manager 和 sampler，但 MiniGPT 自身还没有 paged KV cache，因此 decode 阶段会重算完整上下文。下一步练习才是把 MiniGPT attention 改成可接收 `positions`、`slot_mapping`、`block_tables` 的 KV cache 版本，再让它真正使用 nano-vLLM 的高性能路径。
+当前 MiniGPT attention 已接收 `positions`，并通过 nano-vLLM execution context 使用 `slot_mapping`、`block_tables` 和 paged KV cache。存在可用 FlashAttention backend 时走对应 kernel，否则走基于 paged KV gather 的 PyTorch fallback；fallback 仍复用 KV cache，不会每步重算完整 Transformer 上下文。

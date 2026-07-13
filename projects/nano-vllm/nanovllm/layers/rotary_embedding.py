@@ -1,4 +1,5 @@
 from functools import lru_cache
+
 import torch
 from torch import nn
 
@@ -55,5 +56,4 @@ def get_rope(
     max_position: int,
     base: float,
 ):
-    rotary_emb = RotaryEmbedding(head_size, rotary_dim, max_position, base)
-    return rotary_emb
+    return RotaryEmbedding(head_size, rotary_dim, max_position, base)

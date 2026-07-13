@@ -13,3 +13,15 @@ class GPTConfig:
     n_embd: int = 128
     dropout: float = 0.1
     bias: bool = True
+    position_encoding: str = "learned"
+    rope_theta: float = 10000.0
+
+    def __post_init__(self) -> None:
+        if self.position_encoding not in {"learned", "rope"}:
+            raise ValueError("position_encoding must be 'learned' or 'rope'")
+        if self.n_embd % self.n_head != 0:
+            raise ValueError("n_embd must be divisible by n_head")
+        if self.position_encoding == "rope" and (self.n_embd // self.n_head) % 2 != 0:
+            raise ValueError("RoPE requires an even head_dim")
+        if self.rope_theta <= 0:
+            raise ValueError("rope_theta must be positive")

@@ -18,6 +18,8 @@ projects/minillm/checkpoints/*
 projects/minillm/hf_exports/*
 !projects/minillm/hf_exports/minillm/
 !projects/minillm/hf_exports/minillm/**
+!projects/minillm/hf_exports/minillm-rope/
+!projects/minillm/hf_exports/minillm-rope/**
 
 projects/minimind/checkpoints/*_resume.pth
 projects/minimind/logs/

@@ -12,6 +12,7 @@ from transformers import AutoTokenizer, PretrainedConfig
 from nanovllm.layers.attention import Attention
 from nanovllm.layers.embed_head import ParallelLMHead, VocabParallelEmbedding
 from nanovllm.layers.linear import ColumnParallelLinear, QKVParallelLinear, RowParallelLinear
+from nanovllm.layers.rotary_embedding import get_rope
 from nanovllm.models.registry import register_model
 
 
@@ -43,6 +44,8 @@ class MiniGPTConfig(PretrainedConfig):
         num_key_value_heads: int | None = None,
         hidden_size: int | None = None,
         tie_word_embeddings: bool = True,
+        position_encoding: str = "learned",
+        rope_theta: float = 10000.0,
         **kwargs,
     ) -> None:
         block_size = _resolve_alias(
@@ -55,6 +58,10 @@ class MiniGPTConfig(PretrainedConfig):
             raise ValueError("MiniGPT uses multi-head attention, so num_key_value_heads must equal n_head")
         if n_embd % n_head != 0:
             raise ValueError("n_embd must be divisible by n_head")
+        if position_encoding not in {"learned", "rope"}:
+            raise ValueError("position_encoding must be 'learned' or 'rope'")
+        if position_encoding == "rope" and (n_embd // n_head) % 2 != 0:
+            raise ValueError("RoPE requires an even head_dim")
 
         super().__init__(tie_word_embeddings=tie_word_embeddings, **kwargs)
         self.vocab_size = vocab_size
@@ -70,6 +77,8 @@ class MiniGPTConfig(PretrainedConfig):
         self.head_dim = n_embd // n_head
         self.dropout = dropout
         self.bias = bias
+        self.position_encoding = position_encoding
+        self.rope_theta = rope_theta
 
 
 @dataclass(frozen=True)
@@ -132,6 +141,16 @@ class MiniGPTAttention(nn.Module):
         self.num_heads = config.n_head // tp_size
         self.head_dim = config.head_dim
         self.q_size = self.num_heads * self.head_dim
+        self.rotary = (
+            get_rope(
+                self.head_dim,
+                rotary_dim=self.head_dim,
+                max_position=config.block_size,
+                base=config.rope_theta,
+            )
+            if config.position_encoding == "rope"
+            else None
+        )
         self.c_attn = QKVParallelLinear(
             config.n_embd,
             self.head_dim,
@@ -147,12 +166,14 @@ class MiniGPTAttention(nn.Module):
             num_kv_heads=self.num_heads,
         )
 
-    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+    def forward(self, hidden_states: torch.Tensor, positions: torch.Tensor) -> torch.Tensor:
         qkv = self.c_attn(hidden_states)
         q, k, v = qkv.split([self.q_size, self.q_size, self.q_size], dim=-1)
         q = q.view(-1, self.num_heads, self.head_dim)
         k = k.view(-1, self.num_heads, self.head_dim)
         v = v.view(-1, self.num_heads, self.head_dim)
+        if self.rotary is not None:
+            q, k = self.rotary(positions, q, k)
         output = self.attn(q, k, v)
         return self.c_proj(output.flatten(1, -1))
 
@@ -181,8 +202,8 @@ class MiniGPTBlock(nn.Module):
         self.ln_2 = nn.LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MiniGPTMLP(config)
 
-    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        hidden_states = hidden_states + self.attn(self.ln_1(hidden_states))
+    def forward(self, hidden_states: torch.Tensor, positions: torch.Tensor) -> torch.Tensor:
+        hidden_states = hidden_states + self.attn(self.ln_1(hidden_states), positions)
         hidden_states = hidden_states + self.mlp(self.ln_2(hidden_states))
         return hidden_states
 
@@ -203,7 +224,11 @@ class MiniGPTForCausalLM(nn.Module):
                 f"vocab_size={config.vocab_size} must be divisible by tensor_parallel_size={tp_size}"
             )
         self.token_embedding = VocabParallelEmbedding(config.vocab_size, config.n_embd)
-        self.position_embedding = nn.Embedding(config.block_size, config.n_embd)
+        self.position_embedding = (
+            nn.Embedding(config.block_size, config.n_embd)
+            if config.position_encoding == "learned"
+            else None
+        )
         self.blocks = nn.ModuleList([MiniGPTBlock(config) for _ in range(config.n_layer)])
         self.ln_f = nn.LayerNorm(config.n_embd, bias=config.bias)
         self.lm_head = ParallelLMHead(config.vocab_size, config.n_embd)
@@ -211,9 +236,11 @@ class MiniGPTForCausalLM(nn.Module):
             self.lm_head.weight.data = self.token_embedding.weight.data
 
     def forward(self, input_ids: torch.Tensor, positions: torch.Tensor) -> torch.Tensor:
-        hidden_states = self.token_embedding(input_ids) + self.position_embedding(positions)
+        hidden_states = self.token_embedding(input_ids)
+        if self.position_embedding is not None:
+            hidden_states = hidden_states + self.position_embedding(positions)
         for block in self.blocks:
-            hidden_states = block(hidden_states)
+            hidden_states = block(hidden_states, positions)
         return self.ln_f(hidden_states)
 
     def compute_logits(self, hidden_states: torch.Tensor) -> torch.Tensor:
