@@ -29,6 +29,7 @@ import urllib.request
 import zipfile
 from dataclasses import asdict, dataclass
 from datetime import datetime
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Iterable
 from xml.etree import ElementTree
@@ -39,6 +40,7 @@ ARXIV_API = "https://export.arxiv.org/api/query"
 ARXIV_EPRINT = "https://arxiv.org/e-print/{arxiv_id}"
 USER_AGENT = "local-arxiv-source-downloader/1.0"
 GENERIC_VENUES = {"arxiv", "report", "openai", "nvidia", "unknown"}
+SKIPPED_TITLES = {"programming massively parallel processors"}
 
 
 @dataclass(frozen=True)
@@ -63,9 +65,19 @@ class ArxivMatch:
 
 
 class ArxivClient:
-    def __init__(self, delay: float = 3.1, retries: int = 4) -> None:
+    def __init__(
+        self,
+        delay: float = 3.2,
+        retries: int = 2,
+        request_timeout: float = 15.0,
+        retry_backoff: float = 3.0,
+        max_retry_wait: float = 8.0,
+    ) -> None:
         self.delay = delay
         self.retries = retries
+        self.request_timeout = request_timeout
+        self.retry_backoff = retry_backoff
+        self.max_retry_wait = max_retry_wait
         self.last_request = 0.0
 
     def _wait(self) -> None:
@@ -73,28 +85,47 @@ class ArxivClient:
         if elapsed < self.delay:
             time.sleep(self.delay - elapsed)
 
+    def _retry_wait(self, attempt: int, error: urllib.error.HTTPError | None = None) -> float:
+        retry_after = 0.0
+        if error is not None:
+            value = (error.headers or {}).get("Retry-After", "").strip()
+            if value.isdigit():
+                retry_after = float(value)
+            elif value:
+                try:
+                    retry_at = parsedate_to_datetime(value)
+                    now = datetime.now(retry_at.tzinfo)
+                    retry_after = max(0.0, (retry_at - now).total_seconds())
+                except (TypeError, ValueError):
+                    pass
+        exponential = self.retry_backoff * (2**attempt)
+        return min(self.max_retry_wait, max(self.delay, retry_after, exponential))
+
     def open(self, url: str):
         for attempt in range(self.retries):
             self._wait()
             request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
             try:
-                response = urllib.request.urlopen(request, timeout=90)
+                response = urllib.request.urlopen(request, timeout=self.request_timeout)
                 self.last_request = time.monotonic()
                 return response
             except urllib.error.HTTPError as error:
                 self.last_request = time.monotonic()
                 if error.code not in {429, 500, 502, 503, 504} or attempt + 1 == self.retries:
                     raise
+                wait = self._retry_wait(attempt, error)
+                print(f"  arXiv HTTP {error.code}; retrying in {wait:.0f}s", flush=True)
             except urllib.error.URLError:
                 self.last_request = time.monotonic()
                 if attempt + 1 == self.retries:
                     raise
-            time.sleep(max(self.delay, 2**attempt))
+                wait = self._retry_wait(attempt)
+                print(f"  arXiv connection error; retrying in {wait:.0f}s", flush=True)
+            time.sleep(wait)
         raise RuntimeError(f"request failed: {url}")
 
-    def search(self, title: str, year: str, threshold: float) -> ArxivMatch | None:
-        terms = " ".join(re.findall(r"[\w]+", title, flags=re.UNICODE))
-        queries = [f'ti:"{terms}"', f'all:"{terms}"']
+    def search(self, title: str, threshold: float) -> ArxivMatch | None:
+        queries = title_search_queries(title)
         candidates: dict[str, ArxivMatch] = {}
 
         for query in queries:
@@ -104,7 +135,7 @@ class ArxivClient:
             with self.open(f"{ARXIV_API}?{params}") as response:
                 feed = ElementTree.fromstring(response.read())
             for entry in feed.findall(f"{ATOM}entry"):
-                candidate = parse_arxiv_entry(entry, title, year)
+                candidate = parse_arxiv_entry(entry, title)
                 previous = candidates.get(candidate.arxiv_id)
                 if previous is None or candidate.score > previous.score:
                     candidates[candidate.arxiv_id] = candidate
@@ -132,7 +163,7 @@ class ArxivClient:
                         "--retry",
                         str(self.retries),
                         "--retry-delay",
-                        str(max(1, round(self.delay))),
+                        str(max(1, round(self.retry_backoff))),
                         "--connect-timeout",
                         "20",
                         "--max-time",
@@ -159,6 +190,18 @@ def normalize_title(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
+def title_search_queries(title: str) -> list[str]:
+    """Build arXiv queries exclusively from the paper title."""
+    terms = " ".join(re.findall(r"[\w]+", title, flags=re.UNICODE))
+    return [f'ti:"{terms}"', f'all:"{terms}"']
+
+
+def skip_reason(paper: LocalPaper) -> str:
+    if normalize_title(paper.title) in SKIPPED_TITLES:
+        return "excluded-pmpp"
+    return ""
+
+
 def title_score(expected: str, candidate: str) -> float:
     left = normalize_title(expected)
     right = normalize_title(candidate)
@@ -175,18 +218,12 @@ def title_score(expected: str, candidate: str) -> float:
     return score
 
 
-def parse_arxiv_entry(entry: ElementTree.Element, expected_title: str, expected_year: str) -> ArxivMatch:
+def parse_arxiv_entry(entry: ElementTree.Element, expected_title: str) -> ArxivMatch:
     entry_id = (entry.findtext(f"{ATOM}id") or "").strip()
     arxiv_id = re.sub(r"v\d+$", "", entry_id.rsplit("/", 1)[-1])
     title = re.sub(r"\s+", " ", entry.findtext(f"{ATOM}title") or "").strip()
     published = (entry.findtext(f"{ATOM}published") or "")[:4]
     score = title_score(expected_title, title)
-    if expected_year.isdigit() and published.isdigit():
-        difference = abs(int(expected_year) - int(published))
-        if difference <= 1:
-            score = min(1.0, score + 0.02)
-        elif difference >= 4:
-            score = max(0.0, score - 0.04)
     return ArxivMatch(arxiv_id, title, published, round(score, 4), "api-search")
 
 
@@ -377,6 +414,7 @@ def write_title_list(
                 "pdf_path",
                 "known_arxiv_id",
                 "planned_directory",
+                "skip_reason",
             ]
         )
         for paper in papers:
@@ -393,6 +431,7 @@ def write_title_list(
                     paper.pdf_path,
                     known.arxiv_id if known else "",
                     planned_directory,
+                    skip_reason(paper),
                 ]
             )
     temporary.replace(path)
@@ -454,7 +493,11 @@ def parse_args() -> argparse.Namespace:
     mode.add_argument("--dry-run", action="store_true", help="Only extract and print local paper names (default)")
     parser.add_argument("--limit", type=int, help="Process at most this many unique papers")
     parser.add_argument("--match", help="Only process local titles containing this text")
-    parser.add_argument("--delay", type=float, default=3.1, help="Minimum seconds between arXiv requests")
+    parser.add_argument("--delay", type=float, default=3.2, help="Minimum seconds between arXiv requests")
+    parser.add_argument("--retries", type=int, default=2, help="Maximum attempts for a failed arXiv request")
+    parser.add_argument("--request-timeout", type=float, default=15.0, help="Timeout in seconds for each arXiv API request")
+    parser.add_argument("--retry-backoff", type=float, default=3.0, help="Initial retry wait in seconds; doubles after each failure")
+    parser.add_argument("--max-retry-wait", type=float, default=8.0, help="Maximum wait between retries")
     parser.add_argument("--threshold", type=float, default=0.80, help="Minimum title similarity for API search results")
     return parser.parse_args()
 
@@ -483,41 +526,58 @@ def main() -> int:
     if args.dry_run or (not args.download and not args.search_only):
         for index, paper in enumerate(papers, 1):
             prefix = paper.prefix or "<year+venue from arXiv>"
-            print(f"{index:03d}  {prefix}-{paper.title}")
+            skipped = f"  [skip: {skip_reason(paper)}]" if skip_reason(paper) else ""
+            print(f"{index:03d}  {prefix}-{paper.title}{skipped}")
         return 0
 
     output_root.mkdir(parents=True, exist_ok=True)
-    client = ArxivClient(delay=max(0.0, args.delay))
+    client = ArxivClient(
+        delay=max(0.0, args.delay),
+        retries=max(1, args.retries),
+        request_timeout=max(1.0, args.request_timeout),
+        retry_backoff=max(0.0, args.retry_backoff),
+        max_retry_wait=max(args.delay, args.max_retry_wait, 0.0),
+    )
     results: list[dict] = []
     manifest_path = output_root / "manifest.json"
+    run_started = time.monotonic()
 
     for index, paper in enumerate(papers, 1):
-        print(f"[{index}/{len(papers)}] {paper.prefix or '?'}-{paper.title}", flush=True)
+        paper_started = time.monotonic()
+        print(f"[{index}/{len(papers)}] title: {paper.title}", flush=True)
         result = {"paper": asdict(paper), "status": "pending"}
         try:
-            match = match_known_arxiv(paper, known_entries)
-            if match is None:
-                match = client.search(paper.title, paper.year, args.threshold)
-            if match is None:
-                result["status"] = "not-found"
-                print("  not found with a sufficiently similar arXiv title", flush=True)
+            reason = skip_reason(paper)
+            if reason:
+                result["status"] = "skipped"
+                result["reason"] = reason
+                print(f"  skipped: {reason}", flush=True)
             else:
-                result["arxiv"] = asdict(match)
-                result["directory_name"] = output_name(paper, match)
-                if args.search_only:
-                    result["status"] = "matched"
-                    print(f"  {match.arxiv_id}  score={match.score:.3f}  {match.title}", flush=True)
+                match = match_known_arxiv(paper, known_entries)
+                if match is None:
+                    match = client.search(paper.title, args.threshold)
+                if match is None:
+                    result["status"] = "not-found"
+                    print("  not found with a sufficiently similar arXiv title", flush=True)
                 else:
-                    destination, status = install_source(
-                        client, paper, match, output_root, args.force, args.keep_archive
-                    )
-                    result["status"] = status
-                    result["output"] = str(destination)
-                    print(f"  {status}: {destination.name}", flush=True)
+                    result["arxiv"] = asdict(match)
+                    result["directory_name"] = output_name(paper, match)
+                    if args.search_only:
+                        result["status"] = "matched"
+                        print(f"  {match.arxiv_id}  score={match.score:.3f}  {match.title}", flush=True)
+                    else:
+                        destination, status = install_source(
+                            client, paper, match, output_root, args.force, args.keep_archive
+                        )
+                        result["status"] = status
+                        result["output"] = str(destination)
+                        print(f"  {status}: {destination.name}", flush=True)
         except (OSError, ValueError, urllib.error.URLError, subprocess.CalledProcessError) as error:
             result["status"] = "error"
             result["error"] = str(error)
             print(f"  error: {error}", flush=True)
+        result["elapsed_seconds"] = round(time.monotonic() - paper_started, 3)
+        print(f"  elapsed: {result['elapsed_seconds']:.3f}s", flush=True)
         results.append(result)
         atomic_json(
             manifest_path,
@@ -534,6 +594,7 @@ def main() -> int:
         status = result["status"]
         counts[status] = counts.get(status, 0) + 1
     print("Finished: " + ", ".join(f"{key}={value}" for key, value in sorted(counts.items())))
+    print(f"Search run elapsed: {time.monotonic() - run_started:.3f}s")
     print(f"Manifest: {manifest_path}")
     return 0 if not counts.get("error") else 1
 
