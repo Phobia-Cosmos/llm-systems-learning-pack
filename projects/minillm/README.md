@@ -59,7 +59,7 @@ python train.py --device cuda --max-steps 1000
 训练 RoPE 版本：
 
 ```bash
-python train.py --device cuda --position-encoding rope --rope-theta 10000
+python train.py --device cuda --position-encoding rope --rope-theta 10000 --checkpoint-name minillm-rope.pt
 ```
 
 选择 tokenizer：
@@ -69,16 +69,20 @@ python train.py --device cuda --position-encoding rope --rope-theta 10000
 python train.py --tokenizer char
 
 # 项目内训练/保存的 Byte-level BPE
-python train.py --tokenizer byte-bpe --tokenizer-output-dir tokenizer_variants/byte_bpe
+python train.py \
+  --tokenizer byte-bpe \
+  --tokenizer-output-dir artifacts/tokenizers/byte_bpe \
+  --checkpoint-name minillm-byte-bpe.pt
 
 # 导入任意标准 HF fast tokenizer
 python train.py \
   --tokenizer hf-auto \
-  --tokenizer-path tokenizer_variants/byte_bpe
+  --tokenizer-path artifacts/tokenizers/byte_bpe \
+  --checkpoint-name minillm-hf-auto.pt
 
 # 独立训练 SentencePiece BPE 或 Unigram
-python train.py --tokenizer sentencepiece-bpe --tokenizer-vocab-size 512
-python train.py --tokenizer sentencepiece-unigram --tokenizer-vocab-size 512
+python train.py --tokenizer sentencepiece-bpe --tokenizer-vocab-size 512 --checkpoint-name minillm-sentencepiece-bpe.pt
+python train.py --tokenizer sentencepiece-unigram --tokenizer-vocab-size 512 --checkpoint-name minillm-sentencepiece-unigram.pt
 ```
 
 公共接口、SentencePiece 论文与技术演进见：
@@ -90,8 +94,10 @@ docs/tokenizer_interface_hf_adapter_and_evolution.md
 训练完成后会保存：
 
 ```text
-checkpoints/minillm.pt
+artifacts/checkpoints/minillm.pt
 ```
+
+所有模型产物统一放在 `artifacts/` 下，但按格式分层：PyTorch checkpoint 平铺在 `artifacts/checkpoints/`，HF-like 多文件导出放在 `artifacts/hf_exports/<variant>/`，tokenizer bundle 放在 `artifacts/tokenizers/<variant>/`。现有 checkpoint 分别是 `minillm.pt`、`minillm-byte-bpe.pt` 和 `minillm-rope.pt`；训练新变体时用 `--checkpoint-name` 指定不会覆盖现有文件的名称。
 
 ## 生成
 
@@ -110,6 +116,35 @@ python generate.py --prompt "MiniGPT" --max-new-tokens 200 --temperature 0.8 --t
 ```bash
 python generate.py --prompt "MiniGPT" --max-new-tokens 40 --greedy --kv-cache
 ```
+
+## 完整数值调试：从极小语料到每个 Q/K/V
+
+如果目标是先完整看懂一次 LLM 训练，而不是立即追求生成质量，运行专用的极小调试流水线：
+
+```bash
+/home/undefined/Desktop/ai/.venv/bin/python scripts/debug_tiny_transformer.py --device cpu
+```
+
+它使用 `data/debug_corpus.txt`，默认模型只有 1 个 Transformer block、2 个 attention head、8 维 hidden state、976 个可训练参数。为便于第一次学习，默认实际创建独立的 `q_proj/k_proj/v_proj`；传入 `--fused-qkv` 才切换到生产式融合 QKV。脚本会真实执行：
+
+```text
+corpus -> CharTokenizer -> 完整词表 -> shifted x/y
+-> embedding -> LN -> Wq/Wk/Wv -> 分头 -> RoPE(Q,K)
+-> QK^T -> causal mask -> softmax -> weights@V -> Wo
+-> residual -> MLP -> logits -> cross entropy
+-> backward -> dL/dQ,dL/dK,dL/dV -> AdamW update
+-> 训练前/第 1 步后/训练完成的 QKV 对比 -> greedy generation
+```
+
+输出目录是 `debug_outputs/tiny_transformer/`：
+
+- `report.md`：以公式、shape 和上下游关系为主的完整中文流程讲解。
+- `tensor_dump.md`：训练前、第一步后和训练完成后的全部小张量真实数值。
+- `vocab.json`：字符 token 的 `token <-> id` 完整词表。
+- `loss.csv`：训练过程的全语料 loss。
+- `checkpoint.pt`：可由 MiniLLM 恢复的模型、config 和 tokenizer。
+
+报告还会自动验证 trace logits/loss 与真实 `MiniGPT.forward` 一致、Q/K/V 输出与各自投影公式一致、未来 attention 权重为 0、softmax 每行之和为 1。调试实现位于 `minillm/debug.py`，对应回归测试为 `tests/test_debug_flow.py`。
 
 
 
@@ -131,7 +166,7 @@ python generate.py --prompt "MiniGPT" --max-new-tokens 40 --greedy --kv-cache
 导出教学用 HF-like 目录：
 
 ```bash
-/home/undefined/Desktop/ai/.venv-sglang/bin/python export_hf_like.py   --checkpoint checkpoints/minillm.pt   --out-dir hf_exports/minillm   --safe-serialization
+/home/undefined/Desktop/ai/.venv-sglang/bin/python export_hf_like.py   --checkpoint artifacts/checkpoints/minillm.pt   --out-dir artifacts/hf_exports/minillm   --safe-serialization
 ```
 
 这个导出目录用于学习 Hugging Face 文件结构。当前同级 `nano-vLLM` 和本地 vLLM 源码都已注册 MiniGPT 后端；原版 SGLang 仍需单独实现 native backend。
@@ -185,8 +220,8 @@ python generate.py --prompt "MiniGPT" --max-new-tokens 40 --greedy --kv-cache
 
 ```bash
 /home/undefined/Desktop/ai/.venv-sglang/bin/python export_hf_like.py \
-  --checkpoint checkpoints/minillm.pt \
-  --out-dir hf_exports/minillm \
+  --checkpoint artifacts/checkpoints/minillm.pt \
+  --out-dir artifacts/hf_exports/minillm \
   --safe-serialization
 
 /home/undefined/Desktop/ai/.venv-sglang/bin/python scripts/run_nanovllm_minigpt.py
@@ -209,7 +244,7 @@ VLLM_USE_FLASHINFER_SAMPLER=0 python scripts/run_vllm_minigpt.py
 cd /home/undefined/Desktop/ai
 source scripts/use_disk_ai_env.sh
 python projects/mini-sglang/mini_sglang_server.py \
-  --checkpoint projects/minillm/checkpoints/minillm.pt \
+  --checkpoint projects/minillm/artifacts/checkpoints/minillm.pt \
   --host 127.0.0.1 \
   --port 8011 \
   --device cpu

@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+import math
 
 
 class RMSNorm(nn.Module):
@@ -48,3 +49,26 @@ class RMSNorm(nn.Module):
             return self.rms_forward(x)
         else:
             return self.add_rms_forward(x, residual)
+
+
+class ScaleNorm(nn.Module):
+    def __init__(self, hidden_size: int, eps: float = 1e-5) -> None:
+        super().__init__()
+        self.eps = eps
+        self.scale = nn.Parameter(torch.tensor(math.sqrt(hidden_size), dtype=torch.float32))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        norm = torch.linalg.vector_norm(x.float(), dim=-1, keepdim=True).clamp_min(self.eps)
+        return (x.float() * (self.scale.float() / norm)).to(x.dtype)
+
+
+def build_norm(hidden_size: int, norm_type: str, eps: float, bias: bool) -> nn.Module:
+    if norm_type == "layernorm":
+        return nn.LayerNorm(hidden_size, eps=eps, bias=bias)
+    if norm_type == "rmsnorm":
+        return RMSNorm(hidden_size, eps)
+    if norm_type == "scalenorm":
+        return ScaleNorm(hidden_size, eps)
+    if norm_type == "none":
+        return nn.Identity()
+    raise ValueError(f"unsupported norm_type: {norm_type}")

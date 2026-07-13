@@ -7,7 +7,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .config import GPTConfig
-from .rope import RotaryEmbedding
+from .mlp import build_mlp
+from .norm import build_norm
+from .position import build_attention_position_encoding, build_input_position_encoding
 
 # 问题（已回答）:除了这一种attention 还可以使用哪些？为什么注意力也是nn.Module？n_embd和n_head分别代表什么以及为什么有这样的关系？这里的head代表什么意思？head可以无限增加吗？head_dim代表一个head处理多少的embed吗？
 # 回答：这里实现的是 decoder-only GPT 的 causal multi-head self-attention。其他常见 attention 包括 encoder bidirectional self-attention、
@@ -25,10 +27,12 @@ class CausalSelfAttention(nn.Module):
 
         self.n_head = config.n_head
         self.head_dim = config.n_embd // config.n_head
-        self.rotary = (
-            RotaryEmbedding(self.head_dim, config.block_size, config.rope_theta)
-            if config.position_encoding == "rope"
-            else None
+        self.position_encoding = build_attention_position_encoding(
+            config.position_encoding,
+            self.head_dim,
+            config.n_head,
+            config.block_size,
+            config.rope_theta,
         )
         # 问题（已回答）:c_attn和c_proj是什么？这两个变量的作用是什么在Transformer内？为什么这两个变量内部要如何设置Linear，也要给我解释清楚。
         # 回答：c_attn 是一次性生成 Q、K、V 的线性层，把每个 token 的向量从 n_embd 投影到 3*n_embd，
@@ -41,7 +45,20 @@ class CausalSelfAttention(nn.Module):
         # 问题（已回答）：attention 结构怎样，c_proj 是否分别投影 Q/K/V？
         # 回答：x -> c_attn -> Q,K,V -> 分头 -> softmax(QK^T/sqrt(d))V -> 拼头 -> c_proj -> residual。
         # c_attn 分别产生 Q/K/V；c_proj 只作用于 attention 聚合并拼头后的结果，不再分别处理三者。
-        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
+        self.fused_qkv = config.fused_qkv
+        if self.fused_qkv:
+            # Production-style implementation: one kernel produces [Q | K | V].
+            self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
+            self.q_proj = None
+            self.k_proj = None
+            self.v_proj = None
+        else:
+            # Teaching implementation: the three equations are visible as
+            # three independent Linear modules.
+            self.c_attn = None
+            self.q_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+            self.k_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+            self.v_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
         self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
         # 问题（已回答）:Dropout是一个函数吗？
         # 回答：nn.Dropout 是一个 Module，不只是普通函数。训练时它按概率随机把部分元素置 0 并缩放剩余元素，
@@ -64,6 +81,20 @@ class CausalSelfAttention(nn.Module):
         # state_dict() 是 nn.Module 继承的方法，不需在本类声明，返回已注册参数和 persistent buffer；该 mask 设置为不持久化。
         self.register_buffer("causal_mask", mask.view(1, 1, config.block_size, config.block_size), persistent=False)
 
+    def project_qkv(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Project hidden states into Q/K/V using fused or teaching layout."""
+
+        if self.c_attn is not None:
+            return self.c_attn(x).split(x.size(-1), dim=-1)
+        if self.q_proj is None or self.k_proj is None or self.v_proj is None:
+            raise RuntimeError("separate Q/K/V projections were not initialized")
+        return self.q_proj(x), self.k_proj(x), self.v_proj(x)
+
+    @property
+    def rotary(self):
+        """Compatibility accessor for code that inspected the old RoPE field."""
+        return getattr(self.position_encoding, "rotary", None)
+
     def forward(self, x: torch.Tensor, positions: torch.Tensor) -> torch.Tensor:
         # 问题（已回答）:这里的x是什么 为什么可以直接通过shape赋值三个变量？三个变量分别代表什么意思？
         # 回答：x 是进入 attention 的隐藏状态张量，shape 是 [batch, seq_len, channels]。
@@ -74,7 +105,7 @@ class CausalSelfAttention(nn.Module):
         # 回答：self.c_attn(x) 把最后一维从 channels 投影到 3*channels，里面依次放 Q、K、V。
         # split(channels, dim=2) 表示沿最后一维切成三段，每段长度 channels；dim=2 是因为 x 的维度是 [B,T,C]，
         # 第 2 维就是 embedding/channel 维。
-        q, k, v = self.c_attn(x).split(channels, dim=2)
+        q, k, v = self.project_qkv(x)
 
         # 问题（已回答）:这里是在做什么 为什么这样做 对应公式的哪一步？为什么要转置？为什么传入四个参数？
         # 回答：这一步把 [B,T,C] 拆成多头形式 [B,T,H,D]，其中 H=n_head、D=head_dim，然后转成 [B,H,T,D]。
@@ -86,8 +117,7 @@ class CausalSelfAttention(nn.Module):
         q = q.view(batch, seq_len, self.n_head, self.head_dim).transpose(1, 2)
         k = k.view(batch, seq_len, self.n_head, self.head_dim).transpose(1, 2)
         v = v.view(batch, seq_len, self.n_head, self.head_dim).transpose(1, 2)
-        if self.rotary is not None:
-            q, k = self.rotary(q, k, positions)
+        q, k = self.position_encoding.apply_qk(q, k, positions)
 
         # 问题（已回答）:为什么转置还可以是负数？@是什么意思？
         # 回答：负数维度是从后往前数，-1 是最后一维，-2 是倒数第二维；k.transpose(-2,-1) 把 [B,H,T,D] 变成 [B,H,D,T]。
@@ -96,6 +126,14 @@ class CausalSelfAttention(nn.Module):
         # 回答：QK^T 比较每个 query 位置与每个 key 位置，因此两个 T 维形成所有位置对；V 不参与“匹配打分”，
         # softmax 后的 [B,H,T,T] 权重再乘 V，才得到汇总内容 [B,H,T,D]。
         scores = (q @ k.transpose(-2, -1)) / math.sqrt(self.head_dim)
+        position_bias = self.position_encoding.attention_bias(
+            positions,
+            positions,
+            dtype=scores.dtype,
+            device=scores.device,
+        )
+        if position_bias is not None:
+            scores = scores + position_bias
 
         # 问题（已回答）:这里又是在做什么？这个函数的作用是什么？原理？公式是什么？
         # 回答：masked_fill 把 mask 为 True 的位置替换成指定值。这里先找 causal_mask 中为 0 的未来位置，
@@ -136,12 +174,11 @@ class CausalSelfAttention(nn.Module):
         past_kv: tuple[torch.Tensor, torch.Tensor] | None = None,
     ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
         batch, seq_len, channels = x.shape
-        q, k, v = self.c_attn(x).split(channels, dim=2)
+        q, k, v = self.project_qkv(x)
         q = q.view(batch, seq_len, self.n_head, self.head_dim).transpose(1, 2)
         k = k.view(batch, seq_len, self.n_head, self.head_dim).transpose(1, 2)
         v = v.view(batch, seq_len, self.n_head, self.head_dim).transpose(1, 2)
-        if self.rotary is not None:
-            q, k = self.rotary(q, k, positions)
+        q, k = self.position_encoding.apply_qk(q, k, positions)
 
         past_len = 0
         if past_kv is not None:
@@ -155,6 +192,15 @@ class CausalSelfAttention(nn.Module):
             raise ValueError("KV cache length exceeds block_size; use a longer block_size or fewer generated tokens")
 
         scores = (q @ k.transpose(-2, -1)) / math.sqrt(self.head_dim)
+        key_positions = torch.arange(total_len, device=x.device)
+        position_bias = self.position_encoding.attention_bias(
+            positions,
+            key_positions,
+            dtype=scores.dtype,
+            device=scores.device,
+        )
+        if position_bias is not None:
+            scores = scores + position_bias
         mask = self.causal_mask[:, :, past_len:total_len, :total_len]
         scores = scores.masked_fill(mask == 0, float("-inf"))
         weights = F.softmax(scores, dim=-1)
@@ -166,31 +212,6 @@ class CausalSelfAttention(nn.Module):
 # 问题（已回答）:为什么nn中还有Sequential？nn中都包含哪些东西？
 # 回答：nn.Sequential 是把多个层按顺序串起来的容器，适合“输入依次经过 A、B、C”的简单网络。
 # torch.nn 里包含 Module 基类、Linear/Embedding/Conv、LayerNorm/BatchNorm/RMSNorm 类似归一化层、Dropout、激活函数、损失函数等。
-class MLP(nn.Module):
-    def __init__(self, config: GPTConfig):
-        super().__init__()
-        # 问题（已回答）:为什么1in 4out然后接一个GELU后反过来？这个linear的选择有什么特殊的地方没？只能选择linear吗？GELU的作用是什么？为什么要Dropout？
-        # 回答：Transformer 的 MLP 通常先把维度扩到 4*n_embd，再压回 n_embd，给每个 token 更多非线性变换容量。
-        # Linear 是最常见选择，现代 LLM 也常用 SwiGLU/GEGLU 这类门控 MLP，不是只能用普通 Linear+GELU。
-        # GELU 是平滑激活函数，引入非线性；如果只有线性层叠加，整体仍等价于一个线性变换。
-        # Dropout 训练时随机丢一部分激活，降低 toy 语料上的过拟合。
-        # 问题（已回答）：为什么 MLP 扩 4 倍，激活和最后 Dropout 如何安排？
-        # 回答：4 倍是原始 Transformer/GPT 的经验容量比，不是定律，现代 SwiGLU 常用约 8/3 等比例。
-        # 两个 Linear 之间需非线性以提升表达能力；第二个 Linear 负责投影回 n_embd 供残差相加，随后 Dropout 正则化分支输出，无需再激活。
-        self.net = nn.Sequential(
-            nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias),
-            nn.GELU(),
-            nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias),
-            nn.Dropout(config.dropout),
-        )
-
-    # 问题（已回答）:这个前向传播为什么只是声明一个网络？
-    # 回答：网络结构已经在 __init__ 的 self.net 里声明好了；forward 只需要说明数据如何流过它。
-    # self.net(x) 会自动按 Sequential 里的顺序执行 Linear -> GELU -> Linear -> Dropout。
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.net(x)
-
-
 # 问题（已回答）:ln_1和2代表什么？Transformer的一般结构是什么？MLP的作用是什么？
 # 回答：ln_1 和 ln_2 是两个 LayerNorm，分别放在 attention 分支和 MLP 分支前面，这叫 pre-norm 结构。
 # 一个 decoder-only Transformer block 通常是：x -> LN -> causal self-attention -> residual add -> LN -> MLP -> residual add。
@@ -198,10 +219,20 @@ class MLP(nn.Module):
 class TransformerBlock(nn.Module):
     def __init__(self, config: GPTConfig):
         super().__init__()
-        self.ln_1 = nn.LayerNorm(config.n_embd, bias=config.bias)
+        self.ln_1 = build_norm(
+            config.n_embd,
+            config.norm_type,
+            eps=config.norm_eps,
+            bias=config.bias,
+        )
         self.attn = CausalSelfAttention(config)
-        self.ln_2 = nn.LayerNorm(config.n_embd, bias=config.bias)
-        self.mlp = MLP(config)
+        self.ln_2 = build_norm(
+            config.n_embd,
+            config.norm_type,
+            eps=config.norm_eps,
+            bias=config.bias,
+        )
+        self.mlp = build_mlp(config)
 
     def forward(self, x: torch.Tensor, positions: torch.Tensor) -> torch.Tensor:
         x = x + self.attn(self.ln_1(x), positions)
@@ -233,17 +264,23 @@ class MiniGPT(nn.Module):
         # 回答：token_embedding 有 vocab_size 行，每行代表一种 token；position_embedding 有 block_size 行，每行代表一个位置；
         # 两者行数语义不同但列数同为 n_embd，所以查表后分别得到 [B,T,C] 和 [T,C]，可以相加。
         self.token_embedding = nn.Embedding(config.vocab_size, config.n_embd)
-        self.position_embedding = (
-            nn.Embedding(config.block_size, config.n_embd)
-            if config.position_encoding == "learned"
-            else None
+        self.position_embedding = build_input_position_encoding(
+            config.position_encoding,
+            config.block_size,
+            config.n_embd,
+            config.sinusoidal_theta,
         )
         self.drop = nn.Dropout(config.dropout)
         self.blocks = nn.ModuleList([TransformerBlock(config) for _ in range(config.n_layer)])
         # 问题（已回答）:为什么要设置n_embd？ln_f的作用是什么？
         # 回答：LayerNorm 需要知道归一化最后一维的大小，这里最后一维就是 n_embd。
         # ln_f 是所有 Transformer block 之后的最终归一化，帮助输出分布稳定，再交给 lm_head 预测词表 logits。
-        self.ln_f = nn.LayerNorm(config.n_embd, bias=config.bias)
+        self.ln_f = build_norm(
+            config.n_embd,
+            config.norm_type,
+            eps=config.norm_eps,
+            bias=config.bias,
+        )
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         # 问题（已回答）：nn.Embedding 的 weight 从哪里来？
         # 回答：构造 nn.Embedding(num_embeddings, embedding_dim) 时模块自动创建形状 [V,C] 的 nn.Parameter；
@@ -293,7 +330,7 @@ class MiniGPT(nn.Module):
         positions = torch.arange(seq_len, device=idx.device)
         x = self.token_embedding(idx)
         if self.position_embedding is not None:
-            x = x + self.position_embedding(positions)
+            x = x + self.position_embedding(positions).to(dtype=x.dtype)
         x = self.drop(x)
         for block in self.blocks:
             x = block(x, positions)
@@ -327,7 +364,7 @@ class MiniGPT(nn.Module):
         positions = torch.arange(past_len, total_len, device=idx.device)
         x = self.token_embedding(idx)
         if self.position_embedding is not None:
-            x = x + self.position_embedding(positions)
+            x = x + self.position_embedding(positions).to(dtype=x.dtype)
         x = self.drop(x)
 
         present_key_values: list[tuple[torch.Tensor, torch.Tensor]] = []

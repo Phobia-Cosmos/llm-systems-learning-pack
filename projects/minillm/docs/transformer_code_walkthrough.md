@@ -679,7 +679,7 @@ model.state_dict()["token_embedding.weight"]
 也会被保存到 checkpoint：
 
 ```text
-checkpoints/minillm.pt
+artifacts/checkpoints/minillm.pt
 ```
 
 当前 MiniLLM 还做了 weight tying：

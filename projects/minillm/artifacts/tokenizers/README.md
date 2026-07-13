@@ -1,4 +1,4 @@
-# MiniLLM Tokenizer Variants
+# MiniLLM Tokenizer Artifacts
 
 这个目录用于保存不同 tokenizer 的训练产物，方便和当前 `CharTokenizer` 对比。
 
@@ -54,7 +54,7 @@ python scripts/compare_tokenizers.py --show-tokens
 
 ## 为什么不能直接替换当前 checkpoint
 
-当前 `checkpoints/minillm.pt` 是用 `CharTokenizer` 训练的。它的 `token_embedding.weight` 第一维对应旧词表：
+当前 `artifacts/checkpoints/minillm.pt` 是用 `CharTokenizer` 训练的。它的 `token_embedding.weight` 第一维对应旧词表：
 
 ```text
 CharTokenizer vocab_size -> token_embedding.weight.shape[0]

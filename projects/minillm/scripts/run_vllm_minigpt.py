@@ -11,7 +11,7 @@ MINILLM_DIR = Path(__file__).resolve().parents[1]
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run a MiniLLM HF-like export through vLLM.")
-    parser.add_argument("--model", default=str(MINILLM_DIR / "hf_exports" / "minillm-rope"))
+    parser.add_argument("--model", default=str(MINILLM_DIR / "artifacts" / "hf_exports" / "minillm-rope"))
     parser.add_argument("--prompt", default="embedding 是把离散 token id 映射成")
     parser.add_argument("--max-tokens", type=int, default=16)
     parser.add_argument("--temperature", type=float, default=0.0)

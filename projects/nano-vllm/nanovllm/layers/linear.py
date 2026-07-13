@@ -84,7 +84,16 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
         self.output_sizes = output_sizes
         super().__init__(input_size, sum(output_sizes), bias)
 
-    def weight_loader(self, param: nn.Parameter, loaded_weight: torch.Tensor, loaded_shard_id: int):
+    def weight_loader(
+        self,
+        param: nn.Parameter,
+        loaded_weight: torch.Tensor,
+        loaded_shard_id: int | None = None,
+    ):
+        if loaded_shard_id is None:
+            for shard_id, shard in enumerate(loaded_weight.split(self.output_sizes, self.tp_dim)):
+                self.weight_loader(param, shard, shard_id)
+            return
         param_data = param.data
         shard_offset = sum(self.output_sizes[:loaded_shard_id]) // self.tp_size
         shard_size = self.output_sizes[loaded_shard_id] // self.tp_size

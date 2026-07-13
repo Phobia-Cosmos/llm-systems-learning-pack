@@ -159,7 +159,7 @@ learned 模式超过 `block_size` 时不能简单左移 cache，因为旧 K/V �
 cd /home/undefined/Desktop/ai/projects/minillm
 /home/undefined/Desktop/ai/.venv-sglang/bin/python generate.py \
   --device cuda \
-  --checkpoint checkpoints/minillm.pt \
+  --checkpoint artifacts/checkpoints/minillm.pt \
   --prompt "用户: 什么是 decoder-only Transformer？\n助手:" \
   --max-new-tokens 30 \
   --greedy \

@@ -13,13 +13,15 @@ __pycache__/
 .model_cache/
 .model_cache
 *.pyc
-projects/minillm/checkpoints/*
-!projects/minillm/checkpoints/minillm.pt
-projects/minillm/hf_exports/*
-!projects/minillm/hf_exports/minillm/
-!projects/minillm/hf_exports/minillm/**
-!projects/minillm/hf_exports/minillm-rope/
-!projects/minillm/hf_exports/minillm-rope/**
+projects/minillm/artifacts/checkpoints/*
+!projects/minillm/artifacts/checkpoints/minillm.pt
+!projects/minillm/artifacts/checkpoints/minillm-byte-bpe.pt
+!projects/minillm/artifacts/checkpoints/minillm-rope.pt
+projects/minillm/artifacts/hf_exports/*
+!projects/minillm/artifacts/hf_exports/minillm/
+!projects/minillm/artifacts/hf_exports/minillm/**
+!projects/minillm/artifacts/hf_exports/minillm-rope/
+!projects/minillm/artifacts/hf_exports/minillm-rope/**
 
 projects/minimind/checkpoints/*_resume.pth
 projects/minimind/logs/

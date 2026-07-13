@@ -78,7 +78,7 @@ flowchart TD
 
 ## 3. checkpoint 的组成
 
-`projects/minillm/checkpoints/minillm.pt` 是一个 PyTorch checkpoint dict：
+`projects/minillm/artifacts/checkpoints/minillm.pt` 是一个 PyTorch checkpoint dict：
 
 ```text
 model      -> state_dict，所有权重张量
@@ -102,7 +102,7 @@ device=cuda
 HF-like 导出目录：
 
 ```text
-hf_exports/minillm/
+artifacts/hf_exports/minillm/
   config.json
   model.safetensors
   tokenizer.json
@@ -256,7 +256,7 @@ vLLM 验证口径：
 ```text
 全量从源码编译 CUDA/C++ 扩展：尝试过，但超过 30 分钟未完成。
 当前通过的构建方式：复用已安装 wheel 中的编译扩展，安装本地 Python 源码为 editable package。
-验证模型：/home/undefined/Desktop/ai/projects/minillm/hf_exports/minillm-rope
+验证模型：/home/undefined/Desktop/ai/projects/minillm/artifacts/hf_exports/minillm-rope
 验证调用：LLM(..., dtype="float32", enforce_eager=True)
 验证结果：engine 初始化、完整权重加载、RoPE、KV cache 分配和 16 个 greedy token 均通过；输出 token IDs 与 native KV-cache 路径逐项相同。
 ```

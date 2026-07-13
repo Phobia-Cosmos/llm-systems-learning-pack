@@ -2,5 +2,5 @@
   "tokenizer_class": "CharTokenizer",
   "unk_token": "<unk>",
   "model_max_length": 128,
-  "note": "This is MiniLLM's educational char tokenizer, not a standard HF fast tokenizer."
+  "note": "MiniLLM educational character tokenizer; not an HF fast tokenizer."
 }

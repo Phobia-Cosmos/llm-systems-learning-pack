@@ -6,7 +6,9 @@ from unittest.mock import patch
 
 import torch
 
-from nanovllm.layers.linear import QKVParallelLinear
+from nanovllm.layers.layernorm import RMSNorm, ScaleNorm
+from nanovllm.layers.linear import MergedColumnParallelLinear, QKVParallelLinear
+from nanovllm.layers.position_encoding import SinusoidalPositionEmbedding
 from nanovllm.layers.rotary_embedding import get_rope
 from nanovllm.models.minigpt import MiniGPTCharTokenizer, MiniGPTConfig
 from nanovllm.models.registry import create_model, load_model_config, load_tokenizer, supported_model_types
@@ -31,6 +33,10 @@ class MiniGPTConfigTests(unittest.TestCase):
         self.assertEqual(config.head_dim, 32)
         self.assertEqual(config.position_encoding, "learned")
         self.assertEqual(config.rope_theta, 10000.0)
+        self.assertEqual(config.norm_type, "layernorm")
+        self.assertEqual(config.mlp_type, "dense")
+        self.assertEqual(config.activation, "gelu")
+        self.assertEqual(config.intermediate_size, 512)
 
     def test_conflicting_aliases_are_rejected(self):
         with self.assertRaisesRegex(ValueError, "Conflicting n_layer"):
@@ -110,6 +116,50 @@ class MiniGPTRegistryTests(unittest.TestCase):
         self.assertNotIn("position_embedding.weight", model.state_dict())
         self.assertIsNotNone(model.blocks[0].attn.rotary)
 
+    def test_registry_builds_modular_position_norm_and_mlp_variants(self):
+        base_payload = json.loads((self.model_path / "config.json").read_text(encoding="utf-8"))
+        for position_encoding in ("sinusoidal", "alibi", "none"):
+            with self.subTest(position_encoding=position_encoding):
+                payload = {
+                    **base_payload,
+                    "position_encoding": position_encoding,
+                    "norm_type": "rmsnorm",
+                    "norm_eps": 1e-5,
+                    "mlp_type": "swiglu",
+                    "activation": "silu",
+                    "intermediate_size": 24,
+                }
+                (self.model_path / "config.json").write_text(json.dumps(payload), encoding="utf-8")
+                config = load_model_config(str(self.model_path))
+                with (
+                    patch("torch.distributed.get_world_size", return_value=1),
+                    patch("torch.distributed.get_rank", return_value=0),
+                ):
+                    model = create_model(config)
+
+                self.assertIsInstance(model.blocks[0].ln_1, RMSNorm)
+                self.assertIsNotNone(model.get_parameter("blocks.0.mlp.gate_up_proj.weight"))
+                self.assertIsNotNone(model.get_parameter("blocks.0.mlp.down_proj.weight"))
+                if position_encoding == "sinusoidal":
+                    self.assertIsInstance(model.position_embedding, SinusoidalPositionEmbedding)
+                else:
+                    self.assertIsNone(model.position_embedding)
+                if position_encoding == "alibi":
+                    self.assertEqual(model.blocks[0].attn.attn.alibi_slopes.numel(), 2)
+
+    def test_scalenorm_model_uses_scale_parameter(self):
+        payload = json.loads((self.model_path / "config.json").read_text(encoding="utf-8"))
+        payload["norm_type"] = "scalenorm"
+        (self.model_path / "config.json").write_text(json.dumps(payload), encoding="utf-8")
+        config = load_model_config(str(self.model_path))
+        with (
+            patch("torch.distributed.get_world_size", return_value=1),
+            patch("torch.distributed.get_rank", return_value=0),
+        ):
+            model = create_model(config)
+        self.assertIsInstance(model.blocks[0].ln_1, ScaleNorm)
+        self.assertIsNotNone(model.get_parameter("blocks.0.ln_1.scale"))
+
     def test_registry_loads_minillm_character_tokenizer(self):
         (self.model_path / "tokenizer_config.json").write_text(
             json.dumps({"tokenizer_class": "CharTokenizer"}), encoding="utf-8"
@@ -156,6 +206,21 @@ class FusedQKVLoaderTests(unittest.TestCase):
         layer.bias.weight_loader(layer.bias, loaded_bias)
 
         expected_rows = torch.tensor([2, 3, 6, 7, 10, 11])
+        torch.testing.assert_close(layer.weight, loaded_weight[expected_rows])
+        torch.testing.assert_close(layer.bias, loaded_bias[expected_rows])
+
+    def test_fused_merged_weight_loads_without_explicit_shard_id(self):
+        with (
+            patch("torch.distributed.get_world_size", return_value=2),
+            patch("torch.distributed.get_rank", return_value=1),
+        ):
+            layer = MergedColumnParallelLinear(4, [6, 6], bias=True)
+
+        loaded_weight = torch.arange(12 * 4, dtype=layer.weight.dtype).reshape(12, 4)
+        loaded_bias = torch.arange(12, dtype=layer.bias.dtype)
+        layer.weight.weight_loader(layer.weight, loaded_weight)
+        layer.bias.weight_loader(layer.bias, loaded_bias)
+        expected_rows = torch.tensor([3, 4, 5, 9, 10, 11])
         torch.testing.assert_close(layer.weight, loaded_weight[expected_rows])
         torch.testing.assert_close(layer.bias, loaded_bias[expected_rows])
 

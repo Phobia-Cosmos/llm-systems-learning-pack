@@ -9,7 +9,7 @@ minillm/tokenizer_variants/
   __init__.py
   byte_bpe.py
 
-tokenizer_variants/
+artifacts/tokenizers/
   README.md
   requirements.txt
   byte_bpe/
@@ -155,9 +155,10 @@ python train.py --tokenizer char
 # 新路线：Byte-level BPE tokenizer
 python train.py \
   --data data/teaching_corpus.txt \
-  --out-dir checkpoints-byte-bpe \
+  --out-dir artifacts/checkpoints \
+  --checkpoint-name minillm-byte-bpe.pt \
   --tokenizer byte-bpe \
-  --tokenizer-output-dir tokenizer_variants/byte_bpe \
+  --tokenizer-output-dir artifacts/tokenizers/byte_bpe \
   --tokenizer-vocab-size 512 \
   --block-size 128
 ```
@@ -181,9 +182,10 @@ args
 ```bash
 /home/undefined/Disk/ai-storage/.venv-vllm/bin/python train.py \
   --data data/teaching_corpus.txt \
-  --out-dir checkpoints-byte-bpe \
+  --out-dir artifacts/checkpoints \
+  --checkpoint-name minillm-byte-bpe.pt \
   --tokenizer byte-bpe \
-  --tokenizer-output-dir tokenizer_variants/byte_bpe \
+  --tokenizer-output-dir artifacts/tokenizers/byte_bpe \
   --tokenizer-vocab-size 512 \
   --block-size 128 \
   --batch-size 32 \
@@ -200,15 +202,15 @@ step 0000: train loss 6.2705, val loss 6.2752
 step 0100: train loss 3.3582, val loss 3.3655
 step 0200: train loss 1.5213, val loss 1.5325
 step 0300: train loss 0.4612, val loss 0.4628
-saved checkpoint to checkpoints-byte-bpe/minillm.pt
+saved checkpoint to artifacts/checkpoints/minillm-byte-bpe.pt
 ```
 
 模型对比：
 
 | 模型 | tokenizer | vocab_size | 参数量 |
 | --- | --- | ---: | ---: |
-| `checkpoints/minillm.pt` | legacy char | 339 | 456,576 |
-| `checkpoints-byte-bpe/minillm.pt` | byte-bpe | 512 | 478,720 |
+| `artifacts/checkpoints/minillm.pt` | legacy char | 339 | 456,576 |
+| `artifacts/checkpoints/minillm-byte-bpe.pt` | byte-bpe | 512 | 478,720 |
 
 Byte-BPE 参数更多，主要是因为 `token_embedding.weight` / tied `lm_head.weight` 的第一维从 339 变成 512。
 
@@ -216,8 +218,8 @@ Byte-BPE 参数更多，主要是因为 `token_embedding.weight` / tied `lm_head
 
 ```bash
 python export_hf_like.py \
-  --checkpoint checkpoints-byte-bpe/minillm.pt \
-  --out-dir hf_exports/minillm-byte-bpe \
+  --checkpoint artifacts/checkpoints/minillm-byte-bpe.pt \
+  --out-dir artifacts/hf_exports/minillm-byte-bpe \
   --safe-serialization
 ```
 
@@ -238,7 +240,7 @@ tokenizer.json
 | 路径 | 结果 | 说明 |
 | --- | --- | --- |
 | `generate.py` | 通过 | checkpoint 自动恢复 Byte-BPE tokenizer 并生成 |
-| `transformers.AutoTokenizer` | 通过 | 可加载 `hf_exports/minillm-byte-bpe`，prompt roundtrip 正常 |
+| `transformers.AutoTokenizer` | 通过 | 可加载 `artifacts/hf_exports/minillm-byte-bpe`，prompt roundtrip 正常 |
 | vLLM Python engine | 通过 | 直接传字符串 prompt，vLLM 使用标准 tokenizer 编码 |
 | vLLM OpenAI-compatible server | 通过 | `/health` 和 `/v1/completions` 返回成功 |
 | nano-vLLM | 通过 | MiniGPT tokenizer loader 已扩展为支持 HF tokenizer |

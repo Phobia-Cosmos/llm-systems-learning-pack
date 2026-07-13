@@ -1,16 +1,24 @@
+from __future__ import annotations
+
 import torch
 from torch import nn
-import torch.nn.functional as F
+# TODO:functional是什么？作用是什么？
+from torch.nn import functional as F
 
 
-class SiluAndMul(nn.Module):
-
-    # 问题（已回答）：为什么加 torch.compile？
-    # 回答：它可把 chunk、SiLU、逐元素乘融合成更少 kernel，减少 Python 和 GPU launch 开销；首次调用有编译成本。
-    @torch.compile
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x, y = x.chunk(2, -1)
-        return F.silu(x) * y
+SUPPORTED_ACTIVATIONS = (
+    "gelu",
+    "gelu_tanh",
+    "relu",
+    "relu_squared",
+    "leaky_relu",
+    "elu",
+    "silu",
+    "mish",
+    "tanh",
+    "sigmoid",
+    "identity",
+)
 
 
 class SquaredReLU(nn.Module):
@@ -36,13 +44,3 @@ def build_activation(name: str) -> nn.Module:
         return factories[name]()
     except KeyError as exc:
         raise ValueError(f"unsupported activation: {name}") from exc
-
-
-class ActivationAndMul(nn.Module):
-    def __init__(self, activation: str):
-        super().__init__()
-        self.activation = build_activation(activation)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        gate, value = x.chunk(2, dim=-1)
-        return self.activation(gate) * value

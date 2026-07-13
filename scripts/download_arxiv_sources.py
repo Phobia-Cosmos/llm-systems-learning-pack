@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Find arXiv records for local papers and download their TeX sources.
+"""Find arXiv records by local PDF names or titles and download TeX sources.
 
 The local PDF naming convention is expected to look like:
 
     2022CVPR-Online Continual Learning on a Contaminated Data Stream.pdf
 
-Each downloaded source is extracted into a directory using the same
-``YEARVENUE-Official arXiv Title`` convention.
+Local PDF metadata is preserved in the output directory name. A title supplied
+without year or venue metadata falls back to the arXiv publication year and the
+venue label ``Arxiv``. In both cases the official arXiv title is used.
 """
 
 from __future__ import annotations
@@ -41,6 +42,7 @@ ARXIV_EPRINT = "https://arxiv.org/e-print/{arxiv_id}"
 USER_AGENT = "local-arxiv-source-downloader/1.0"
 GENERIC_VENUES = {"arxiv", "report", "openai", "nvidia", "unknown"}
 SKIPPED_TITLES = {"programming massively parallel processors"}
+FALLBACK_VENUE = "Arxiv"
 
 
 @dataclass(frozen=True)
@@ -191,9 +193,21 @@ def normalize_title(value: str) -> str:
 
 
 def title_search_queries(title: str) -> list[str]:
-    """Build arXiv queries exclusively from the paper title."""
-    terms = " ".join(re.findall(r"[\w]+", title, flags=re.UNICODE))
-    return [f'ti:"{terms}"', f'all:"{terms}"']
+    """Build progressively broader arXiv queries from a paper title."""
+    terms = re.findall(r"[\w]+", title, flags=re.UNICODE)
+    full_title = " ".join(terms)
+    queries = [f'ti:"{full_title}"']
+
+    fragments = re.split(r"\s*[:–—]\s*", title, maxsplit=1)
+    if len(fragments) == 2:
+        subtitle = " ".join(re.findall(r"[\w]+", fragments[1], flags=re.UNICODE))
+        if len(subtitle.split()) >= 4:
+            queries.append(f'ti:"{subtitle}"')
+
+    queries.append(f'all:"{full_title}"')
+    if len(terms) > 12:
+        queries.append(f'all:"{" ".join(terms[:12])}"')
+    return list(dict.fromkeys(queries))
 
 
 def skip_reason(paper: LocalPaper) -> str:
@@ -227,29 +241,36 @@ def parse_arxiv_entry(entry: ElementTree.Element, expected_title: str) -> ArxivM
     return ArxivMatch(arxiv_id, title, published, round(score, 4), "api-search")
 
 
-def parse_local_paper(pdf_path: Path) -> LocalPaper:
-    stem = pdf_path.stem.strip()
-    match = re.match(r"^((?:19|20)\d{2})([^-]+)-(.+)$", stem)
+def parse_paper_label(value: str, pdf_path: str = "") -> LocalPaper:
+    label = value.strip()
+    if label.casefold().endswith(".pdf"):
+        label = label[:-4].rstrip()
+    match = re.match(r"^((?:19|20)\d{2})([^-]+)-(.+)$", label)
     if match:
         return LocalPaper(
-            str(pdf_path),
+            pdf_path,
             match.group(1),
             match.group(2).strip(),
             match.group(3).strip().rstrip("."),
         )
-    return LocalPaper(str(pdf_path), "", "", stem.rstrip("."))
+    return LocalPaper(pdf_path, "", "", label.rstrip("."))
+
+
+def parse_local_paper(pdf_path: Path) -> LocalPaper:
+    return parse_paper_label(pdf_path.stem, str(pdf_path))
 
 
 def venue_rank(venue: str) -> int:
     return 0 if venue.casefold() in GENERIC_VENUES else 1
 
 
-def discover_papers(papers_root: Path) -> tuple[list[LocalPaper], int]:
+def deduplicate_papers(papers: Iterable[LocalPaper]) -> tuple[list[LocalPaper], int]:
     selected: dict[str, LocalPaper] = {}
     duplicate_count = 0
-    for pdf_path in sorted(papers_root.rglob("*.pdf")):
-        paper = parse_local_paper(pdf_path)
+    for paper in papers:
         key = normalize_title(paper.title)
+        if not key:
+            continue
         current = selected.get(key)
         if current is None:
             selected[key] = paper
@@ -260,6 +281,65 @@ def discover_papers(papers_root: Path) -> tuple[list[LocalPaper], int]:
         if paper_quality > current_quality:
             selected[key] = paper
     return sorted(selected.values(), key=lambda item: (item.year, item.venue, item.title)), duplicate_count
+
+
+def discover_papers(papers_root: Path) -> tuple[list[LocalPaper], int]:
+    papers = (parse_local_paper(path) for path in sorted(papers_root.rglob("*.pdf")))
+    return deduplicate_papers(papers)
+
+
+def paper_from_fields(title: str, year: str = "", venue: str = "") -> LocalPaper:
+    paper = parse_paper_label(title)
+    return LocalPaper(
+        "",
+        year.strip() or paper.year,
+        venue.strip() or paper.venue,
+        paper.title,
+    )
+
+
+def load_title_file(path: Path) -> list[LocalPaper]:
+    if not path.is_file():
+        raise SystemExit(f"title file not found: {path}")
+    lines = [
+        line
+        for line in path.read_text(encoding="utf-8-sig").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    if not lines:
+        return []
+
+    delimiter = ""
+    if "\t" in lines[0] or path.suffix.casefold() == ".tsv":
+        delimiter = "\t"
+    elif path.suffix.casefold() == ".csv":
+        delimiter = ","
+    if not delimiter:
+        return [paper_from_fields(line) for line in lines]
+
+    rows = list(csv.reader(lines, delimiter=delimiter))
+    headers = {value.strip().casefold(): index for index, value in enumerate(rows[0])}
+    if "title" not in headers:
+        return [paper_from_fields(row[0]) for row in rows if row and row[0].strip()]
+
+    papers: list[LocalPaper] = []
+    title_index = headers["title"]
+    year_index = headers.get("year")
+    venue_index = headers.get("venue")
+    for row in rows[1:]:
+        if title_index >= len(row) or not row[title_index].strip():
+            continue
+        year = row[year_index] if year_index is not None and year_index < len(row) else ""
+        venue = row[venue_index] if venue_index is not None and venue_index < len(row) else ""
+        papers.append(paper_from_fields(row[title_index], year, venue))
+    return papers
+
+
+def discover_title_inputs(titles: Iterable[str], title_files: Iterable[Path]) -> tuple[list[LocalPaper], int]:
+    papers = [paper_from_fields(title) for title in titles if title.strip()]
+    for path in title_files:
+        papers.extend(load_title_file(path))
+    return deduplicate_papers(papers)
 
 
 def extract_arxiv_id(url: str) -> str:
@@ -319,7 +399,7 @@ def safe_name(value: str, max_length: int = 180) -> str:
 
 def output_name(paper: LocalPaper, match: ArxivMatch) -> str:
     year = paper.year or match.published_year or arxiv_year(match.arxiv_id)
-    venue = paper.venue or "arXiv"
+    venue = paper.venue or FALLBACK_VENUE
     return safe_name(f"{year}{venue}-{match.title}")
 
 
@@ -421,7 +501,7 @@ def write_title_list(
             known = match_known_arxiv(paper, known_entries)
             official_title = known.title if known else paper.title
             year = paper.year or (known.published_year if known else "")
-            venue = paper.venue or ("arXiv" if known else "")
+            venue = paper.venue or (FALLBACK_VENUE if known else "")
             planned_directory = safe_name(f"{year}{venue}-{official_title}") if year and venue else ""
             writer.writerow(
                 [
@@ -478,12 +558,41 @@ def install_source(
 def parse_args() -> argparse.Namespace:
     home = Path.home()
     parser = argparse.ArgumentParser(
-        description="Search arXiv for PDFs under ~/Desktop/ai/papers and download TeX sources sequentially."
+        description=(
+            "Search arXiv by local PDF names or supplied paper titles, then download "
+            "and extract TeX sources sequentially."
+        )
     )
-    parser.add_argument("--papers-root", type=Path, default=home / "Desktop/ai/papers")
-    parser.add_argument("--output", type=Path, default=home / "Downloads/arxiv_sources")
+    input_group = parser.add_argument_group("paper inputs")
+    input_group.add_argument(
+        "--papers-root",
+        type=Path,
+        default=home / "Desktop/ai/papers",
+        help="Scan local PDF names when neither --title nor --title-file is supplied",
+    )
+    input_group.add_argument(
+        "--title",
+        action="append",
+        default=[],
+        metavar="TITLE",
+        help="Paper title or YEARVENUE-title label; repeat for multiple papers",
+    )
+    input_group.add_argument(
+        "--title-file",
+        action="append",
+        default=[],
+        type=Path,
+        metavar="PATH",
+        help="Text/TSV/CSV title list; repeat for multiple files",
+    )
+    parser.add_argument("--output", type=Path, default=home / "Downloads")
     parser.add_argument("--index", type=Path, default=home / "Desktop/ai/paper_list.tsv")
-    parser.add_argument("--titles-file", type=Path, default=home / "Desktop/ai/paper_titles.tsv")
+    parser.add_argument(
+        "--titles-file",
+        type=Path,
+        default=home / "Desktop/ai/paper_titles.tsv",
+        help="Catalog generated while scanning the local PDF tree",
+    )
     parser.add_argument("--force-search", action="store_true", help="Ignore arXiv IDs already recorded in paper_list.tsv")
     parser.add_argument("--force", action="store_true", help="Replace existing source directories")
     parser.add_argument("--keep-archive", action="store_true", help="Keep the raw e-print download after extraction")
@@ -504,15 +613,25 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    papers_root = args.papers_root.expanduser().resolve()
     output_root = args.output.expanduser().resolve()
-    if not papers_root.is_dir():
-        raise SystemExit(f"papers directory not found: {papers_root}")
+    title_files = [path.expanduser().resolve() for path in args.title_file]
+    direct_title_mode = bool(args.title or title_files)
+    papers_root: Path | None = None
+    if direct_title_mode:
+        all_papers, duplicate_count = discover_title_inputs(args.title, title_files)
+        if not all_papers:
+            raise SystemExit("no usable titles found in --title or --title-file inputs")
+    else:
+        papers_root = args.papers_root.expanduser().resolve()
+        if not papers_root.is_dir():
+            raise SystemExit(f"papers directory not found: {papers_root}")
+        all_papers, duplicate_count = discover_papers(papers_root)
 
-    all_papers, duplicate_count = discover_papers(papers_root)
     known_entries = [] if args.force_search else load_known_arxiv(args.index.expanduser())
-    titles_file = args.titles_file.expanduser().resolve()
-    write_title_list(all_papers, titles_file, known_entries)
+    titles_file: Path | None = None
+    if not direct_title_mode:
+        titles_file = args.titles_file.expanduser().resolve()
+        write_title_list(all_papers, titles_file, known_entries)
 
     papers = all_papers
     if args.match:
@@ -521,11 +640,13 @@ def main() -> int:
     if args.limit is not None:
         papers = papers[: max(0, args.limit)]
 
-    print(f"Found {len(papers)} unique papers ({duplicate_count} duplicate PDF names removed).")
-    print(f"Title list: {titles_file} ({len(all_papers)} total unique papers)")
+    source_label = "supplied titles" if direct_title_mode else "local PDFs"
+    print(f"Found {len(papers)} unique papers from {source_label} ({duplicate_count} duplicates removed).")
+    if titles_file is not None:
+        print(f"Title list: {titles_file} ({len(all_papers)} total unique papers)")
     if args.dry_run or (not args.download and not args.search_only):
         for index, paper in enumerate(papers, 1):
-            prefix = paper.prefix or "<year+venue from arXiv>"
+            prefix = paper.prefix or f"<arXiv year>{FALLBACK_VENUE}"
             skipped = f"  [skip: {skip_reason(paper)}]" if skip_reason(paper) else ""
             print(f"{index:03d}  {prefix}-{paper.title}{skipped}")
         return 0
@@ -539,7 +660,7 @@ def main() -> int:
         max_retry_wait=max(args.delay, args.max_retry_wait, 0.0),
     )
     results: list[dict] = []
-    manifest_path = output_root / "manifest.json"
+    manifest_path = output_root / "arxiv_sources_manifest.json"
     run_started = time.monotonic()
 
     for index, paper in enumerate(papers, 1):
@@ -582,7 +703,9 @@ def main() -> int:
         atomic_json(
             manifest_path,
             {
-                "papers_root": str(papers_root),
+                "input_mode": "titles" if direct_title_mode else "local-pdfs",
+                "papers_root": str(papers_root) if papers_root is not None else None,
+                "title_files": [str(path) for path in title_files],
                 "output_root": str(output_root),
                 "updated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
                 "results": results,

@@ -11,7 +11,7 @@ from train import pick_device
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate text with a trained MiniGPT checkpoint.")
-    parser.add_argument("--checkpoint", default="checkpoints/minillm.pt")
+    parser.add_argument("--checkpoint", default="artifacts/checkpoints/minillm.pt")
     parser.add_argument("--prompt", default="LLM")
     parser.add_argument("--max-new-tokens", type=int, default=160)
     parser.add_argument("--temperature", type=float, default=0.8)

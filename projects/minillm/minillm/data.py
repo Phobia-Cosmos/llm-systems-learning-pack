@@ -25,7 +25,7 @@ def get_batch(
     batch_size: int,
     device: torch.device,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    if len(data) <= block_size + 1:
+    if len(data) < block_size + 1:
         raise ValueError("dataset is too small for the configured block_size")
     # 问题（已回答）:为什么第三个参数里面有个,？为什么start是随机数?为什么要使用stack？x和y的区别是什么？为什么后需要使用to？
     # 回答：(batch_size,) 是一维 shape tuple，逗号表示“这是只有一个元素的元组”，不是括号表达式。
@@ -33,7 +33,9 @@ def get_batch(
     # torch.stack 把 batch_size 个长度为 block_size 的一维片段堆成二维张量 [batch, block_size]。
     # x 是输入序列，y 是右移一位的目标序列；模型看到 x[t]，训练目标是预测 y[t] 也就是下一个 token。
     # .to(device) 把数据移动到 CPU/CUDA/MPS 中当前模型所在设备，否则模型和数据不在同一设备会报错。
-    starts = torch.randint(0, len(data) - block_size - 1, (batch_size,))
+    # randint's upper bound is exclusive. ``len(data) - block_size`` keeps the
+    # final valid start (whose target ends exactly at len(data)) reachable.
+    starts = torch.randint(0, len(data) - block_size, (batch_size,))
     x = torch.stack([data[i : i + block_size] for i in starts])
     y = torch.stack([data[i + 1 : i + block_size + 1] for i in starts])
     return x.to(device), y.to(device)

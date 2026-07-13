@@ -3,7 +3,7 @@
   "architectures": [
     "MiniGPTForCausalLM"
   ],
-  "vocab_size": 339,
+  "vocab_size": 512,
   "block_size": 128,
   "max_position_embeddings": 128,
   "n_layer": 2,
@@ -14,6 +14,15 @@
   "hidden_size": 128,
   "dropout": 0.1,
   "bias": true,
+  "position_encoding": "rope",
+  "rope_theta": 10000.0,
+  "sinusoidal_theta": 10000.0,
+  "norm_type": "layernorm",
+  "norm_eps": 1e-05,
+  "mlp_type": "dense",
+  "activation": "gelu",
+  "hidden_act": "gelu",
+  "intermediate_size": 512,
   "tie_word_embeddings": true,
   "torch_dtype": "float16"
 }

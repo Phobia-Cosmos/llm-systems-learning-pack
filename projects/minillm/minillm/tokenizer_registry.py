@@ -38,7 +38,7 @@ def build_tokenizer(
     if tokenizer_name == "byte-bpe":
         from .tokenizer_variants import HFByteBPETokenizer
 
-        output_dir = Path(tokenizer_output_dir or "tokenizer_variants/byte_bpe")
+        output_dir = Path(tokenizer_output_dir or "artifacts/tokenizers/byte_bpe")
 
         # 问题（已回答）：为什么这里用 if/elif/else 选择路径？
         # 回答：三个来源按优先级互斥：显式 tokenizer_path 最高，其次 output_dir 下的默认文件，最后项目默认路径；
@@ -74,7 +74,7 @@ def build_tokenizer(
         from .tokenizer_variants import SentencePieceTokenizer
 
         model_type = tokenizer_name.removeprefix("sentencepiece-")
-        output_dir = Path(tokenizer_output_dir or f"tokenizer_variants/sentencepiece_{model_type}")
+        output_dir = Path(tokenizer_output_dir or f"artifacts/tokenizers/sentencepiece_{model_type}")
         path = Path(tokenizer_path) if tokenizer_path is not None else output_dir / "tokenizer.model"
         if path.is_dir():
             path = path / "tokenizer.model"

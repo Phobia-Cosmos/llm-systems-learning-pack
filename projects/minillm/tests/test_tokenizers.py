@@ -64,7 +64,7 @@ class ByteBPETokenizerTests(unittest.TestCase):
 
 class HFTokenizerAdapterTests(unittest.TestCase):
     def setUp(self):
-        self.tokenizer_path = ROOT / "tokenizer_variants" / "byte_bpe"
+        self.tokenizer_path = ROOT / "artifacts" / "tokenizers" / "byte_bpe"
 
     def test_hf_adapter_checkpoint_is_self_contained(self):
         tokenizer = HFTokenizerAdapter.from_pretrained(self.tokenizer_path)

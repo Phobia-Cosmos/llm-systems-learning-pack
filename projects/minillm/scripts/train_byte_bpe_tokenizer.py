@@ -13,7 +13,7 @@ from minillm.tokenizer_variants import HFByteBPETokenizer  # noqa: E402
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train a MiniLLM Byte-level BPE tokenizer variant.")
     parser.add_argument("--input", default=str(ROOT / "data" / "teaching_corpus.txt"))
-    parser.add_argument("--output", default=str(ROOT / "tokenizer_variants" / "byte_bpe"))
+    parser.add_argument("--output", default=str(ROOT / "artifacts" / "tokenizers" / "byte_bpe"))
     parser.add_argument("--vocab-size", type=int, default=512)
     parser.add_argument("--min-frequency", type=int, default=1)
     parser.add_argument("--sample", default="用户: 什么是 embedding?\n助手:")

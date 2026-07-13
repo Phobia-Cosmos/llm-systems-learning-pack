@@ -77,12 +77,15 @@ class Attention(nn.Module):
         head_dim,
         scale,
         num_kv_heads,
+        alibi_slopes=None,
     ):
         super().__init__()
         self.num_heads = num_heads
         self.head_dim = head_dim
         self.scale = scale
         self.num_kv_heads = num_kv_heads
+        slopes = torch.empty(0, dtype=torch.float32) if alibi_slopes is None else torch.as_tensor(alibi_slopes)
+        self.register_buffer("alibi_slopes", slopes.float(), persistent=False)
         self.k_cache = self.v_cache = torch.tensor([])
 
     def expand_kv_heads(self, x: torch.Tensor) -> torch.Tensor:
@@ -97,6 +100,9 @@ class Attention(nn.Module):
         scores = torch.einsum("qhd,khd->hqk", q, k).float() * self.scale
         q_pos = torch.arange(query_start, query_start + q.size(0), device=q.device)
         k_pos = torch.arange(k.size(0), device=q.device)
+        if self.alibi_slopes.numel():
+            relative_distance = k_pos.unsqueeze(0) - q_pos.unsqueeze(1)
+            scores = scores + self.alibi_slopes[:, None, None] * relative_distance[None, :, :]
         causal_mask = k_pos.unsqueeze(0) <= q_pos.unsqueeze(1)
         scores = scores.masked_fill(~causal_mask.unsqueeze(0), torch.finfo(scores.dtype).min)
         probs = torch.softmax(scores, dim=-1).to(q.dtype)
@@ -150,11 +156,13 @@ class Attention(nn.Module):
             o = flash_attn_varlen_func(q, k, v,
                                        max_seqlen_q=context.max_seqlen_q, cu_seqlens_q=context.cu_seqlens_q,
                                        max_seqlen_k=context.max_seqlen_k, cu_seqlens_k=context.cu_seqlens_k,
-                                       softmax_scale=self.scale, causal=True, block_table=context.block_tables)
+                                       softmax_scale=self.scale, causal=True, block_table=context.block_tables,
+                                       alibi_slopes=self.alibi_slopes if self.alibi_slopes.numel() else None)
         elif flash_attn_with_kvcache is not None:    # decode with upstream flash-attn
             o = flash_attn_with_kvcache(q.unsqueeze(1), k_cache, v_cache,
                                         cache_seqlens=context.context_lens, block_table=context.block_tables,
-                                        softmax_scale=self.scale, causal=True)
+                                        softmax_scale=self.scale, causal=True,
+                                        alibi_slopes=self.alibi_slopes if self.alibi_slopes.numel() else None)
         elif _flash_attn_backend == "vllm":    # decode with vLLM's bundled FlashAttention
             cu_seqlens_q = torch.arange(q.size(0) + 1, dtype=torch.int32, device=q.device)
             o = flash_attn_varlen_func(
@@ -168,6 +176,7 @@ class Attention(nn.Module):
                 softmax_scale=self.scale,
                 causal=True,
                 block_table=context.block_tables,
+                alibi_slopes=self.alibi_slopes if self.alibi_slopes.numel() else None,
             )
         else:
             return self.torch_decode(q)

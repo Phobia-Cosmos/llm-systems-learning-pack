@@ -11,7 +11,7 @@ Run:
 cd /home/undefined/Desktop/ai
 source scripts/use_disk_ai_env.sh
 python projects/mini-sglang/mini_sglang_server.py \
-  --checkpoint projects/minillm/checkpoints/minillm.pt \
+  --checkpoint projects/minillm/artifacts/checkpoints/minillm.pt \
   --host 127.0.0.1 \
   --port 8011 \
   --device cpu

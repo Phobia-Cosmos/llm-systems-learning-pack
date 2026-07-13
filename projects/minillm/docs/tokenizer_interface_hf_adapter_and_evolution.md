@@ -74,9 +74,10 @@ tokenizer = HFTokenizerAdapter.from_pretrained("path/or/repo")
 ```bash
 python train.py \
   --tokenizer hf-auto \
-  --tokenizer-path tokenizer_variants/byte_bpe \
+  --tokenizer-path artifacts/tokenizers/byte_bpe \
   --data data/teaching_corpus.txt \
-  --out-dir checkpoints-hf
+  --out-dir artifacts/checkpoints \
+  --checkpoint-name minillm-hf.pt
 ```
 
 当前 adapter 要求 fast tokenizer。原因是 fast tokenizer 的 Rust backend 可以序列化成完整 `tokenizer_json`，直接写进 checkpoint：
@@ -117,13 +118,13 @@ MiniLLM 有两条 SentencePiece 路线：
 
 ```bash
 # 学习 SentencePiece BPE
-python train.py --tokenizer sentencepiece-bpe --tokenizer-vocab-size 512
+python train.py --tokenizer sentencepiece-bpe --tokenizer-vocab-size 512 --checkpoint-name minillm-sentencepiece-bpe.pt
 
 # 学习 SentencePiece Unigram LM
-python train.py --tokenizer sentencepiece-unigram --tokenizer-vocab-size 512
+python train.py --tokenizer sentencepiece-unigram --tokenizer-vocab-size 512 --checkpoint-name minillm-sentencepiece-unigram.pt
 
 # 使用真实模型已经发布的标准 HF/SentencePiece tokenizer
-python train.py --tokenizer hf-auto --tokenizer-path /path/to/tokenizer
+python train.py --tokenizer hf-auto --tokenizer-path /path/to/tokenizer --checkpoint-name minillm-hf-auto.pt
 ```
 
 自训练版本保存 `tokenizer.model`、`tokenizer.vocab` 和配置，并将序列化 model proto 写入 checkpoint。HF adapter

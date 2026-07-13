@@ -27,8 +27,11 @@ def display(text: str) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Compare MiniLLM CharTokenizer with tokenizer variants.")
-    parser.add_argument("--checkpoint", default=str(ROOT / "checkpoints" / "minillm.pt"))
-    parser.add_argument("--byte-bpe", default=str(ROOT / "tokenizer_variants" / "byte_bpe" / "tokenizer.json"))
+    parser.add_argument("--checkpoint", default=str(ROOT / "artifacts" / "checkpoints" / "minillm.pt"))
+    parser.add_argument(
+        "--byte-bpe",
+        default=str(ROOT / "artifacts" / "tokenizers" / "byte_bpe" / "tokenizer.json"),
+    )
     parser.add_argument("--sample", action="append", default=[])
     parser.add_argument("--show-tokens", action="store_true")
     args = parser.parse_args()

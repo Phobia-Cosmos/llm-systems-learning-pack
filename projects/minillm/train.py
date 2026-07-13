@@ -7,14 +7,23 @@ from pathlib import Path
 import torch
 
 from minillm import GPTConfig, MiniGPT
+from minillm.activations import SUPPORTED_ACTIVATIONS
 from minillm.data import get_batch, read_text, split_train_val
+from minillm.mlp import SUPPORTED_MLP_TYPES
+from minillm.norm import SUPPORTED_NORMS
+from minillm.position import SUPPORTED_POSITION_ENCODINGS
 from minillm.tokenizer_registry import SUPPORTED_TOKENIZERS, build_tokenizer, tokenizer_to_checkpoint_payload
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train a minimal decoder-only LLM.")
     parser.add_argument("--data", default="data/tiny_corpus.txt")
-    parser.add_argument("--out-dir", default="checkpoints")
+    parser.add_argument("--out-dir", default="artifacts/checkpoints")
+    parser.add_argument(
+        "--checkpoint-name",
+        default="minillm.pt",
+        help="Checkpoint filename inside --out-dir; keep variants together by choosing a unique .pt name.",
+    )
     # 问题（已回答）:作用？eval-interval、max-steps、block-size、n-embd、lr请你帮我解释每个参数的意义是什么？
     # 回答：这些是训练超参数。max-steps 是优化更新多少步；eval-interval 是每隔多少步评估/打印一次 loss；
     # eval-iters 是评估 loss 时抽多少个 batch 求平均；batch-size 是一次训练多少条序列；block-size 是上下文长度；
@@ -29,8 +38,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--n-head", type=int, default=4)
     parser.add_argument("--n-embd", type=int, default=128)
     parser.add_argument("--dropout", type=float, default=0.1)
-    parser.add_argument("--position-encoding", default="learned", choices=["learned", "rope"])
+    parser.add_argument("--position-encoding", default="learned", choices=SUPPORTED_POSITION_ENCODINGS)
     parser.add_argument("--rope-theta", type=float, default=10000.0)
+    parser.add_argument("--sinusoidal-theta", type=float, default=10000.0)
+    parser.add_argument("--norm-type", default="layernorm", choices=SUPPORTED_NORMS)
+    parser.add_argument("--norm-eps", type=float, default=1e-5)
+    parser.add_argument("--mlp-type", default="dense", choices=SUPPORTED_MLP_TYPES)
+    parser.add_argument("--activation", default="gelu", choices=SUPPORTED_ACTIVATIONS)
+    parser.add_argument("--intermediate-size", type=int, default=None)
     parser.add_argument("--lr", type=float, default=3e-4)
     parser.add_argument("--seed", type=int, default=1337)
     parser.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda", "mps"])
@@ -98,6 +113,9 @@ def estimate_loss(
 
 def main() -> None:
     args = parse_args()
+    checkpoint_name = Path(args.checkpoint_name)
+    if checkpoint_name.name != args.checkpoint_name or checkpoint_name.suffix != ".pt":
+        raise ValueError("--checkpoint-name must be a plain filename ending in .pt")
     torch.manual_seed(args.seed)
     device = pick_device(args.device)
 
@@ -124,6 +142,12 @@ def main() -> None:
         dropout=args.dropout,
         position_encoding=args.position_encoding,
         rope_theta=args.rope_theta,
+        sinusoidal_theta=args.sinusoidal_theta,
+        norm_type=args.norm_type,
+        norm_eps=args.norm_eps,
+        mlp_type=args.mlp_type,
+        activation=args.activation,
+        intermediate_size=args.intermediate_size,
     )
     model = MiniGPT(config).to(device)
     # 问题（已回答）:为什么要使用一个优化器，这个优化器的作用是什么？难道MiniGPT不能完成任务吗？
@@ -161,10 +185,10 @@ def main() -> None:
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    ckpt_path = out_dir / "minillm.pt"
+    ckpt_path = out_dir / checkpoint_name
     # 问题（已回答）:pt格式是什么？自动保存为pt格式吗？
     # 回答：.pt/.pth 是 PyTorch 社区常用 checkpoint 后缀，本质是 torch.save 序列化出来的文件，不是强制文件格式标准。
-    # 这里因为路径写成 minillm.pt，所以保存出来就是 .pt。内容是一个 dict：模型权重、config、tokenizer、训练参数。
+    # 这里要求 --checkpoint-name 以 .pt 结尾。内容是一个 dict：模型权重、config、tokenizer、训练参数。
     torch.save(
         {
             "model": model.state_dict(),

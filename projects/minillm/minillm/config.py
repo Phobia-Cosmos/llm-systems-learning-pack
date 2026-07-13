@@ -1,5 +1,10 @@
 from dataclasses import dataclass
 
+from .activations import SUPPORTED_ACTIVATIONS
+from .mlp import SUPPORTED_MLP_TYPES, default_intermediate_size
+from .norm import SUPPORTED_NORMS
+from .position import SUPPORTED_POSITION_ENCODINGS
+
 
 @dataclass
 # 问题（已回答）：这些默认值为何这样设置，layer 和 block_size 指什么？
@@ -11,17 +16,38 @@ class GPTConfig:
     n_layer: int = 2
     n_head: int = 4
     n_embd: int = 128
+    fused_qkv: bool = True
     dropout: float = 0.1
     bias: bool = True
     position_encoding: str = "learned"
     rope_theta: float = 10000.0
+    sinusoidal_theta: float = 10000.0
+    norm_type: str = "layernorm"
+    norm_eps: float = 1e-5
+    mlp_type: str = "dense"
+    activation: str = "gelu"
+    intermediate_size: int | None = None
 
     def __post_init__(self) -> None:
-        if self.position_encoding not in {"learned", "rope"}:
-            raise ValueError("position_encoding must be 'learned' or 'rope'")
+        if self.position_encoding not in SUPPORTED_POSITION_ENCODINGS:
+            raise ValueError(f"position_encoding must be one of {SUPPORTED_POSITION_ENCODINGS}")
         if self.n_embd % self.n_head != 0:
             raise ValueError("n_embd must be divisible by n_head")
         if self.position_encoding == "rope" and (self.n_embd // self.n_head) % 2 != 0:
             raise ValueError("RoPE requires an even head_dim")
         if self.rope_theta <= 0:
             raise ValueError("rope_theta must be positive")
+        if self.sinusoidal_theta <= 0:
+            raise ValueError("sinusoidal_theta must be positive")
+        if self.norm_type not in SUPPORTED_NORMS:
+            raise ValueError(f"norm_type must be one of {SUPPORTED_NORMS}")
+        if self.norm_eps <= 0:
+            raise ValueError("norm_eps must be positive")
+        if self.mlp_type not in SUPPORTED_MLP_TYPES:
+            raise ValueError(f"mlp_type must be one of {SUPPORTED_MLP_TYPES}")
+        if self.activation not in SUPPORTED_ACTIVATIONS:
+            raise ValueError(f"activation must be one of {SUPPORTED_ACTIVATIONS}")
+        if self.intermediate_size is None:
+            self.intermediate_size = default_intermediate_size(self.n_embd, self.mlp_type)
+        if self.intermediate_size <= 0:
+            raise ValueError("intermediate_size must be positive")

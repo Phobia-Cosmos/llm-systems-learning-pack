@@ -12,8 +12,8 @@ from minillm.tokenizer_registry import tokenizer_from_checkpoint
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Export a MiniLLM checkpoint to an educational HF-like directory.")
-    parser.add_argument("--checkpoint", default="checkpoints/minillm.pt")
-    parser.add_argument("--out-dir", default="hf_exports/minillm")
+    parser.add_argument("--checkpoint", default="artifacts/checkpoints/minillm.pt")
+    parser.add_argument("--out-dir", default="artifacts/hf_exports/minillm")
     parser.add_argument("--safe-serialization", action="store_true", help="Write model.safetensors; requires safetensors.")
     return parser.parse_args()
 
@@ -48,6 +48,13 @@ def main() -> None:
         "bias": config.bias,
         "position_encoding": config.position_encoding,
         "rope_theta": config.rope_theta,
+        "sinusoidal_theta": config.sinusoidal_theta,
+        "norm_type": config.norm_type,
+        "norm_eps": config.norm_eps,
+        "mlp_type": config.mlp_type,
+        "activation": config.activation,
+        "hidden_act": config.activation,
+        "intermediate_size": config.intermediate_size,
         "tie_word_embeddings": True,
         "torch_dtype": "float16",
     }

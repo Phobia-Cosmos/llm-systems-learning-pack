@@ -55,8 +55,8 @@ Run the MiniLLM export in this workspace with:
 ```bash
 cd /home/undefined/Desktop/ai/projects/minillm
 python export_hf_like.py \
-  --checkpoint checkpoints/minillm.pt \
-  --out-dir hf_exports/minillm \
+  --checkpoint artifacts/checkpoints/minillm.pt \
+  --out-dir artifacts/hf_exports/minillm \
   --safe-serialization
 python scripts/run_nanovllm_minigpt.py
 ```

@@ -1,34 +1,51 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo="/home/undefined/Desktop/ai"
-mode="${1:-}"
-message="${1:-sync: workspace update}"
+repos=(
+  "/home/undefined/Desktop/ai"
+  "/home/undefined/Desktop/bci"
+  "/home/undefined/Desktop/IPhone"
+)
 
-cd "$repo"
-
-echo "[git-sync] repo: $repo"
-echo "[git-sync] status before sync:"
-git status --short
-
-if [[ "$mode" == "--dry-run" ]]; then
-  echo "[git-sync] dry run: no add, commit, pull, or push was executed"
-  exit 0
+dry_run=false
+if [[ "${1:-}" == "--dry-run" ]]; then
+  dry_run=true
+  shift
 fi
+message="${*:-sync: workspace update}"
 
-git add -A
+for repo in "${repos[@]}"; do
+  echo
+  echo "[git-sync] repo: $repo"
 
-if git diff --cached --quiet; then
-  echo "[git-sync] no staged changes to commit"
-else
-  echo "[git-sync] committing staged changes"
-  git commit -m "$message"
-fi
+  if [[ ! -d "$repo/.git" ]] || [[ "$(git -C "$repo" rev-parse --show-toplevel 2>/dev/null)" != "$repo" ]]; then
+    echo "[git-sync] error: top-level repository not found: $repo" >&2
+    exit 1
+  fi
 
-echo "[git-sync] pulling remote changes with rebase"
-git pull --rebase --autostash
+  echo "[git-sync] status before sync:"
+  git -C "$repo" status --short
 
-echo "[git-sync] pushing to remote"
-git push
+  if [[ "$dry_run" == true ]]; then
+    echo "[git-sync] dry run: no add, commit, pull, or push was executed"
+    continue
+  fi
 
+  git -C "$repo" add -A
+
+  if git -C "$repo" diff --cached --quiet; then
+    echo "[git-sync] no staged changes to commit"
+  else
+    echo "[git-sync] committing staged changes"
+    git -C "$repo" commit -m "$message"
+  fi
+
+  echo "[git-sync] pulling remote changes with rebase"
+  git -C "$repo" pull --rebase --autostash
+
+  echo "[git-sync] pushing to remote"
+  git -C "$repo" push
+done
+
+echo
 echo "[git-sync] done"

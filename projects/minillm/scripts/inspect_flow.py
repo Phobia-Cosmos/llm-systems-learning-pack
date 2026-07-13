@@ -63,7 +63,9 @@ def register_hooks(model: MiniGPT, records: list[tuple[str, str, str]]) -> list[
         handles.append(module.register_forward_hook(hook))
 
     add("token_embedding", model.token_embedding, "token_embedding")
-    add("position_embedding", model.position_embedding, "position_embedding")
+    # RoPE models intentionally have no learned absolute-position Embedding.
+    if model.position_embedding is not None:
+        add("position_embedding", model.position_embedding, "position_embedding")
     add("drop", model.drop, "drop")
     for i, block in enumerate(model.blocks):
         add(f"blocks.{i}.ln_1", block.ln_1, "ln_1")
@@ -78,7 +80,7 @@ def register_hooks(model: MiniGPT, records: list[tuple[str, str, str]]) -> list[
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Inspect one MiniLLM text flow from tokenizer to logits.")
-    parser.add_argument("--checkpoint", default=str(ROOT / "checkpoints" / "minillm.pt"))
+    parser.add_argument("--checkpoint", default=str(ROOT / "artifacts" / "checkpoints" / "minillm.pt"))
     parser.add_argument("--prompt", default="用户: 什么是 embedding?\n助手:")
     parser.add_argument("--top-k", type=int, default=8)
     parser.add_argument("--vocab-limit", type=int, default=80)
@@ -93,11 +95,12 @@ def main() -> None:
     model.load_state_dict(checkpoint["model"])
     model.eval()
 
-    ids = tokenizer.encode(args.prompt)
+    prompt = args.prompt.replace("\\n", "\n")
+    ids = tokenizer.encode(prompt)
     input_ids = torch.tensor([ids], dtype=torch.long, device=args.device)
 
     print("== Prompt ==")
-    print(repr(args.prompt))
+    print(repr(prompt))
     print()
     print("== stoi / itos ==")
     print(f"vocab_size={tokenizer.vocab_size}")
@@ -117,10 +120,10 @@ def main() -> None:
 
     print("== encode ==")
     if hasattr(tokenizer, "itos"):
-        for pos, (ch, token_id) in enumerate(zip(args.prompt, ids)):
+        for pos, (ch, token_id) in enumerate(zip(prompt, ids)):
             print(f"pos={pos:02d} char={display_token(ch)!r} -> id={token_id}")
     elif hasattr(tokenizer, "encode_with_tokens"):
-        piece_ids, pieces = tokenizer.encode_with_tokens(args.prompt)
+        piece_ids, pieces = tokenizer.encode_with_tokens(prompt)
         for pos, (piece, token_id) in enumerate(zip(pieces, piece_ids)):
             print(f"pos={pos:02d} token={display_token(piece)!r} -> id={token_id}")
     else:

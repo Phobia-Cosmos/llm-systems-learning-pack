@@ -42,7 +42,7 @@ cd /home/undefined/Desktop/ai/projects/minillm
   --n-layer 2 \
   --n-head 4 \
   --n-embd 128 \
-  --out-dir checkpoints
+  --out-dir artifacts/checkpoints
 ```
 
 GPU 可以跑：
@@ -60,14 +60,14 @@ cd /home/undefined/Desktop/ai/projects/minillm
   --n-layer 2 \
   --n-head 4 \
   --n-embd 128 \
-  --out-dir checkpoints
+  --out-dir artifacts/checkpoints
 ```
 
 生成时先用 greedy 看模型是否学会稳定格式：
 
 ```bash
 /home/undefined/Desktop/ai/.venv/bin/python generate.py \
-  --checkpoint checkpoints/minillm.pt \
+  --checkpoint artifacts/checkpoints/minillm.pt \
   --device cpu \
   --prompt "用户: 什么是 attention？\n助手:" \
   --max-new-tokens 120 \
@@ -78,7 +78,7 @@ cd /home/undefined/Desktop/ai/projects/minillm
 
 ```bash
 /home/undefined/Desktop/ai/.venv/bin/python generate.py \
-  --checkpoint checkpoints/minillm.pt \
+  --checkpoint artifacts/checkpoints/minillm.pt \
   --device cpu \
   --prompt "用户: 什么是 decoder-only Transformer？\n助手:" \
   --max-new-tokens 120 \

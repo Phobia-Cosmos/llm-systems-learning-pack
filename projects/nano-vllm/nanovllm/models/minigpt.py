@@ -10,8 +10,16 @@ from torch import nn
 from transformers import AutoTokenizer, PretrainedConfig
 
 from nanovllm.layers.attention import Attention
+from nanovllm.layers.activation import ActivationAndMul, build_activation
 from nanovllm.layers.embed_head import ParallelLMHead, VocabParallelEmbedding
-from nanovllm.layers.linear import ColumnParallelLinear, QKVParallelLinear, RowParallelLinear
+from nanovllm.layers.layernorm import build_norm
+from nanovllm.layers.linear import (
+    ColumnParallelLinear,
+    MergedColumnParallelLinear,
+    QKVParallelLinear,
+    RowParallelLinear,
+)
+from nanovllm.layers.position_encoding import SinusoidalPositionEmbedding, get_alibi_slopes
 from nanovllm.layers.rotary_embedding import get_rope
 from nanovllm.models.registry import register_model
 
@@ -46,6 +54,14 @@ class MiniGPTConfig(PretrainedConfig):
         tie_word_embeddings: bool = True,
         position_encoding: str = "learned",
         rope_theta: float = 10000.0,
+        sinusoidal_theta: float = 10000.0,
+        norm_type: str = "layernorm",
+        norm_eps: float | None = None,
+        layer_norm_epsilon: float | None = None,
+        mlp_type: str = "dense",
+        activation: str | None = None,
+        hidden_act: str | None = None,
+        intermediate_size: int | None = None,
         **kwargs,
     ) -> None:
         block_size = _resolve_alias(
@@ -54,14 +70,33 @@ class MiniGPTConfig(PretrainedConfig):
         n_layer = _resolve_alias("n_layer", n_layer, "num_hidden_layers", num_hidden_layers, 2)
         n_head = _resolve_alias("n_head", n_head, "num_attention_heads", num_attention_heads, 4)
         n_embd = _resolve_alias("n_embd", n_embd, "hidden_size", hidden_size, 128)
+        norm_eps = _resolve_alias("norm_eps", norm_eps, "layer_norm_epsilon", layer_norm_epsilon, 1e-5)
+        activation = _resolve_alias("activation", activation, "hidden_act", hidden_act, "gelu")
         if num_key_value_heads is not None and num_key_value_heads != n_head:
             raise ValueError("MiniGPT uses multi-head attention, so num_key_value_heads must equal n_head")
         if n_embd % n_head != 0:
             raise ValueError("n_embd must be divisible by n_head")
-        if position_encoding not in {"learned", "rope"}:
-            raise ValueError("position_encoding must be 'learned' or 'rope'")
+        if position_encoding not in {"learned", "sinusoidal", "rope", "alibi", "none"}:
+            raise ValueError("unsupported position_encoding")
         if position_encoding == "rope" and (n_embd // n_head) % 2 != 0:
             raise ValueError("RoPE requires an even head_dim")
+        if rope_theta <= 0 or sinusoidal_theta <= 0:
+            raise ValueError("position theta values must be positive")
+        if norm_type not in {"layernorm", "rmsnorm", "scalenorm", "none"}:
+            raise ValueError("unsupported norm_type")
+        if mlp_type not in {"dense", "swiglu", "geglu", "reglu"}:
+            raise ValueError("unsupported mlp_type")
+        if activation not in {
+            "gelu", "gelu_tanh", "relu", "relu_squared", "leaky_relu",
+            "elu", "silu", "mish", "tanh", "sigmoid", "identity",
+        }:
+            raise ValueError("unsupported activation")
+        if norm_eps <= 0:
+            raise ValueError("norm_eps must be positive")
+        if intermediate_size is None:
+            intermediate_size = 4 * n_embd if mlp_type == "dense" else 8 * ((n_embd + 2) // 3)
+        if intermediate_size <= 0:
+            raise ValueError("intermediate_size must be positive")
 
         super().__init__(tie_word_embeddings=tie_word_embeddings, **kwargs)
         self.vocab_size = vocab_size
@@ -79,6 +114,14 @@ class MiniGPTConfig(PretrainedConfig):
         self.bias = bias
         self.position_encoding = position_encoding
         self.rope_theta = rope_theta
+        self.sinusoidal_theta = sinusoidal_theta
+        self.norm_type = norm_type
+        self.norm_eps = norm_eps
+        self.layer_norm_epsilon = norm_eps
+        self.mlp_type = mlp_type
+        self.activation = activation
+        self.hidden_act = activation
+        self.intermediate_size = intermediate_size
 
 
 @dataclass(frozen=True)
@@ -159,11 +202,16 @@ class MiniGPTAttention(nn.Module):
             bias=config.bias,
         )
         self.c_proj = RowParallelLinear(config.n_embd, config.n_embd, bias=config.bias)
+        alibi_slopes = None
+        if config.position_encoding == "alibi":
+            head_start = dist.get_rank() * self.num_heads
+            alibi_slopes = get_alibi_slopes(config.n_head)[head_start : head_start + self.num_heads]
         self.attn = Attention(
             num_heads=self.num_heads,
             head_dim=self.head_dim,
             scale=self.head_dim**-0.5,
             num_kv_heads=self.num_heads,
+            alibi_slopes=alibi_slopes,
         )
 
     def forward(self, hidden_states: torch.Tensor, positions: torch.Tensor) -> torch.Tensor:
@@ -182,24 +230,36 @@ class MiniGPTMLP(nn.Module):
 
     def __init__(self, config: MiniGPTConfig) -> None:
         super().__init__()
-        intermediate_size = 4 * config.n_embd
-        self.net = nn.Sequential(
-            ColumnParallelLinear(config.n_embd, intermediate_size, bias=config.bias),
-            nn.GELU(),
-            RowParallelLinear(intermediate_size, config.n_embd, bias=config.bias),
-        )
+        self.mlp_type = config.mlp_type
+        if self.mlp_type == "dense":
+            self.net = nn.Sequential(
+                ColumnParallelLinear(config.n_embd, config.intermediate_size, bias=config.bias),
+                build_activation(config.activation),
+                RowParallelLinear(config.intermediate_size, config.n_embd, bias=config.bias),
+            )
+        else:
+            gate_activation = {"swiglu": "silu", "geglu": "gelu", "reglu": "relu"}[self.mlp_type]
+            self.gate_up_proj = MergedColumnParallelLinear(
+                config.n_embd,
+                [config.intermediate_size, config.intermediate_size],
+                bias=config.bias,
+            )
+            self.activation_and_mul = ActivationAndMul(gate_activation)
+            self.down_proj = RowParallelLinear(config.intermediate_size, config.n_embd, bias=config.bias)
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        return self.net(hidden_states)
+        if self.mlp_type == "dense":
+            return self.net(hidden_states)
+        return self.down_proj(self.activation_and_mul(self.gate_up_proj(hidden_states)))
 
 
 class MiniGPTBlock(nn.Module):
 
     def __init__(self, config: MiniGPTConfig) -> None:
         super().__init__()
-        self.ln_1 = nn.LayerNorm(config.n_embd, bias=config.bias)
+        self.ln_1 = build_norm(config.n_embd, config.norm_type, config.norm_eps, config.bias)
         self.attn = MiniGPTAttention(config)
-        self.ln_2 = nn.LayerNorm(config.n_embd, bias=config.bias)
+        self.ln_2 = build_norm(config.n_embd, config.norm_type, config.norm_eps, config.bias)
         self.mlp = MiniGPTMLP(config)
 
     def forward(self, hidden_states: torch.Tensor, positions: torch.Tensor) -> torch.Tensor:
@@ -224,13 +284,16 @@ class MiniGPTForCausalLM(nn.Module):
                 f"vocab_size={config.vocab_size} must be divisible by tensor_parallel_size={tp_size}"
             )
         self.token_embedding = VocabParallelEmbedding(config.vocab_size, config.n_embd)
-        self.position_embedding = (
-            nn.Embedding(config.block_size, config.n_embd)
-            if config.position_encoding == "learned"
-            else None
-        )
+        if config.position_encoding == "learned":
+            self.position_embedding = nn.Embedding(config.block_size, config.n_embd)
+        elif config.position_encoding == "sinusoidal":
+            self.position_embedding = SinusoidalPositionEmbedding(
+                config.block_size, config.n_embd, config.sinusoidal_theta
+            )
+        else:
+            self.position_embedding = None
         self.blocks = nn.ModuleList([MiniGPTBlock(config) for _ in range(config.n_layer)])
-        self.ln_f = nn.LayerNorm(config.n_embd, bias=config.bias)
+        self.ln_f = build_norm(config.n_embd, config.norm_type, config.norm_eps, config.bias)
         self.lm_head = ParallelLMHead(config.vocab_size, config.n_embd)
         if config.tie_word_embeddings:
             self.lm_head.weight.data = self.token_embedding.weight.data
@@ -238,7 +301,7 @@ class MiniGPTForCausalLM(nn.Module):
     def forward(self, input_ids: torch.Tensor, positions: torch.Tensor) -> torch.Tensor:
         hidden_states = self.token_embedding(input_ids)
         if self.position_embedding is not None:
-            hidden_states = hidden_states + self.position_embedding(positions)
+            hidden_states = hidden_states + self.position_embedding(positions).to(hidden_states.dtype)
         for block in self.blocks:
             hidden_states = block(hidden_states, positions)
         return self.ln_f(hidden_states)

@@ -15,7 +15,7 @@ from nanovllm import LLM, SamplingParams  # noqa: E402
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the MiniLLM HF-like export through the nano-vLLM teaching backend.")
-    parser.add_argument("--model", default=str(MINILLM_DIR / "hf_exports" / "minillm"))
+    parser.add_argument("--model", default=str(MINILLM_DIR / "artifacts" / "hf_exports" / "minillm"))
     parser.add_argument("--prompt", default="用户: 什么是 decoder-only Transformer？\\n助手:")
     parser.add_argument("--max-tokens", type=int, default=90)
     parser.add_argument("--temperature", type=float, default=0.7)
