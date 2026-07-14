@@ -157,8 +157,10 @@ def main() -> None:
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
 
     print(f"device={device}, vocab_size={tokenizer.vocab_size}, parameters={model.parameter_count():,}")
+    if args.max_steps < 0:
+        raise ValueError("--max-steps must be non-negative")
     for step in range(args.max_steps + 1):
-        if step % args.eval_interval == 0:
+        if step % args.eval_interval == 0 or step == args.max_steps:
             losses = estimate_loss(
                 model,
                 train_data,
@@ -169,6 +171,11 @@ def main() -> None:
                 device,
             )
             print(f"step {step:04d}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+
+        # step 0 is the untrained baseline and step N is the final evaluation.
+        # Exactly max_steps optimizer updates happen between them.
+        if step == args.max_steps:
+            break
 
         x, y = get_batch(train_data, args.block_size, args.batch_size, device)
         _, loss = model(x, y)

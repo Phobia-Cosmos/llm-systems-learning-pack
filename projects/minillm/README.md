@@ -179,7 +179,8 @@ corpus -> CharTokenizer -> 完整词表 -> shifted x/y
 - 观察 loss 如何下降。
 - 理解 token、embedding、attention、MLP、采样之间的关系。
 - 作为读论文时的实验底座。
-- 后续扩展 LoRA、RMSNorm、SwiGLU、GQA、量化、RAG、指令微调。
+- 对比 learned/sinusoidal/RoPE/ALiBi/NoPE、LayerNorm/RMSNorm/ScaleNorm 和多种 dense/gated MLP。
+- 后续扩展 GQA、LoRA、量化、RAG、指令微调。
 
 它不适合：
 
@@ -187,15 +188,35 @@ corpus -> CharTokenizer -> 完整词表 -> shifted x/y
 - 当可靠知识库。
 - 评估真实 LLM 能力。
 
+## 结构组件公平 benchmark
+
+位置编码、Norm 和 MLP 已有可复现的三组消融基准：
+
+```bash
+/home/undefined/Disk/python-envs/ai-core-py312/bin/python \
+  scripts/benchmark_components.py \
+  --run-name components_cpu_100step
+```
+
+默认比较 12 个变体、3 个模型随机种子，每个变体严格执行 100 次参数更新。tokenizer 只在 train split 上建立；所有变体复用相同的训练 batch、完整验证目标、optimizer、token 数和 greedy prompt；同名同 shape 的公共参数也具有相同初值。
+
+输出为：
+
+- `benchmarks/results/components_cpu_100step.json`：完整 config、逐 seed 原始结果、hash 与配对统计。
+- `benchmarks/results/components_cpu_100step.csv`：适合后续画图或数据分析的扁平记录。
+- `benchmarks/results/components_cpu_100step.md`：便于阅读的均值、标准差与相对基线差。
+
+当前 CPU 小基准的 36 条逐 seed 记录全部满足普通 greedy 与 KV-cache greedy token 完全一致。loss 和 tokens/s 只用于这个约 21K 参数、约 1K 字符语料的教学回归，不能据此给真实大模型的结构优劣排名。详细契约见 `benchmarks/README.md`。
+
 ## 后续扩展路线
 
 建议按这个顺序改：
 
-1. 固定当前 RoPE + BPE baseline，保留 learned position 兼容模式。
-2. 把 `LayerNorm + GELU MLP` 逐项升级为可选 `RMSNorm + SwiGLU`。
+1. 已完成 position、Norm、MLP 模块化与三 seed CSV/JSON benchmark，并保留旧 checkpoint 兼容。
+2. 为 RoPE + Byte-BPE + RMSNorm + SwiGLU 训练正式 checkpoint，补齐 native/nano-vLLM/vLLM 端到端对齐。
 3. 给 attention 增加 GQA，并保持 MHA 作为对照。
-4. 加 `Dataset/DataLoader`、checkpoint resume、学习率调度和混合精度。
-5. 加验证集 perplexity、生成回归样例和结构化 benchmark。
+4. 加 `Dataset/DataLoader`、checkpoint resume、学习率调度、warmup、梯度累积和混合精度。
+5. 扩展为更长训练预算、更多语料与 GPU/engine 性能 benchmark。
 6. 完成 SFT loss mask，再加入 LoRA。
 7. 包装为真正的 Transformers `PreTrainedModel`。
 8. 完成 SGLang native backend、OpenAI 服务与并发测试。
@@ -210,6 +231,7 @@ corpus -> CharTokenizer -> 完整词表 -> shifted x/y
 - 数据 batch: `minillm/data.py`
 - 训练: `train.py`
 - 生成: `generate.py`
+- 结构组件 benchmark: `scripts/benchmark_components.py`、`minillm/benchmark.py`
 - KV cache、autograd、训练到推理路线: `docs/kvcache_autograd_training_roadmap.md`
 - 模型结构、推理引擎接入、AI Infra 表格: `docs/minillm_ai_infra_engine_requirements.md`
 - RoPE 原理、实现、验证与后续路线: `docs/rope_implementation_and_roadmap.md`
@@ -232,7 +254,7 @@ corpus -> CharTokenizer -> 完整词表 -> shifted x/y
 ### 通过 vLLM 运行 RoPE MiniLLM
 
 ```bash
-source /home/undefined/Desktop/ai/scripts/use_vllm.sh
+source /home/undefined/Desktop/ai/use_vllm.sh
 VLLM_USE_FLASHINFER_SAMPLER=0 python scripts/run_vllm_minigpt.py
 ```
 
@@ -242,7 +264,7 @@ VLLM_USE_FLASHINFER_SAMPLER=0 python scripts/run_vllm_minigpt.py
 
 ```bash
 cd /home/undefined/Desktop/ai
-source scripts/use_disk_ai_env.sh
+source /home/undefined/Desktop/ai/use_disk_ai_env.sh
 python projects/mini-sglang/mini_sglang_server.py \
   --checkpoint projects/minillm/artifacts/checkpoints/minillm.pt \
   --host 127.0.0.1 \

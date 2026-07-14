@@ -25,7 +25,7 @@ Run native Transformers baseline:
 
 ```bash
 cd /home/undefined/Desktop/ai
-source scripts/use_vllm.sh
+source /home/undefined/Desktop/ai/use_vllm.sh
 python benchmarks/qwen_compare/run_transformers.py
 ```
 
@@ -33,7 +33,7 @@ Run vLLM full path:
 
 ```bash
 cd /home/undefined/Desktop/ai
-source scripts/use_vllm.sh
+source /home/undefined/Desktop/ai/use_vllm.sh
 VLLM_USE_FLASHINFER_SAMPLER=1 python benchmarks/qwen_compare/run_vllm_full.py
 ```
 
@@ -44,7 +44,7 @@ Run SGLang full path:
 
 ```bash
 cd /home/undefined/Desktop/ai
-source scripts/use_sglang.sh
+source /home/undefined/Desktop/ai/use_sglang.sh
 python benchmarks/qwen_compare/run_sglang_full.py
 ```
 
@@ -61,7 +61,7 @@ Run nano-vLLM full path:
 
 ```bash
 cd /home/undefined/Desktop/ai
-source scripts/use_sglang.sh
+source /home/undefined/Desktop/ai/use_sglang.sh
 python benchmarks/qwen_compare/run_nanovllm_flash.py
 ```
 
@@ -109,7 +109,7 @@ that, SGLang full FlashInfer attention + sampler + CUDA graph ran successfully.
 `run_sglang_variant.py` can isolate SGLang backend choices:
 
 ```bash
-source scripts/use_sglang.sh
+source /home/undefined/Desktop/ai/use_sglang.sh
 python benchmarks/qwen_compare/run_sglang_variant.py \
   --attention-backend flashinfer \
   --sampling-backend flashinfer

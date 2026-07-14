@@ -11,7 +11,7 @@ OUT="$ROOT/PAPER_INDEX.md"
   echo "Generated from \`paper_list.tsv\`. Status is based on files under \`papers/\`."
   echo
   current=""
-  tail -n +2 "$LIST" | while IFS=$'\t' read -r category filename url title; do
+  tail -n +2 "$LIST" | LC_ALL=C sort -t $'\t' -k1,1 -k2,2 | while IFS=$'\t' read -r category filename url title; do
     [ -z "${category:-}" ] && continue
     if [ "$category" != "$current" ]; then
       current="$category"

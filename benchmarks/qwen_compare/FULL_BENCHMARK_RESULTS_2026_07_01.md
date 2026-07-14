@@ -51,28 +51,28 @@ benchmark.
 Transformers:
 
 ```bash
-source scripts/use_vllm.sh
+source /home/undefined/Desktop/ai/use_vllm.sh
 python benchmarks/qwen_compare/run_transformers.py
 ```
 
 vLLM full:
 
 ```bash
-source scripts/use_vllm.sh
+source /home/undefined/Desktop/ai/use_vllm.sh
 VLLM_USE_FLASHINFER_SAMPLER=1 python benchmarks/qwen_compare/run_vllm_full.py
 ```
 
 SGLang full:
 
 ```bash
-source scripts/use_sglang.sh
+source /home/undefined/Desktop/ai/use_sglang.sh
 python benchmarks/qwen_compare/run_sglang_full.py
 ```
 
 nano-vLLM full:
 
 ```bash
-source scripts/use_sglang.sh
+source /home/undefined/Desktop/ai/use_sglang.sh
 python benchmarks/qwen_compare/run_nanovllm_flash.py
 ```
 
@@ -114,7 +114,7 @@ Root cause: FlashInfer reused an old JIT cache whose `build.ninja` hard-coded th
 venv CUDA wheel path. That pulled CUDA 13.3 compiler/header packages into a torch
 2.9.1+cu130 runtime and caused the mismatch.
 
-Fix applied in `scripts/use_sglang.sh`:
+Fix applied in `use_sglang.sh`:
 
 ```bash
 export CUDA_HOME=/usr/local/cuda-13.0

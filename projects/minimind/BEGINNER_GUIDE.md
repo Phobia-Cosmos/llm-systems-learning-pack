@@ -54,7 +54,7 @@ epochs             = 1 + 1
 
 ```bash
 cd /home/undefined/Desktop/ai
-source scripts/use_disk_ai_env.sh
+source /home/undefined/Desktop/ai/use_disk_ai_env.sh
 ```
 
 当前验证可用环境：

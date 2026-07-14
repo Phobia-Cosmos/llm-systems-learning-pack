@@ -190,8 +190,8 @@ Cuda compilation tools, release 13.0, V13.0.88
 The environment scripts now prefer this system toolkit:
 
 ```bash
-source scripts/use_vllm.sh
-source scripts/use_sglang.sh
+source /home/undefined/Desktop/ai/use_vllm.sh
+source /home/undefined/Desktop/ai/use_sglang.sh
 ```
 
 Both scripts set `CUDA_HOME=/usr/local/cuda-13.0` when it exists. They fall back to venv CUDA wheel paths only if the system toolkit is absent.
@@ -305,7 +305,7 @@ produced:
 CUDA compiler and CUDA toolkit headers are incompatible, please check your include paths
 ```
 
-`scripts/use_sglang.sh` now defaults to the system CUDA Toolkit and a clean Disk
+`use_sglang.sh` now defaults to the system CUDA Toolkit and a clean Disk
 cache:
 
 ```bash
@@ -318,7 +318,7 @@ After this change, SGLang full FlashInfer attention + FlashInfer sampling + CUDA
 graph runs successfully.
 
 Important shell note: a bare shell may not have `nvcc` in `PATH`. Either run
-`source scripts/use_sglang.sh`, `source scripts/use_vllm.sh`, or call:
+`source /home/undefined/Desktop/ai/use_sglang.sh`, `source /home/undefined/Desktop/ai/use_vllm.sh`, or call:
 
 ```bash
 /usr/local/cuda-13.0/bin/nvcc --version

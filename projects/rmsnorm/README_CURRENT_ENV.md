@@ -23,7 +23,7 @@ From the workspace, reuse the shared Disk AI environment:
 
 ```bash
 cd /home/undefined/Desktop/ai
-source scripts/use_disk_ai_env.sh
+source /home/undefined/Desktop/ai/use_disk_ai_env.sh
 python projects/rmsnorm/experiments/verify_rmsnorm_paper.py \
   --steps 160 --depth 24 --hidden-size 128 --threads 1
 ```

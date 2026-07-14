@@ -9,7 +9,7 @@ Run:
 
 ```bash
 cd /home/undefined/Desktop/ai
-source scripts/use_disk_ai_env.sh
+source /home/undefined/Desktop/ai/use_disk_ai_env.sh
 python projects/mini-sglang/mini_sglang_server.py \
   --checkpoint projects/minillm/artifacts/checkpoints/minillm.pt \
   --host 127.0.0.1 \

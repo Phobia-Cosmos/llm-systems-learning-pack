@@ -19,14 +19,14 @@ Activate vLLM:
 
 ```bash
 cd /home/undefined/Desktop/ai
-source scripts/use_vllm.sh
+source /home/undefined/Desktop/ai/use_vllm.sh
 ```
 
 Activate SGLang:
 
 ```bash
 cd /home/undefined/Desktop/ai
-source scripts/use_sglang.sh
+source /home/undefined/Desktop/ai/use_sglang.sh
 ```
 
 ## Verified Versions
@@ -56,11 +56,11 @@ Full 7B FP16 models are usually too large for this card once KV cache and runtim
 ## Quick Checks
 
 ```bash
-source scripts/use_vllm.sh
+source /home/undefined/Desktop/ai/use_vllm.sh
 python -c "import torch, vllm; print(torch.cuda.is_available(), torch.version.cuda, vllm.__version__)"
 
 deactivate
-source scripts/use_sglang.sh
+source /home/undefined/Desktop/ai/use_sglang.sh
 python -c "import torch, sglang; print(torch.cuda.is_available(), torch.version.cuda, sglang.__version__)"
 ```
 
@@ -69,7 +69,7 @@ python -c "import torch, sglang; print(torch.cuda.is_available(), torch.version.
 vLLM OpenAI-compatible server:
 
 ```bash
-source scripts/use_vllm.sh
+source /home/undefined/Desktop/ai/use_vllm.sh
 vllm serve Qwen/Qwen2.5-0.5B-Instruct \
   --host 127.0.0.1 \
   --port 8000 \
@@ -80,7 +80,7 @@ vllm serve Qwen/Qwen2.5-0.5B-Instruct \
 SGLang server:
 
 ```bash
-source scripts/use_sglang.sh
+source /home/undefined/Desktop/ai/use_sglang.sh
 python -m sglang.launch_server \
   --model-path Qwen/Qwen2.5-0.5B-Instruct \
   --host 127.0.0.1 \

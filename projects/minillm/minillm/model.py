@@ -440,7 +440,7 @@ class MiniGPT(nn.Module):
             )
 
         logits, past_key_values = self.forward_with_cache(idx)
-        for _ in range(max_new_tokens):
+        for step in range(max_new_tokens):
             idx_next = self._sample_next_token(
                 logits[:, -1, :],
                 temperature=temperature,
@@ -448,7 +448,10 @@ class MiniGPT(nn.Module):
                 greedy=greedy,
             )
             idx = torch.cat((idx, idx_next), dim=1)
-            logits, past_key_values = self.forward_with_cache(idx_next, past_key_values)
+            # The final sampled token is returned immediately. Computing its
+            # logits would prepare a token that the caller did not request.
+            if step + 1 < max_new_tokens:
+                logits, past_key_values = self.forward_with_cache(idx_next, past_key_values)
         return idx
 
     def parameter_count(self) -> int:
