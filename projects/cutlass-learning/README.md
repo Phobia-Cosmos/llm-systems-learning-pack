@@ -6,7 +6,7 @@
 RTX 4070 SUPER 编译 `sm_89`，先把 CUDA、GEMM、Tensor Core、CUTLASS 调用和
 CuTe Layout 五条最重要的链路跑通。
 
-当前状态：15 个自动测试全部通过；`compute-sanitizer` 的 memcheck/racecheck
+当前状态：21 个自动测试全部通过；`compute-sanitizer` 的 memcheck/racecheck
 通过；Tensor Core 二进制中已确认存在 `HMMA.16816.F32` 指令。
 
 详细材料：
@@ -50,7 +50,7 @@ CUTLASS 是 header-only 依赖；这批 C++ 练习不需要 Python 虚拟环境�
 | CUDA Toolkit | 13.0.88 | 已真实编译 CUTLASS v4.5.3 |
 | Host compiler | GCC/G++ 13.3 | CUDA 13 支持范围内 |
 | Build tools | CMake 3.28.3，Ninja 1.11.1 | 满足 CUTLASS C++17 要求 |
-| 分析工具 | Nsight Systems/Compute、Compute Sanitizer | Systems 和 sanitizer 可用；Compute counter 权限受限 |
+| 分析工具 | Nsight Systems/Compute、Compute Sanitizer | Systems/sanitizer 可用；NCU 已完成一次性管理员采集，普通用户仍受限 |
 
 这张卡适合学习：
 
@@ -75,6 +75,7 @@ CUTLASS 是 header-only 依赖；这批 C++ 练习不需要 Python 虚拟环境�
 | --- | --- | --- |
 | `00_device_info/device_info` | 设备属性、kernel launch、CUDA 错误检查 | 设备和 kernel smoke test 通过 |
 | `01_vector_add/vector_add` | block sweep、尾块、`float4`、alignment fallback、Event | 六种边界及 A/B/C 未对齐测试通过 |
+| `01_vector_add/vector_add_advanced` | 任意 warp multiple、10 轮 median/p95、half2/int4、NVTX、曲线 | aligned/unaligned、CSV/PNG/SVG、Nsight Systems 通过 |
 | `02_tiled_gemm/tiled_gemm` | naive GEMM、shared-memory tiling、同步、边界 | CPU reference 与两个 kernel 均通过 |
 | `03_cutlass_sgemm/cutlass_sgemm` | CUTLASS `Arguments → can_implement → initialize → run` | FP32 与 cuBLAS 对齐 |
 | `03_cutlass_sgemm/cutlass_tensorop` | FP16 输入、FP32 累加/输出、Tensor Core | 与 cuBLAS 对齐，SASS 有 HMMA |
@@ -91,6 +92,7 @@ Tensor Core 版本仍要求 `N` 和 `K` 是 8 个 half 元素的整数倍，这�
 ```bash
 ./build/bin/device_info
 ./build/bin/vector_add 16777219 100
+./build/bin/vector_add_advanced --n 16777219 --rounds 10 --min-block 32 --max-block 1024 --step 32 --csv results/vector_add_advanced.csv
 ./build/bin/tiled_gemm 512 512 512 50
 ./build/bin/cutlass_sgemm 1024 1024 1024 100
 ./build/bin/cutlass_tensorop 1024 1024 1024 100
@@ -101,6 +103,7 @@ Tensor Core 版本仍要求 `N` 和 `K` 是 8 个 half 元素的整数倍，这�
 
 ```text
 vector_add       N iterations [A_offset B_offset C_offset block_size]
+vector_add_advanced 使用 --help 查看命名参数
 tiled_gemm       M N K iterations
 cutlass_sgemm    M N K iterations
 cutlass_tensorop M N K iterations
@@ -123,8 +126,13 @@ less results/shape_sweep.txt
 
 ```bash
 ./scripts/run_vector_add_project.sh
+./scripts/run_vector_add_advanced.sh
+./scripts/profile_vector_add_advanced_nsys.sh
 ./scripts/inspect_vector_add_sass.sh
 ```
+
+高级曲线结果默认写入 `results/vector_add_advanced/`。原始基础版 `main.cu` 保留，
+高级实验独立放在 `advanced.cu`。
 
 确认编译器真的生成 Tensor Core 指令：
 
@@ -139,12 +147,22 @@ less results/shape_sweep.txt
 nsys stats profiles/cutlass_tensorop.nsys-rep
 ```
 
-Nsight Compute 的硬件计数器当前被驱动限制为管理员访问。脚本会先检测并给出
-明确提示：
+Nsight Compute 的硬件计数器当前被驱动限制为管理员访问；一次性管理员采集已
+完成，报告位于 `profiles/vector_add_advanced/ncu/`，汇总位于
+`results/vector_add_advanced/ncu/{summary,comparison}.csv`。复现命令：
 
 ```bash
 ./scripts/profile_ncu.sh
+sudo ./scripts/profile_vector_add_advanced_ncu.sh  # 一次性管理员采集
+
+# 或在可信个人开发机持久开放，重启后普通用户采集
+sudo ./scripts/enable_nvidia_performance_counters.sh
+sudo reboot
+./scripts/profile_vector_add_advanced_ncu.sh
 ```
+
+持久开放会让所有本地用户读取 GPU 计数器；可用
+`sudo ./scripts/disable_nvidia_performance_counters.sh` 后重启恢复。
 
 ## CUTLASS Profiler 是可选的重构建
 

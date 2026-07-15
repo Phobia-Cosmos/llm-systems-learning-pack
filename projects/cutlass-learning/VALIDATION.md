@@ -1,6 +1,6 @@
 # 本机验证记录
 
-验证日期：2026-07-14。下面是一次环境/正确性快照，不是锁频后的正式论文基准。
+验证日期：2026-07-15。下面是一次环境/正确性快照，不是锁频后的正式论文基准。
 
 ## 环境
 
@@ -36,17 +36,24 @@ vector_add_n256/n257        PASS
 vector_add_n1000003_sweep   PASS
 vector_add_unaligned_a/b/c  PASS
 vector_add_unaligned_all    PASS
+vector_add_advanced_aligned PASS
+vector_add_advanced_small_n PASS
+vector_add_advanced_tail2/tail3 PASS
+vector_add_advanced_unaligned PASS
+vector_add_advanced_reject_nonwarp PASS (expected rejection)
 tiled_gemm_tail             PASS
 cutlass_sgemm_tail          PASS
 cutlass_tensorop_tail       PASS
 cute_layout_mapping         PASS
 
-100% tests passed, 0 tests failed out of 15
+100% tests passed, 0 tests failed out of 21
 ```
 
-其中 10 个 Vector Add 测试覆盖 `N=1,3,255,256,257,1,000,003`、四种 block
-size，以及 A/B/C 单独或同时不满足 16-byte alignment。其余测试覆盖三个 GEMM
-维度的尾块和满足 128-bit 输入对齐、但不是 CTA tile 整数倍的 Tensor Core shape。
+其中 16 个 Vector Add 测试覆盖 `N=1,3,255,256,257,258,259,1,000,003`、基础
+block sizes、advanced small-N fallback、全部 pack 余数、非 2 次幂 warp
+multiples、block=1024、A/B/C 未对齐，以及非法 block=33 的预期拒绝。其余测试
+覆盖三个 GEMM 维度的尾块和满足 128-bit 输入对齐、但不是 CTA tile 整数倍的
+Tensor Core shape。
 
 ## Sanitizer
 
@@ -61,6 +68,8 @@ size，以及 A/B/C 单独或同时不满足 16-byte alignment。其余测试覆
 ```text
 Vector Add aligned float4 + scalar tail: 0 errors
 Vector Add unaligned scalar fallback:    0 errors
+Vector Add advanced float4/half2/int4:   0 errors
+Vector Add advanced alignment fallback:  0 errors
 Tiled GEMM memcheck:                     0 errors
 Tiled GEMM racecheck:                    0 hazards, 0 errors, 0 warnings
 ```
@@ -74,6 +83,9 @@ Tiled GEMM racecheck:                    0 hazards, 0 errors, 0 warnings
 | --- | --- | ---: | ---: | --- |
 | Vector Add scalar | N=16,777,219 | 最好约 0.455 ms，443 effective GB/s | CPU ref | guard/结果通过 |
 | Vector Add float4 | N=16,777,219 | 最好约 0.457 ms，440 effective GB/s | scalar/CPU ref | guard/结果通过 |
+| Advanced float scalar / float4 | N=16,777,219，10 rounds | 453 / 448 median effective GB/s | typed CPU ref | 通过 |
+| Advanced half scalar / half2 | N=16,777,219，10 rounds | 456 / 455 median effective GB/s | typed CPU ref | 通过 |
+| Advanced int scalar / CUDA int4 | N=16,777,219，10 rounds | 454 / 447 median effective GB/s | typed CPU ref | 通过 |
 | Naive SGEMM | 512³ | 0.130 ms，2.06 TFLOP/s | CPU ref | 通过 |
 | Tiled SGEMM | 512³ | 0.116 ms，2.31 TFLOP/s | CPU ref | 通过 |
 | CUTLASS FP32 SIMT | 1024³ | 0.159–0.183 ms，11.7–13.5 TFLOP/s | 0.122–0.155 ms，13.8–17.6 TFLOP/s | 通过 |
@@ -102,7 +114,14 @@ LDG.E.128
 STG.E.128
 ```
 
-因此手写 `float4` 确实落成 128-bit global-memory 指令。
+因此手写 `float4` 确实落成 128-bit global-memory 指令。扩展后的同一检查脚本还
+确认 advanced `float4`/CUDA `int4` 主体都有 `LDG.E.128`/`STG.E.128`，`half2`
+主体则有 32-bit packed load/store 和 `HADD2`；尾部仍按元素宽度使用标量指令。
+
+Advanced 原始样本和曲线位于 `results/vector_add_advanced/`。每行 CSV 保存 10 个
+round samples、type-7 median/p95、实际 alignment path 和 correctness。PNG/SVG
+曲线覆盖 block=32..1024 的全部 warp multiples，并用阴影表示 median 到
+p95-latency-derived bandwidth。
 
 ## Tensor Core 证据
 
@@ -127,20 +146,46 @@ Nsight Systems 已成功生成：
 
 ```text
 profiles/cutlass_tensorop.nsys-rep
+profiles/vector_add_advanced/nvtx_timeline.nsys-rep
 ```
 
 一次 summary 中可区分 CUTLASS kernel 与 cuBLAS 的 Ampere FP16 kernel，说明
 CUDA timeline 路径可用。
 
-Nsight Compute CLI 已安装，但当前普通用户运行得到：
+Advanced timeline 的 `nvtx_gpu_proj_sum` 已识别
+`dtype/variant/path/block/round` ranges，并分别统计六个 scalar/packed kernel，
+说明 NVTX 标注与 Systems 脚本可用。
+
+Nsight Compute CLI 已安装，当前普通用户运行仍得到：
 
 ```text
 ERR_NVGPUCTRPERM
 ```
 
-原因是 `/proc/driver/nvidia/params` 中 `RmProfilingAdminOnly: 1`。需要机器管理员
-开放 GPU performance counter；这不是项目或 CUDA 编译错误。`profile_ncu.sh`
-会在启动前检查这一点。
+原因是 `/proc/driver/nvidia/params` 中 `RmProfilingAdminOnly: 1`。本轮经用户授权，
+使用 `sudo profile_vector_add_advanced_ncu.sh` 完成了一次性管理员采集；没有写入
+modprobe 配置，也没有向其他普通用户永久开放 counter。六份报告和两张数据表位于：
+
+```text
+profiles/vector_add_advanced/ncu/{float,half,int}_{scalar,vector}.ncu-rep
+results/vector_add_advanced/ncu/summary.csv
+results/vector_add_advanced/ncu/comparison.csv
+```
+
+`N=16,777,219`、block=256、单个被 NCU 捕获的 kernel 结果如下。load/store 是
+warp-level SASS 指令执行数；L2/DRAM 是硬件计数器报告的实际流量率，不是逻辑
+`3*N*sizeof(T)` 人工换算值。
+
+| dtype | global load inst S→V | global store inst S→V | L2 GB/s S/V | DRAM GB/s S/V | DRAM peak % S/V | GPU time µs S/V |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| FP32 / `float4` | 1,048,578 → 262,146 | 524,289 → 131,073 | 432.2 / 436.0 | 441.9 / 436.4 | 89.89 / 88.78 | 466.1 / 465.4 |
+| FP16 / `half2` | 1,048,578 → 524,292 | 524,289 → 262,146 | 510.5 / 499.4 | 460.5 / 408.8 | 93.68 / 83.18 | 222.6 / 228.1 |
+| INT32 / CUDA `int4` | 1,048,578 → 262,146 | 524,289 → 131,073 | 435.4 / 441.9 | 445.0 / 443.5 | 90.52 / 90.23 | 462.7 / 455.9 |
+
+因此 `float4/int4` 确实把 global load/store 指令减少约 75%，`half2` 减少约 50%，
+但 kernel 时间分别只约 -0.1%、+2.5%、-1.5%。物理 DRAM byte 还会受压缩、写回
+和事务粒度影响，不能拿它反推逻辑元素数。NCU 会 replay kernel，程序在 profiler
+内打印的 CUDA Event 带宽不具代表性；稳定性能结论仍以独立 10-round 曲线为准。
 
 ## 官方 CUTLASS Profiler 构建状态
 

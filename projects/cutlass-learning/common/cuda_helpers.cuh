@@ -141,6 +141,11 @@ float benchmark_cuda_ms(Launch&& launch, int warmup, int iterations) {
   return total_ms / static_cast<float>(iterations);
 }
 
+// inline 不保证编译器一定把函数体展开；编译器会自行决定是否真正内联。它在这个
+// header 中更重要的作用，是允许多个 translation unit 各自包含同一函数定义而不
+// 触发链接期的重复定义。std::stoll 把字符串解析为 long long；consumed 返回已
+// 消费的字符数，因此 "12abc" 不会被悄悄当成 12。它可能抛 invalid_argument 或
+// out_of_range，catch 会统一报错；随后还显式限制为正数且不超过 32-bit int。
 inline int parse_positive_int(char const* text, char const* name) {
   try {
     std::size_t consumed = 0;

@@ -11,7 +11,8 @@
 - `N % 4` 的 0–3 个元素在同一个 kernel 中用标量访问处理；
 - `N < 4` 时回退 scalar，避免非法的 0-block launch；
 - A、B、C 任一地址不满足 16-byte alignment 时回退 scalar；
-- A/B 输入区与 C 前后 guard 使用 NaN canary，检测漏写、越界读和逻辑越界写；
+- C 使用 NaN poison 和尾部 guard；offset>0 时前置区也充当 prefix guard，用于
+  检测漏写与 allocation 内的逻辑越界写；越界读/写另由 Compute Sanitizer 检测；
 - CPU reference、绝对/相对误差与 guard 检查；
 - CTest 边界矩阵与 Compute Sanitizer。
 
@@ -73,8 +74,8 @@ block = 64, 128, 256, 512
 ```
 
 每次 variant 运行前把整个 C allocation poison 成 NaN。如果向量 kernel 忘了
-写尾部，旧的 scalar 结果不会替它掩盖错误。逻辑输出前后还有四个 guard 元素；
-它们必须始终保持 NaN。
+写尾部，旧的 scalar 结果不会替它掩盖错误。逻辑输出后固定有四个 guard 元素；
+`c_offset>0` 时，逻辑输出前的 offset 区也作为 prefix guard。它们必须保持 NaN。
 
 ## 如何理解性能
 
@@ -91,11 +92,100 @@ H2D 或 D2H。
 `inspect_vector_add_sass.sh` 已确认当前 `sm_89` 二进制含有
 `LDG.E.128` / `STG.E.128`，证明手写向量访问确实落成 128-bit 全局访存指令。
 
-## 推荐继续修改
+## 高级扩展（已完成，未覆盖基础版）
 
-1. 把 block size 扩展为任意 warp 整数倍并画曲线；
-2. 独立重复 10 轮，报告 median/p95，而不是只看单轮平均；
-3. 加 `half2`、`int4` 等不同向量类型，比较 alignment 与有效带宽；
-4. 用 NVTX 标出 scalar/vectorized 区间，再用 Nsight Systems 看 timeline；
-5. 管理员开放 performance counter 后，用 Nsight Compute 对比 global load/store
-   指令数与 DRAM/L2 throughput。
+基础版仍保留在 `main.cu`；所有后续实验位于新的 `advanced.cu`，可执行文件是
+`vector_add_advanced`。
+
+已经实现：
+
+- 任意 warp 整数倍 block range，默认 32、64、…、1024；
+- 每配置独立 10 轮，每轮多次 launch，保留原始样本并报告 type-7 median/p95；
+- `float`/`float4`、`__half`/`half2`、`int32`/CUDA `int4`；
+- aligned 与 element offset=1 的 scalar alignment fallback 对照；
+- CSV、PNG、SVG，以及 median 到 p95-latency-derived bandwidth 阴影；
+- 每个测量 batch 的 NVTX range 和 Nsight Systems timeline；
+- Nsight Compute 的 global load/store、DRAM 与 L2 指标脚本；
+- SASS 检查确认 `float4/int4` 的 128-bit 访存以及 `half2` 的 packed `HADD2`；
+- 输出前后固定 guard、typed CPU reference、CTest 和 Compute Sanitizer。
+
+注意 CUDA `int4` 是四个 32-bit `int`，总计 16 byte，不是量化中的 4-bit INT4；
+`half2` 是两个 FP16，总计 4 byte。
+
+一键跑完整 10 轮曲线：
+
+```bash
+./scripts/run_vector_add_advanced.sh
+```
+
+结果位于：
+
+```text
+results/vector_add_advanced/aligned.csv
+results/vector_add_advanced/unaligned_offset1.csv
+results/vector_add_advanced/vector_add_bandwidth.{png,svg}
+results/vector_add_advanced/vector_add_alignment.{png,svg}
+```
+
+自定义 sweep 示例：
+
+```bash
+./build/bin/vector_add_advanced \
+  --n 16777219 --iterations 20 --rounds 10 --warmup 3 \
+  --min-block 96 --max-block 960 --step 96 \
+  --types all --variants all --offset 0 \
+  --csv results/vector_add_advanced/custom.csv
+```
+
+`min/max/step` 都必须构成 warp（本机 32 threads）的整数倍；`--block 256` 可只
+测一个 block size。CSV 同时记录 `requested_variant` 和 `actual_path`，因此未对齐
+时不会把 scalar fallback 误标为 packed 性能。
+
+NVTX/Nsight Systems 已验证：
+
+```bash
+./scripts/profile_vector_add_advanced_nsys.sh
+```
+
+输出位于 `profiles/vector_add_advanced/nvtx_timeline.nsys-rep`，其中可以直接看到
+`float32/float4/path=.../block=256/round=...` 等 range。
+
+Nsight Compute 对普通用户仍受系统管理员权限限制；本机已用下面的一次性管理员
+方式成功采集六个 scalar/packed kernel，没有永久修改驱动权限：
+
+```bash
+sudo ./scripts/profile_vector_add_advanced_ncu.sh
+```
+
+输出包括六份 `.ncu-rep`、19 项原始指标的 `summary.csv`，以及直接比较 scalar 与
+packed 的 `comparison.csv`：
+
+```text
+profiles/vector_add_advanced/ncu/
+results/vector_add_advanced/ncu/summary.csv
+results/vector_add_advanced/ncu/comparison.csv
+```
+
+实测中 `float4`/CUDA `int4` 把 warp-level global load/store 指令数降至 scalar 的
+约 1/4，`half2` 降至约 1/2；但三组 kernel 时间只变化约 -1.5% 到 +2.5%。这说明
+指令减少是真实的，但 DRAM 已接近高利用率，Vector Add 不会因此获得 2–4 倍加速。
+
+若确实需要普通用户反复采集，也可仅在可信个人开发机持久开放，重启后再运行：
+
+```bash
+sudo ./scripts/enable_nvidia_performance_counters.sh
+sudo reboot
+./scripts/profile_vector_add_advanced_ncu.sh
+```
+
+恢复 admin-only：
+
+```bash
+sudo ./scripts/disable_nvidia_performance_counters.sh
+sudo reboot
+```
+
+本机最终二进制重跑后的最佳 median 有效带宽约为 447–456 GB/s：float
+scalar/float4 约 453/448，half scalar/half2 约 456/455，int scalar/CUDA int4
+约 454/447 GB/s。六条路径接近，说明这个 workload 主要受 memory subsystem
+限制。曲线有明显桌面负载/频率噪声，不能只看单个最高点。

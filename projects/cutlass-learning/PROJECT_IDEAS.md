@@ -16,11 +16,17 @@
 5. small/L2-sensitive 与大于 L2 的数据集；
 6. NaN poison、前后 guard、CPU reference、CTest 与 memcheck；
 7. SASS 中的 `LDG.E.128` / `STG.E.128` 证据。
+8. 独立 `advanced.cu`，完整 sweep 32..1024 warp multiples；
+9. 10 轮 raw samples、median/p95、CSV、PNG/SVG；
+10. `half2` 与 CUDA `int4`、aligned/unaligned 对照；
+11. NVTX、Nsight Systems，以及六个 scalar/packed kernel 的管理员 NCU 指标对比。
 
 一键复现见 [`01_vector_add/README.md`](01_vector_add/README.md) 和：
 
 ```bash
 ./scripts/run_vector_add_project.sh
+./scripts/run_vector_add_advanced.sh
+./scripts/profile_vector_add_advanced_nsys.sh
 ./scripts/inspect_vector_add_sass.sh
 ```
 
@@ -35,8 +41,8 @@
 建议 shape：`1024×1024`、`1023×1001`、`32×4096`。
 
 验收：CPU reference 通过；解释为什么读或写不合并；用 padding 前后结果证明
-bank conflict 的影响。当前 Nsight Compute counter 权限未开放时，先用 Event
-和代码推理，管理员开放后补 counter 证据。
+bank conflict 的影响。普通用户的 Nsight Compute counter 权限仍未开放；可像
+项目 1 一样用一次性管理员采集补 counter 证据，不必永久改变系统权限。
 
 ## 项目 3：GEMM Tile Sweep（入门到中级）
 
