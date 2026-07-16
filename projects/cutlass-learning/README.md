@@ -80,6 +80,7 @@ CUTLASS 是 header-only 依赖；这批 C++ 练习不需要 Python 虚拟环境�
 | `03_cutlass_sgemm/cutlass_sgemm` | CUTLASS `Arguments → can_implement → initialize → run` | FP32 与 cuBLAS 对齐 |
 | `03_cutlass_sgemm/cutlass_tensorop` | FP16 输入、FP32 累加/输出、Tensor Core | 与 cuBLAS 对齐，SASS 有 HMMA |
 | `04_cute_layout/cute_layout` | Shape、Stride、Layout、层次结构、coalesce | row/column/padded/hierarchical 映射可视化 |
+| `05_python_operators/benchmark.py` | PyTorch baseline、Python 教学实现、`torch.compile`、Triton dispatcher/fallback | 30 个代表算子 correctness 与统一 CPU/CUDA benchmark |
 
 所有 GEMM 都按 row-major 输入理解。测试故意包含不是 CTA/tile 整数倍的 shape；
 Tensor Core 版本仍要求 `N` 和 `K` 是 8 个 half 元素的整数倍，这是 128-bit
@@ -97,6 +98,7 @@ Tensor Core 版本仍要求 `N` 和 `K` 是 8 个 half 元素的整数倍，这�
 ./build/bin/cutlass_sgemm 1024 1024 1024 100
 ./build/bin/cutlass_tensorop 1024 1024 1024 100
 ./build/bin/cute_layout
+./scripts/run_python_operator_project.sh
 ```
 
 参数约定：

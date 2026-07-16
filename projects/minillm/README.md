@@ -22,19 +22,26 @@
 - Python 3.10+，当前机器是 Python 3.12.3。
 - PyTorch 2.3+。
 - CPU 可运行，2GB 内存足够跑默认 toy 配置。
-- GPU 不是必须；如果有 CUDA GPU，训练会更快。
+- GPU 不是必须；安装 CUDA-enabled PyTorch 后可在同一份代码中选择 CPU 或 CUDA。
 
 默认模型大约几十万到百万级参数，主要用于理解结构，不用于真实生产。
 
 ## 安装
 
+`requirements.txt` 不再固定 `+cpu` wheel；安装时只选择一个与机器匹配的 PyTorch index。CUDA wheel 本身也能执行 CPU 路径，不需要维护两份 MiniLLM 源码。
+
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+
+# CPU-only 环境
+pip install --index-url https://download.pytorch.org/whl/cpu -r requirements.txt
+
+# 当前机器 CUDA 13 对应环境；若官方 index 变化，以 PyTorch 安装页为准
+pip install --index-url https://download.pytorch.org/whl/cu130 -r requirements.txt
 ```
 
-如果你要安装指定 CUDA 版本的 PyTorch，建议按 PyTorch 官网给出的命令安装，再运行本项目。
+本机也可直接复用已登记的 `/home/undefined/Disk/python-envs/vllm/bin/python`（PyTorch 2.11.0+cu130）运行 CUDA 教学基准；不要为了本项目修改这个共享环境。`train.py`/`generate.py` 已支持 `--device auto|cpu|cuda|mps`，模型参数、buffer 和输入会由现有 `.to(device)` 路径迁移。
 
 ## 训练
 

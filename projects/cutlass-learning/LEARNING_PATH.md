@@ -76,6 +76,12 @@ ctest --test-dir build --output-on-failure
 验收：能用线程索引手算某个元素由谁处理；能解释为什么小数组的有效带宽可能
 超过显存标称带宽；能识别非合并访存和 bank conflict。
 
+进入手写 CUDA 前，先运行 [`05_python_operators`](05_python_operators/README.md) 建立 PyTorch reference、Python 教学公式、`torch.compile` 和 Triton 的共同 correctness/benchmark 口径。这样后续每个 C++/CUDA kernel 都有同输入、同误差、同计时协议的 baseline，不会把 Python 循环、PyTorch C++ backend 和 GPU kernel 混成同一个比较对象。
+
+```bash
+./scripts/run_python_operator_project.sh
+```
+
 ## 第 3 周：从 naive GEMM 到 tiled GEMM
 
 学习：CTA tile、算术强度、数据复用、Roofline、共享内存、同步与资源权衡。
