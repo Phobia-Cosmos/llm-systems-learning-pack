@@ -2,12 +2,51 @@ from __future__ import annotations
 
 import argparse
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import torch
 
 from minillm import GPTConfig, MiniGPT
 from minillm.tokenizer_registry import tokenizer_from_checkpoint
+
+
+def pack_separate_qkv_for_export(model: MiniGPT, config: GPTConfig) -> tuple[MiniGPT, GPTConfig]:
+    """Convert teaching q/k/v modules into the packed inference checkpoint layout."""
+
+    if config.fused_qkv:
+        return model, config
+
+    export_config = replace(config, fused_qkv=True)
+    export_model = MiniGPT(export_config)
+    source_state = model.state_dict()
+    packed_state: dict[str, torch.Tensor] = {}
+    skip_fragments = (".attn.q_proj.", ".attn.k_proj.", ".attn.v_proj.")
+    for name, value in source_state.items():
+        if not any(fragment in name for fragment in skip_fragments):
+            packed_state[name] = value
+    for layer_index in range(config.n_layer):
+        prefix = f"blocks.{layer_index}.attn"
+        packed_state[f"{prefix}.c_attn.weight"] = torch.cat(
+            [
+                source_state[f"{prefix}.q_proj.weight"],
+                source_state[f"{prefix}.k_proj.weight"],
+                source_state[f"{prefix}.v_proj.weight"],
+            ],
+            dim=0,
+        )
+        if config.bias:
+            packed_state[f"{prefix}.c_attn.bias"] = torch.cat(
+                [
+                    source_state[f"{prefix}.q_proj.bias"],
+                    source_state[f"{prefix}.k_proj.bias"],
+                    source_state[f"{prefix}.v_proj.bias"],
+                ],
+                dim=0,
+            )
+    export_model.load_state_dict(packed_state)
+    export_model.eval()
+    return export_model, export_config
 
 
 def parse_args() -> argparse.Namespace:
@@ -31,6 +70,7 @@ def main() -> None:
     model = MiniGPT(config)
     model.load_state_dict(checkpoint["model"])
     model.eval()
+    model, config = pack_separate_qkv_for_export(model, config)
 
     config_json = {
         "model_type": "minigpt",
@@ -46,6 +86,7 @@ def main() -> None:
         "hidden_size": config.n_embd,
         "dropout": config.dropout,
         "bias": config.bias,
+        "fused_qkv": config.fused_qkv,
         "position_encoding": config.position_encoding,
         "rope_theta": config.rope_theta,
         "sinusoidal_theta": config.sinusoidal_theta,

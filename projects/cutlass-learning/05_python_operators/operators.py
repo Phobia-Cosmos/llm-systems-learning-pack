@@ -36,7 +36,7 @@ class OperatorCase:
     atol: float = 1e-5
     rtol: float = 1e-4
 
-# TODO:这里实现的这么多的函数目的是什么？这里不是自定义的python版本kernel 算子吧？这些函数会放到GPU上执行是吗？
+# TODO:这里实现的这么多的函数目的是什么？这里不是自定义的python版本kernel 算子吧？这些函数会放到GPU上执行是吗？这些函数就是算子是吗？353
 def vector_add(a: Tensor, b: Tensor) -> Tensor:
     """逐元素向量/张量加法。
 
@@ -240,6 +240,7 @@ def matmul_from_broadcast(a: Tensor, b: Tensor) -> Tensor:
     场景：教学验证 GEMM 的乘积与归约依赖；它会物化巨大的 M×K×N 临时张量，真实 Linear/GEMM 必须用 torch.matmul/cuBLAS/CUTLASS 等 tiled kernel，不能把本函数当高性能实现。
     """
 
+    # TODO：unsqueeze的作用是什么？为什么一个要传入-1一个是-3？广播乘法是什么？为什么矩阵可以有三个维度并且可以直接相乘？
     return torch.sum(a.unsqueeze(-1) * b.unsqueeze(-3), dim=-2)
 
 
@@ -276,7 +277,7 @@ def embedding_from_one_hot(indices: Tensor, weight: Tensor) -> Tensor:
     encoded = F.one_hot(indices, num_classes=weight.shape[0]).to(weight.dtype)
     return encoded @ weight
 
-
+# TODO：scatter_add_from_one_hot和这个函数的区别是什么只有最后的unsqueeze参数不同吧？
 def gather_from_one_hot(x: Tensor, indices: Tensor) -> Tensor:
     """用 one-hot selector 展示最后一维 gather。
 

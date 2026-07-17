@@ -10,6 +10,7 @@ import torch.nn.functional as F
 from minillm import GPTConfig, MiniGPT
 from minillm.data import get_batch
 from minillm.debug import split_qkv_parameters, trace_forward
+from export_hf_like import pack_separate_qkv_for_export
 
 
 class DebugTraceTests(unittest.TestCase):
@@ -139,6 +140,21 @@ class DebugTraceTests(unittest.TestCase):
 
         torch.testing.assert_close(x, torch.tensor([[0, 1, 2, 3], [0, 1, 2, 3]]))
         torch.testing.assert_close(y, torch.tensor([[1, 2, 3, 4], [1, 2, 3, 4]]))
+
+    def test_separate_qkv_export_packs_without_changing_logits(self):
+        model = self.make_model("rope", fused_qkv=False).eval()
+        input_ids = torch.tensor([[5, 8, 3, 10, 2]], dtype=torch.long)
+        with torch.no_grad():
+            expected_logits, _ = model(input_ids)
+
+        packed_model, packed_config = pack_separate_qkv_for_export(model, model.config)
+        with torch.no_grad():
+            packed_logits, _ = packed_model(input_ids)
+
+        self.assertTrue(packed_config.fused_qkv)
+        self.assertIsNotNone(packed_model.blocks[0].attn.c_attn)
+        self.assertIsNone(packed_model.blocks[0].attn.q_proj)
+        torch.testing.assert_close(packed_logits, expected_logits)
 
 
 if __name__ == "__main__":

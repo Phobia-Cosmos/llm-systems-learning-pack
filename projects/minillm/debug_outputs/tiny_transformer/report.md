@@ -9,6 +9,7 @@
 > - [x] `c_proj`、`mlp.net.0`、`mlp.net.2` 分别做什么？
 > - [x] Q/K/V 能否不融合，以及每一步对应哪条公式？
 > - [x] 为什么逐 token 生成默认只有 5 个 step？
+> - [x] 同一个 prompt 在 nano-vLLM 与 mini-sglang 中怎样完成 prefill、KV-cache decode、调度和返回？
 
 **先直接回答最容易混淆的两个 step：**
 
@@ -230,7 +231,229 @@ AdamW 更新的是 embedding、$W_Q/W_K/W_V$、$W_O$、MLP、Norm 等参数；�
 | '小狗喝' | 3 | '小狗喝水。\n' | 小:0.994, 。:0.002, 吃:0.002 | 小 |
 | '小狗喝' | 4 | '小狗喝水。\n小' | 猫:0.543, 狗:0.452, 鱼:0.002 | 猫 |
 
-## 9. 自动校验
+## 9. 同一个 prompt 如何流过 nano-vLLM 与 mini-sglang
+
+这一节固定追踪同一个请求：prompt 是 `小猫吃`（3 个 token），最多新增 5 个 token，模型续写为 `鱼 → 。 → \n → 小 → 猫`。这里不再展示浮点 Tensor，只保留 shape、公式和“上一步输出为什么会成为下一步输入”。
+
+> [!question] 这一节回答什么？
+> - [x] 一个 prompt 进入推理服务后，在模型计算之前还经历什么？
+> - [x] prefill 和 decode 分别是什么，为什么不是每步都重算整个 prompt？
+> - [x] Q/K/V 在首次输入和逐 token 生成时分别怎样产生、使用和缓存？
+> - [x] nano-vLLM 的 `slot_mapping`、`block_table`、paged KV cache 和调度器怎样配合？
+> - [x] mini-sglang 的普通 KV cache 与 nano-vLLM 的分页缓存有什么本质差别？
+> - [x] 明明生成 5 个 token，为什么实际是 1 次 prefill 加 4 次 decode forward？
+
+> [!info] 先分清“模型”和“推理引擎”
+> Transformer 决定 `embedding → Q/K/V → attention → MLP → logits` 的数学计算；推理引擎负责请求排队、batch、显存中的 KV 存放、选择执行 kernel、停止与返回结果。两个运行时使用的是同一套训练权重，所以模型学到的“`小猫吃` 后面更可能是 `鱼`”没有变化，变化的是组织计算与缓存的方式。
+
+教学 checkpoint 中 Q/K/V 是三个独立的 `q_proj/k_proj/v_proj`。mini-sglang 直接加载这份 `.pt`；nano-vLLM 的 MiniGPT 后端使用融合的 `c_attn`，所以导出时把三组参数沿输出维拼成：
+
+$$
+W_{QKV}=\begin{bmatrix}W_Q\\W_K\\W_V\end{bmatrix},\qquad
+b_{QKV}=\begin{bmatrix}b_Q\\b_K\\b_V\end{bmatrix}.
+$$
+
+于是一次 `Linear(C,3C)` 再切三段，与三次 `Linear(C,C)` 分别计算完全等价。**这是权重布局和执行效率的变化，不是注意力公式的变化。**
+
+整个请求可以先压缩成这一条主线：
+
+```text
+HTTP/Python 请求
+  ↓ tokenizer.encode
+prompt token ids
+  ↓ 请求状态与缓存空间准备
+prefill：并行处理 prompt 的 3 个 token
+  ↓ 最后位置 logits → 选出“鱼”
+decode：只输入新 token“鱼”，历史 K/V 从 cache 读取
+  ↓ logits → 选出“。”并把它作为下一轮输入
+decode：“。” → “\n”
+  ↓
+decode：“\n” → “小”
+  ↓
+decode：“小” → “猫”
+  ↓ 达到 max_tokens=5
+释放请求缓存并返回 completion
+```
+
+五次 next-token 决策与五次模型 forward 的对应关系如下。注意最后采样出的 `猫` 已经是调用者要求的第 5 个新 token；除非还要预测第 6 个 token，否则无需再把 `猫` 喂进模型。
+
+| 引擎 forward | 阶段 | 本轮真正送入模型的 token | 本轮写入 cache 后可见的历史 | 用本轮最后 logits 选出 |
+| ---: | --- | --- | --- | --- |
+| 0 | prefill | `小 猫 吃` | `小 猫 吃` | `鱼` |
+| 1 | decode | `鱼` | `小 猫 吃 鱼` | `。` |
+| 2 | decode | `。` | `小 猫 吃 鱼 。` | `\n` |
+| 3 | decode | `\n` | `小 猫 吃 鱼 。 \n` | `小` |
+| 4 | decode | `小` | `小 猫 吃 鱼 。 \n 小` | `猫` |
+
+### 9.1 nano-vLLM：从请求队列到 paged KV cache
+
+在任何 prompt 到来前，构造 `LLM` 已经完成一次性的启动工作：读取导出的 `config.json`，由 model registry 选择 MiniGPT 后端，在 CUDA 上构造模型并加载 `model.safetensors`，用 warmup 测量峰值显存，再按 `gpu_memory_utilization` 预分配全局 KV pool，最后创建 tokenizer、`Scheduler` 和 `BlockManager`。本例词表只有 11 项，当前 tensor-parallel 词表切分要求它能被 TP 数整除，所以实跑使用 `tensor_parallel_size=1`；`enforce_eager=True` 跳过 CUDA Graph capture，但 prefill/decode 仍全部在 GPU 上执行。
+
+`LLM.generate()` 收到字符串和 `SamplingParams` 后，并不会直接调用 Transformer。它先执行下面的控制流：
+
+```text
+LLM.generate
+  → add_request
+  → tokenizer.encode
+  → Sequence(status=WAITING)
+  → Scheduler.schedule
+  → BlockManager.allocate
+  → ModelRunner.prepare_prefill / prepare_decode
+  → GPU 上的 MiniGPT forward
+  → Sampler 选一个 token
+  → Scheduler.postprocess
+  → 未结束：回到 schedule；结束：deallocate
+```
+
+`Sequence` 是 CPU 上的请求记录，保存 prompt/completion token、状态、温度、最大生成数以及逻辑页到物理页的映射。它**不是** KV Tensor；真正的 K/V 在 GPU 上由所有请求共享的预分配缓存池里。该池可概念化为：
+
+$$[2,L,P,S,H_{kv},D]$$
+
+其中 `2` 表示 K 与 V，`L` 是层数，`P` 是物理 block 数，`S` 是每个 block 的 token 槽位数，$H_{kv}$ 是 KV head 数，$D$ 是 head dimension。nano-vLLM 当前将 `S` 设为 256；本例总长度只有 8，仍会占用一个 256 槽物理页。浪费一点页尾空间，换来固定大小分配、回收、共享和较少显存碎片。
+
+首次调度发生的是 **prefill**：
+
+1. `Scheduler` 从 `waiting` 取出请求，检查本轮 token 预算和空闲 KV blocks；`BlockManager` 分配一个物理页，`Sequence` 从 `WAITING` 变为 `RUNNING`。
+2. `prepare_prefill` 把同一批请求的 token 去掉补齐空位并压平成一条紧凑 token 流。单请求时相当于 `[小, 猫, 吃]`；多请求时则是多条序列首尾相接的 `[N]`，而不是训练讲解中的 `[B,T]`。
+3. `cu_seqlens_q` 保存每条 packed 序列的累计边界。它告诉 FlashAttention “第几段属于哪条请求”，所以压平后不会让一条请求错误地注意到另一条请求。
+4. `positions` 给出每个 token 的位置，供 RoPE 使用；`slot_mapping` 给出每个本轮 token 应写到哪个物理 KV 槽位。关系是 `物理槽位 = physical_block_id × block_size + 页内偏移`。
+5. `block_table` 则从另一个方向回答“某个请求的第 i 个逻辑页实际在哪个物理页”。`slot_mapping` 用于**本轮新 K/V 的写入地址**，`block_table` 用于**读取该请求的整段历史 K/V**，二者不是重复字段。
+
+> [!info] 为什么本例的 prefill 没有获得 prefix-cache 加速？
+> nano-vLLM 只对填满的完整 block 建立可复用哈希。本例的 3-token prompt 远小于 256，连一个完整 block 都没有，因此即便系统具备 prefix cache，也没有可命中的完整页。这里仍会正常使用 KV cache 加速后续 decode，只是不能从另一个相同 prompt 请求复用已有前缀页。
+
+进入 GPU 后，prefill 的模型内部仍对应第 4 节的 Transformer 公式，只是批次布局从 `[B,T,C]` 变为 packed 的 `[N,C]`：
+
+| 模型内步骤 | nano-vLLM 中做什么 | 为什么交给下一步 |
+| --- | --- | --- |
+| Embedding | token ids 查表得到 `[N,C]` hidden states | Linear、Norm 只能处理连续向量，不能直接处理文字或 id |
+| LN1 → fused QKV | `c_attn` 一次产生 `[Q\|K\|V]`，再切为三份 `[N,H,D]` | Q 用来提问，K 用来匹配，V 是匹配后读取的内容 |
+| RoPE | 按各自 `positions` 旋转 Q 和 K，V 不旋转 | 让后续 QK 内积包含相对位置 |
+| 写 KV cache | K/V 按 `slot_mapping` 散写进每层的 paged cache | decode 时可直接读取 prompt 历史，不再重算它们 |
+| FlashAttention prefill | 依据 `cu_seqlens` 做 causal scaled dot-product attention | 每个 prompt 位置只能读取自己及之前位置的 V |
+| 输出投影、残差、MLP | 与教学模型相同：`c_proj → residual → LN2 → MLP → residual` | 形成这一层处理后的 hidden states |
+| Final Norm → LM head | prefill 只选每条请求的最后一个 hidden state 投影到词表 | 当前只需要“整个 prompt 之后的下一个 token”，无需返回前两个位置的 logits |
+
+本机实跑时 prefill 进入 `flash_attn_varlen_func`，decode 进入 `flash_attn_with_kvcache`。FlashAttention 仍计算同一个 scaled dot-product attention，但用分块矩阵乘法与 online softmax 避免长期物化完整的 `[T,T]` score/weight 矩阵；这是内存访问方式的优化，不会改变 Q/K/V 的含义或公式。
+
+prefill 中第 $i$ 个位置的核心公式仍是：
+
+$$
+q_i'=R_iq_i,\qquad k_j'=R_jk_j,\qquad
+o_i=\sum_{j\le i}\operatorname{softmax}_j\!\left(\frac{q_i'{k_j'}^\top}{\sqrt D}\right)v_j.
+$$
+
+`ParallelLMHead` 只取 prompt 最后位置的 hidden state，得到一行词表 logits。nano-vLLM 的 `Sampler` 再用温度缩放、softmax 和 categorical sampling 选出 `鱼`。当前实现明确禁止严格的 `temperature=0` greedy，因此实测用极小正温度近似 greedy；这会让最高 logit 几乎占满概率，但原理上仍是随机采样，不应误称为严格 `argmax`。
+
+采样结果从 GPU 转回 CPU 后，`Scheduler.postprocess` 才能更新 Python 中的请求状态；这是模型数据流重新进入引擎控制流的边界。
+
+随后 `Scheduler.postprocess` 把 `鱼` 追加到 `Sequence.token_ids`。这个“刚刚选出的输出 token”立即成为下一次 forward 的输入，这就是自回归生成的闭环。
+
+下一轮进入 **decode**，它与 prefill 最大的不同是：模型只接收 `[鱼]`，不再接收 `[小,猫,吃,鱼]` 全序列。
+
+1. `Scheduler` 为每条 running 请求各安排 1 个 token；若刚好跨过页边界，`BlockManager.may_append` 再分配新页。本例始终在第一页内。
+2. `prepare_decode` 读取 `Sequence.last_token=鱼`，给它位置 3；同时产生该位置的 `slot_mapping`、当前完整上下文长度和 `block_table`。
+3. 模型只为 `鱼` 计算新的 $q_t,k_t,v_t$，并对 $q_t,k_t$ 应用位置 3 的 RoPE。$k_t,v_t$ 原地写入新的缓存槽，prompt 的 K/V 不动。
+4. decode FlashAttention 根据 `block_table` 找到 `小、猫、吃、鱼` 的全部 K/V，但 query 只有当前 `鱼` 的 $q_t$，因此输出也只有一个 token 的 hidden state。
+5. LM head 和 sampler 得到 `。`；它又成为下一轮唯一的新输入。后续 `。→\n→小→猫` 完全重复这个闭环。
+
+这可以写成统一的增量公式：
+
+$$
+K_{\le t}=\operatorname{Concat}(K_{<t},k_t),\qquad
+V_{\le t}=\operatorname{Concat}(V_{<t},v_t),
+$$
+
+$$
+o_t=\operatorname{softmax}\!\left(\frac{q_t' {K_{\le t}'}^\top}{\sqrt D}\right)V_{\le t},\qquad
+z_{t+1}=\operatorname{Select}(\operatorname{LMHead}(o_t)).
+$$
+
+公式写 `Concat` 是逻辑含义；nano-vLLM 的物理实现不会每轮复制整段历史，而是把新 K/V 原地写到分页缓存的空槽中。也只有 K/V 被缓存：未来 token 的新 Q 需要和所有历史 K 比较，历史 V 需要被加权读取；历史 Q 完成本位置的查询后，未来计算不会再使用，所以没有缓存价值。
+
+RoPE 与 KV cache 并不冲突。历史 key 在产生时已经按它自己的绝对位置旋转，当前 query 按当前位置旋转，因此：
+
+$$
+(R_tq_t)^\top(R_jk_j)=q_t^\top R_t^\top R_jk_j=q_t^\top R_{j-t}k_j.
+$$
+
+内积最终依赖相对位移 $j-t$。因此缓存的是“已经带上正确位置的 K”；decode 不应把历史 K 再旋转一次。
+
+达到第 5 个 completion token 后，`postprocess` 将状态设为 `FINISHED`，`BlockManager.deallocate` 降低页的引用计数并把空闲页归还池中。最后的 `猫` 已加入返回序列，但还没有作为模型输入产生 K/V；若请求第 6 个 token，下一轮才会为 `猫` 生成 Q/K/V。最终 `LLM.generate` 只 decode completion 部分并返回。
+
+> [!info] CPU 与 GPU 的边界
+> tokenizer、`Sequence`、请求队列、调度决策和 block 元数据主要在 CPU；embedding、Q/K/V、RoPE、paged KV Tensor、FlashAttention、MLP、LM head 和采样在 GPU。`enforce_eager=True` 只表示 decode 不走 CUDA Graph，并不表示模型可以在 CPU 运行；这个 nano-vLLM 后端仍是 CUDA/NCCL 推理引擎。
+
+### 9.2 mini-sglang：同一数学过程，最朴素的服务与缓存
+
+> [!question] mini-sglang 是缩小版 SGLang Runtime 吗？
+> 不是。本仓库的 `mini-sglang` 是一个教学用的单文件 HTTP 包装器：`ThreadingHTTPServer + MiniGPT`。它模仿了 `/v1/completions` 和 `/v1/chat/completions` 接口，但没有 SGLang 的调度器、continuous batching、RadixAttention、paged KV cache 或流式执行状态机。理解这一点很重要，否则会把“HTTP 接口长得像”误认为“推理引擎内部也相同”。
+
+服务启动时，`load_minillm` 从 `.pt` 读取 config、tokenizer 状态和模型权重，构造 `MiniGPT` 并切换到 `eval()`。本次实际使用 CPU。一个 completion 请求的真实控制流是：
+
+```text
+POST /v1/completions
+  → BaseHTTPRequestHandler.do_POST
+  → 读取并解析 JSON
+  → _send_completion
+  → _generate
+  → tokenizer.encode(prompt)
+  → MiniGPT.generate_with_kv_cache
+  → tokenizer.decode(完整 ids)
+  → 去掉 prompt 文本
+  → 一次性返回 JSON
+```
+
+请求中 `greedy=true, kv_cache=true, max_tokens=5` 时，`_generate` 先把 3 个 prompt ids 组成 `[B,T]`，再调用 `generate_with_kv_cache`。它的首次 `forward_with_cache(prompt)` 就是语义上的 prefill：
+
+1. token embedding 得到 `[B,T,C]`，这里没有为了跨请求 batch 而压成 `[N,C]`。
+2. 唯一的 Transformer block 分别调用 `q_proj/k_proj/v_proj`，产生三份 Q/K/V，再拆成 `[B,H,T,D]` 并给 Q/K 应用 RoPE。
+3. causal attention 同时计算 prompt 的所有位置；该层返回 hidden states，并把 `(K,V)` 元组放入 Python list。若有多层，list 中每层各有一对 K/V。
+4. Final Norm 与 LM head 得到所有 prompt 位置的 logits；生成函数只读取 `logits[:, -1, :]`，严格 `argmax` 选出 `鱼`。
+
+decode 时，生成函数把 `鱼` 作为 shape `[B,1]` 的 `idx_next` 传给：
+
+```text
+forward_with_cache(idx_next, past_key_values)
+```
+
+模型依据 `past_len` 自动把位置设为 3，只为 `鱼` 计算新 Q/K/V。每层随后执行逻辑上的：
+
+```text
+K = torch.cat((past_K, new_K), dim=token_axis)
+V = torch.cat((past_V, new_V), dim=token_axis)
+```
+
+当前 `鱼` 的 Q 与拼接后的全部 K 做匹配，权重再读取全部 V，得到一个位置的输出与下一 token logits。`。` 被选中后再次作为 `[B,1]` 输入，如此重复。最后一次选出的 `猫` 同样不会再 forward，因为没有第 6 个 token 请求。
+
+这里的 `torch.cat` 很直观，适合教学，但每增长一个 token 都要为更长 Tensor 重新分配空间并复制旧 K/V。nano-vLLM 则预先分配固定页，仅写入一个新槽位，并能让多个请求的逻辑序列映射到共享物理池；这正是“数学相同，缓存工程不同”。
+
+如果设置 `kv_cache=false`，mini-sglang 会改用普通 `generate`：第 1 轮输入 `小猫吃`，第 2 轮输入 `小猫吃鱼`，第 3 轮输入 `小猫吃鱼。`……每一轮都重新计算所有历史 token 的 Q/K/V。输出可以相同，但重复计算随上下文增长越来越多。KV cache 的目的不是改变预测，而是避免这部分重复工作。
+
+mini-sglang 还没有请求队列、显存页分配、prefix cache、请求抢占、batch 合并、取消或真正 streaming。`ThreadingHTTPServer` 可以为连接创建 handler 线程，但这些线程不会被一个模型调度器合并为 continuous batch；请求里的 `stream=true` 当前也没有执行分支，仍会在生成完成后返回一个完整 JSON。
+
+### 9.3 把两条链放在一起理解
+
+| 观察点 | nano-vLLM | mini-sglang |
+| --- | --- | --- |
+| 服务入口 | Python `LLM.generate` | HTTP `/v1/completions` |
+| 请求状态 | `WAITING → RUNNING → FINISHED` | 一次 handler 函数调用，没有显式状态机 |
+| 模型权重 | 导出后 fused QKV，数学上等价 | 直接加载 separate Q/K/V 教学 checkpoint |
+| prompt 布局 | 多请求可 packed 为 `[N,C]`，用 `cu_seqlens` 分界 | 单次调用保持 `[B,T,C]` |
+| prefill | FlashAttention varlen，并把 prompt K/V 写入全局分页池 | PyTorch attention，把各层 K/V 放入 Python list |
+| decode 输入 | 每个 running 请求只交一个 `last_token` | 开启 cache 时同样只交 `idx_next` |
+| KV 增长方式 | `slot_mapping` 指定空槽，原地写入 paged cache | `torch.cat(old,new)` 生成更长 Tensor |
+| 历史定位 | `block_table + context_lens` | list 中 Tensor 的 token 轴顺序就是历史 |
+| 跨请求能力 | 调度、batch、分页分配、完整块 prefix reuse、抢占 | 没有模型级调度与缓存共享 |
+| 采样 | 极小温度近似 greedy，仍属于 categorical sampling | `greedy=true` 时严格 argmax |
+| 停止与回收 | Scheduler 判断上限/EOS并归还物理页 | Python for-loop 到上限，局部 Tensor 随请求结束释放 |
+
+> [!info] 已用真实运行而不是只读代码推测
+> 导出的极小模型已在本机 RTX 4070 SUPER 上通过 nano-vLLM 实际生成 `鱼。\n小猫`；同一 `.pt` checkpoint 也已由 mini-sglang 在 CPU 上以 `kv_cache=true` 和 `kv_cache=false` 分别运行，两条路径得到相同文本。这验证了 fused/separate QKV 与两种 KV 存储方式没有改变模型语义。mini-sglang 的 `stream=true` 也实测仍返回一次完整响应。
+
+最后可以用一句话记忆：**Transformer 负责算“下一个 token 是谁”，KV cache 负责不重复算历史，调度器负责决定“此刻替哪些请求算”，paged cache 负责决定“它们的历史放在哪里”。** mini-sglang 只展示第一、二件事的朴素版本；nano-vLLM 把第三、四件事也显式实现出来。
+
+## 10. 自动校验
 
 | 阶段 | 检查 | 结果 |
 | --- | --- | --- |

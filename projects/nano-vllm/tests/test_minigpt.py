@@ -25,6 +25,7 @@ class MiniGPTConfigTests(unittest.TestCase):
             n_embd=128,
         )
 
+        # TODO：为什么需要这个属性？这个属性代表什么意思？num_key_value_heads是什么？rope_theta是可以随便设置的吗？mlp为什么是dense,除了dense还有哪些值？intermediate_size是FFN升维后的大小是吗？
         self.assertEqual(config.max_position_embeddings, 64)
         self.assertEqual(config.num_hidden_layers, 3)
         self.assertEqual(config.num_attention_heads, 4)
@@ -39,6 +40,7 @@ class MiniGPTConfigTests(unittest.TestCase):
         self.assertEqual(config.intermediate_size, 512)
 
     def test_conflicting_aliases_are_rejected(self):
+        # TODO:这个是在测试什么？
         with self.assertRaisesRegex(ValueError, "Conflicting n_layer"):
             MiniGPTConfig(n_layer=2, num_hidden_layers=3)
 
@@ -244,4 +246,5 @@ class RotaryEmbeddingTests(unittest.TestCase):
 
 
 if __name__ == "__main__":
+    # TODO：这个函数的主函数是什么？如何测试我们上面的函数？
     unittest.main()
