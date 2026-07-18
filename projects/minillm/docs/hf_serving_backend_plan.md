@@ -137,6 +137,7 @@ MiniLLM 当前只是普通 `torch.nn.Module`，所以能 `torch.save/torch.load`
 - `hidden_size` / `n_embd`：隐藏维度。
 - `num_hidden_layers` / `n_layer`：层数。
 - `num_attention_heads` / `n_head`：attention 头数。
+- `num_key_value_heads`：KV head 数；必须是正数并整除 attention heads。两者相等是 MHA，介于 1 和 attention heads 之间是 GQA，等于 1 是 MQA。
 - `max_position_embeddings` / `block_size`：最大上下文长度。
 - RoPE、RMSNorm、MoE、dtype、tie_word_embeddings 等结构参数。
 

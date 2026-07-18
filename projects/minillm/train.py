@@ -36,6 +36,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--block-size", type=int, default=64)
     parser.add_argument("--n-layer", type=int, default=2)
     parser.add_argument("--n-head", type=int, default=4)
+    parser.add_argument(
+        "--num-key-value-heads",
+        type=int,
+        default=None,
+        help="KV heads for GQA/MQA; defaults to --n-head (legacy MHA).",
+    )
     parser.add_argument("--n-embd", type=int, default=128)
     parser.add_argument("--dropout", type=float, default=0.1)
     parser.add_argument("--position-encoding", default="learned", choices=SUPPORTED_POSITION_ENCODINGS)
@@ -138,6 +144,7 @@ def main() -> None:
         block_size=args.block_size,
         n_layer=args.n_layer,
         n_head=args.n_head,
+        num_key_value_heads=args.num_key_value_heads,
         n_embd=args.n_embd,
         dropout=args.dropout,
         position_encoding=args.position_encoding,

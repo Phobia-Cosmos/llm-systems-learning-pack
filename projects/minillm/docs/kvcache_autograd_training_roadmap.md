@@ -107,9 +107,11 @@ Attention(Q,K,V) = softmax(QK^T / sqrt(d_head) + mask) V
 
 ```text
 past_key_values[layer] = (K_cache, V_cache)
-K_cache shape: [batch, n_head, past_len, head_dim]
-V_cache shape: [batch, n_head, past_len, head_dim]
+K_cache shape: [batch, num_key_value_heads, past_len, head_dim]
+V_cache shape: [batch, num_key_value_heads, past_len, head_dim]
 ```
+
+MHA 中 `num_key_value_heads=n_head`；GQA/MQA 只保存紧凑 KV heads，做 attention matmul 时才映射到 query heads，因此 cache 元素数按 `num_key_value_heads/n_head` 缩小。
 
 下一个 token 到来时，只算新 token 的：
 
@@ -375,7 +377,7 @@ optimizer.step()
 - 位置编码：MiniLLM 已支持 learned absolute position 与 RoPE；现代 LLM 还常配合 RoPE scaling 和长上下文训练。
 - Norm：MiniLLM 用 LayerNorm；Llama/Qwen/Mistral 常用 RMSNorm。
 - MLP：MiniLLM 用 GELU MLP；现代 LLM 常用 SwiGLU/GEGLU。
-- Attention：MiniLLM 是普通 MHA；现代 LLM 常见 GQA/MQA、FlashAttention、长上下文 attention。
+- Attention：MiniLLM 已可选 MHA/GQA/MQA；现代 LLM 还常用 FlashAttention、滑动窗口和长上下文 attention。
 - 训练系统：MiniLLM 原生单进程训练；大模型需要分布式、混合精度、checkpoint resume、数据流式加载。
 - 对齐阶段：MiniLLM 没有 SFT、DPO/RLHF、安全对齐、偏好数据。
 - 格式生态：MiniLLM 只是 PyTorch Module；生产模型通常是完整 Hugging Face `PreTrainedModel` + tokenizer + safetensors。
@@ -436,13 +438,13 @@ MiniLLM 当前阶段先补齐原生训练功能：
 6. HF-like 导出：`export_hf_like.py`。
 7. nano-vLLM 后端：`projects/nano-vllm/nanovllm/models/minigpt.py`。
 8. KV cache：`generate.py --kv-cache`。
-9. 下一步：RMSNorm/SwiGLU/GQA、LoRA/SFT、真实 HF `PreTrainedModel`、SGLang backend、量化。
+9. 下一步：训练 resume/LR schedule/AMP/gradient accumulation，然后是 LoRA/SFT、真实 HF `PreTrainedModel`、SGLang backend、量化。
 
 ## 17. 初学者视角的后续任务规划
 
 ### 阶段 A：把 MiniLLM 训练闭环补完整
 
-- 给 `generate_with_kv_cache()` 加测试：greedy 模式下和普通 `generate()` 输出一致。
+- 给 `generate_with_kv_cache()` 加测试：已完成，greedy 模式下和普通 `generate()` 输出一致，并覆盖 MHA/GQA/MQA。
 - 加 `--resume`，能从 checkpoint 继续训练。
 - 加 `--save-interval`，训练中定期保存。
 - 加 `perplexity = exp(loss)` 打印。
@@ -453,9 +455,9 @@ MiniLLM 当前阶段先补齐原生训练功能：
 
 - 字符 tokenizer 换成 BPE 或 SentencePiece。
 - learned position embedding 与 RoPE 对照：已完成。
-- LayerNorm 换成 RMSNorm。
-- GELU MLP 换成 SwiGLU。
-- attention 加 GQA/MQA 选项。
+- LayerNorm 换成 RMSNorm：已完成可选实现。
+- GELU MLP 换成 SwiGLU：已完成可选实现。
+- attention 加 GQA/MQA 选项：已完成，并保留默认 MHA checkpoint 兼容。
 - KV cache 支持超过 `block_size` 的长上下文策略。
 
 ### 阶段 C：训练框架与微调
@@ -492,8 +494,8 @@ MiniLLM 当前阶段先补齐原生训练功能：
 当前最合适的下一批任务是：
 
 1. 固定当前 RoPE+BPE checkpoint 的 val loss、perplexity、生成和性能基线。
-2. 依次实现可选 RMSNorm、SwiGLU、GQA，每步都做 checkpoint 与引擎回归。
-3. 给训练脚本加 checkpoint resume、warmup/cosine learning rate、AMP 和 gradient accumulation。
+2. 可选 RMSNorm、SwiGLU、GQA/MQA 已实现；下一步用正式 MHA/GQA checkpoint 补齐 GPU 引擎回归数据。
+3. 下一代码迭代给训练脚本加 checkpoint resume、warmup/cosine learning rate、AMP 和 gradient accumulation。
 4. 完成 SFT response loss mask 和 LoRA，再包成真正 HF `PreTrainedModel`。
 5. 实现 SGLang native MiniGPT backend，然后进入量化和 Triton/CUDA 算子实验。
 

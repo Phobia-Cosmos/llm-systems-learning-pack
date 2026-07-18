@@ -24,12 +24,24 @@ from minillm.benchmark import (
     run_component_benchmark,
     write_benchmark_outputs,
 )
+from scripts.benchmark_components import format_run_summary
 
 
 class ComponentBenchmarkTests(unittest.TestCase):
+    def test_cli_summary_distinguishes_variants_from_per_seed_rows(self):
+        payload = {
+            "aggregates": [{} for _ in range(15)],
+            "results": [{} for _ in range(45)],
+        }
+
+        self.assertEqual(
+            format_run_summary(payload),
+            "wrote 15 variants / 45 result rows",
+        )
+
     def test_variant_matrix_matches_learning_plan(self):
         specs = component_variant_specs()
-        self.assertEqual(len(specs), 12)
+        self.assertEqual(len(specs), 15)
         self.assertEqual(
             [spec.variant_id for spec in specs],
             [
@@ -45,6 +57,9 @@ class ComponentBenchmarkTests(unittest.TestCase):
                 "mlp/swiglu",
                 "mlp/geglu",
                 "mlp/reglu",
+                "attention/mha",
+                "attention/gqa",
+                "attention/mqa",
             ],
         )
         effective_activations = {
@@ -56,6 +71,23 @@ class ComponentBenchmarkTests(unittest.TestCase):
             effective_activations,
             {"dense": "gelu", "swiglu": "silu", "geglu": "gelu", "reglu": "relu"},
         )
+        attention_kv_heads = {
+            spec.name: spec.overrides["num_key_value_heads"]
+            for spec in specs
+            if spec.suite == "attention"
+        }
+        self.assertEqual(attention_kv_heads, {"mha": 4, "gqa": 2, "mqa": 1})
+
+    def test_attention_matrix_adapts_to_query_heads_and_rejects_prime_count(self):
+        specs = component_variant_specs(("attention",), n_head=12)
+        self.assertEqual(
+            [spec.overrides["num_key_value_heads"] for spec in specs],
+            [12, 6, 1],
+        )
+        with self.assertRaisesRegex(ValueError, "divisor strictly between 1 and n_head"):
+            component_variant_specs(("attention",), n_head=5)
+        # Other suites do not need a distinct GQA configuration.
+        self.assertEqual(len(component_variant_specs(("position",), n_head=5)), 5)
 
     def test_fixed_batches_are_seed_reproducible(self):
         data = torch.arange(64)
@@ -148,7 +180,7 @@ class ComponentBenchmarkTests(unittest.TestCase):
                 },
             )
             payload = run_component_benchmark(settings, specs=[spec])
-            self.assertEqual(payload["schema_version"], 1)
+            self.assertEqual(payload["schema_version"], 2)
             self.assertEqual(len(payload["aggregates"]), 1)
             self.assertEqual(len(payload["results"]), 1)
             result = payload["results"][0]
@@ -156,6 +188,12 @@ class ComponentBenchmarkTests(unittest.TestCase):
             self.assertEqual(len(result["completion_token_ids"]), 2)
             self.assertEqual(result["trained_tokens"], 16)
             self.assertEqual(result["model_seed"], 11)
+            self.assertEqual(result["num_query_heads"], 2)
+            self.assertEqual(result["num_key_value_heads"], 2)
+            self.assertEqual(result["kv_cache_elements_per_token_per_layer"], 16)
+            self.assertEqual(result["kv_cache_bytes_per_token_per_layer"], 64)
+            self.assertEqual(result["kv_cache_compression_ratio_vs_mha"], 1.0)
+            self.assertEqual(result["resolved_config"]["num_key_value_heads"], 2)
             self.assertEqual(len(payload["data_sha256"]), 64)
             self.assertEqual(len(payload["schedule_sha256"]), 64)
 
@@ -182,11 +220,55 @@ class ComponentBenchmarkTests(unittest.TestCase):
                 csv_path=csv_path,
                 markdown_path=markdown_path,
             )
-            self.assertEqual(json.loads(json_path.read_text())["schema_version"], 1)
+            self.assertEqual(json.loads(json_path.read_text())["schema_version"], 2)
             with csv_path.open(encoding="utf-8", newline="") as handle:
                 rows = list(csv.DictReader(handle))
             self.assertEqual(rows[0]["variant_id"], "position/rope")
+            self.assertEqual(json.loads(rows[0]["resolved_config"])["num_key_value_heads"], 2)
             self.assertIn("Fairness contract", markdown_path.read_text(encoding="utf-8"))
+
+    def test_attention_smoke_reports_parameter_and_kv_cache_savings(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            data_path = Path(temporary_directory) / "corpus.txt"
+            data_path.write_text(("猫吃鱼。狗吃肉。\n" * 30), encoding="utf-8")
+            settings = BenchmarkSettings(
+                data_path=str(data_path),
+                max_steps=1,
+                batch_size=2,
+                block_size=8,
+                eval_batches=1,
+                n_layer=1,
+                n_head=4,
+                n_embd=8,
+                prompt="猫吃",
+                max_new_tokens=1,
+                generation_repeats=1,
+                torch_threads=1,
+                model_seeds=(23,),
+            )
+
+            payload = run_component_benchmark(settings, suites=("attention",))
+            rows = payload["results"]
+            self.assertEqual(
+                [row["variant_id"] for row in rows],
+                ["attention/mha", "attention/gqa", "attention/mqa"],
+            )
+            self.assertEqual([row["num_key_value_heads"] for row in rows], [4, 2, 1])
+            self.assertEqual(
+                [row["kv_cache_elements_per_token_per_layer"] for row in rows],
+                [16, 8, 4],
+            )
+            self.assertEqual(
+                [row["kv_cache_bytes_per_token_per_layer"] for row in rows],
+                [64, 32, 16],
+            )
+            self.assertEqual(
+                [row["kv_cache_compression_ratio_vs_mha"] for row in rows],
+                [1.0, 2.0, 4.0],
+            )
+            self.assertGreater(rows[0]["parameter_count"], rows[1]["parameter_count"])
+            self.assertGreater(rows[1]["parameter_count"], rows[2]["parameter_count"])
+            self.assertTrue(all(row["cache_matches_full"] for row in rows))
 
 
 if __name__ == "__main__":

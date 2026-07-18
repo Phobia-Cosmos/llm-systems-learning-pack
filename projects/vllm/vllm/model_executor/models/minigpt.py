@@ -7,8 +7,8 @@ normal vLLM KV-cache path. It is a learning implementation, not yet a tuned
 production backend.
 """
 
-from collections.abc import Iterable
 import math
+from collections.abc import Iterable
 
 import torch
 from torch import nn
@@ -21,6 +21,7 @@ from vllm.distributed import (
 )
 from vllm.model_executor.layers.activation import get_act_fn
 from vllm.model_executor.layers.attention import Attention
+from vllm.model_executor.layers.layernorm import RMSNorm
 from vllm.model_executor.layers.linear import (
     ColumnParallelLinear,
     MergedColumnParallelLinear,
@@ -28,7 +29,6 @@ from vllm.model_executor.layers.linear import (
     RowParallelLinear,
 )
 from vllm.model_executor.layers.logits_processor import LogitsProcessor
-from vllm.model_executor.layers.layernorm import RMSNorm
 from vllm.model_executor.layers.quantization import QuantizationConfig
 from vllm.model_executor.layers.rotary_embedding import get_rope
 from vllm.model_executor.layers.vocab_parallel_embedding import (
@@ -56,6 +56,11 @@ def _num_layers(config) -> int:
 
 def _num_heads(config) -> int:
     return _first_attr(config, "num_attention_heads", "n_head")
+
+
+def _num_kv_heads(config) -> int:
+    num_kv_heads = getattr(config, "num_key_value_heads", None)
+    return _num_heads(config) if num_kv_heads is None else num_kv_heads
 
 
 def _intermediate_size(config) -> int:
@@ -101,14 +106,18 @@ class SinusoidalPositionEmbedding(nn.Module):
         self.register_buffer("table", table, persistent=False)
 
     def forward(self, positions: torch.Tensor) -> torch.Tensor:
-        return self.table.index_select(0, positions.reshape(-1)).view(*positions.shape, -1)
+        return self.table.index_select(0, positions.reshape(-1)).view(
+            *positions.shape, -1
+        )
 
 
 class ScaleNorm(nn.Module):
     def __init__(self, hidden_size: int, eps: float = 1e-5):
         super().__init__()
         self.eps = eps
-        self.scale = nn.Parameter(torch.tensor(math.sqrt(hidden_size), dtype=torch.float32))
+        self.scale = nn.Parameter(
+            torch.tensor(math.sqrt(hidden_size), dtype=torch.float32)
+        )
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         norm = torch.linalg.vector_norm(
@@ -180,6 +189,13 @@ class MiniGPTAttention(nn.Module):
         super().__init__()
         hidden_size = _hidden_size(config)
         total_num_heads = _num_heads(config)
+        total_num_kv_heads = _num_kv_heads(config)
+        if total_num_kv_heads <= 0:
+            raise ValueError("num_key_value_heads must be positive")
+        if total_num_heads % total_num_kv_heads != 0:
+            raise ValueError(
+                "num_attention_heads must be divisible by num_key_value_heads"
+            )
         tp_size = get_tensor_model_parallel_world_size()
         self.num_heads = total_num_heads // tp_size
         self.head_dim = hidden_size // total_num_heads
@@ -188,10 +204,14 @@ class MiniGPTAttention(nn.Module):
             hidden_size,
             self.head_dim,
             total_num_heads,
+            total_num_kv_heads,
             bias=getattr(config, "bias", True),
             quant_config=quant_config,
             prefix=f"{prefix}.c_attn",
         )
+        self.num_kv_heads = self.c_attn.num_kv_heads
+        self.q_size = self.num_heads * self.head_dim
+        self.kv_size = self.num_kv_heads * self.head_dim
         self.c_proj = RowParallelLinear(
             hidden_size,
             hidden_size,
@@ -202,7 +222,9 @@ class MiniGPTAttention(nn.Module):
         self.rotary_emb = (
             get_rope(
                 self.head_dim,
-                max_position=_first_attr(config, "max_position_embeddings", "block_size"),
+                max_position=_first_attr(
+                    config, "max_position_embeddings", "block_size"
+                ),
                 is_neox_style=True,
                 rope_parameters={"rope_theta": getattr(config, "rope_theta", 10000.0)},
             )
@@ -220,15 +242,18 @@ class MiniGPTAttention(nn.Module):
             self.num_heads,
             self.head_dim,
             scale=self.scale,
+            num_kv_heads=self.num_kv_heads,
             alibi_slopes=alibi_slopes,
             cache_config=cache_config,
             quant_config=quant_config,
             prefix=f"{prefix}.attn",
         )
 
-    def forward(self, positions: torch.Tensor, hidden_states: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, positions: torch.Tensor, hidden_states: torch.Tensor
+    ) -> torch.Tensor:
         qkv, _ = self.c_attn(hidden_states)
-        q, k, v = qkv.chunk(chunks=3, dim=-1)
+        q, k, v = qkv.split([self.q_size, self.kv_size, self.kv_size], dim=-1)
         if self.rotary_emb is not None:
             q, k = self.rotary_emb(positions, q, k)
         hidden_states = self.attn(q, k, v)
@@ -309,11 +334,15 @@ class MiniGPTBlock(nn.Module):
     ):
         super().__init__()
         self.ln_1 = _build_norm(config)
-        self.attn = MiniGPTAttention(config, cache_config, quant_config, prefix=f"{prefix}.attn")
+        self.attn = MiniGPTAttention(
+            config, cache_config, quant_config, prefix=f"{prefix}.attn"
+        )
         self.ln_2 = _build_norm(config)
         self.mlp = MiniGPTMLP(config, quant_config, prefix=f"{prefix}.mlp")
 
-    def forward(self, positions: torch.Tensor, hidden_states: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, positions: torch.Tensor, hidden_states: torch.Tensor
+    ) -> torch.Tensor:
         hidden_states = hidden_states + self.attn(positions, self.ln_1(hidden_states))
         hidden_states = hidden_states + self.mlp(self.ln_2(hidden_states))
         return hidden_states

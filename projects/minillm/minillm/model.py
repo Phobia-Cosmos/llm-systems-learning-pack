@@ -26,7 +26,13 @@ class CausalSelfAttention(nn.Module):
             raise ValueError("n_embd must be divisible by n_head")
 
         self.n_head = config.n_head
+        if config.num_key_value_heads is None:
+            raise RuntimeError("GPTConfig did not resolve num_key_value_heads")
+        self.num_key_value_heads = config.num_key_value_heads
+        self.num_key_value_groups = self.n_head // self.num_key_value_heads
         self.head_dim = config.n_embd // config.n_head
+        self.q_size = config.n_embd
+        self.kv_size = self.num_key_value_heads * self.head_dim
         self.position_encoding = build_attention_position_encoding(
             config.position_encoding,
             self.head_dim,
@@ -35,20 +41,24 @@ class CausalSelfAttention(nn.Module):
             config.rope_theta,
         )
         # 问题（已回答）:c_attn和c_proj是什么？这两个变量的作用是什么在Transformer内？为什么这两个变量内部要如何设置Linear，也要给我解释清楚。
-        # 回答：c_attn 是一次性生成 Q、K、V 的线性层，把每个 token 的向量从 n_embd 投影到 3*n_embd，
-        # 后面再 split 成 q/k/v。这样等价于三个 Linear，但更紧凑。c_proj 是 attention 输出后的输出投影 Wo，
+        # 回答：c_attn 是一次性生成 Q、K、V 的线性层。MHA 输出 3*n_embd；GQA/MQA 的 K/V head 更少，
+        # 输出宽度是 n_embd + 2*num_key_value_heads*head_dim。这样等价于三个 Linear，但更紧凑。c_proj 是 attention 输出后的输出投影 Wo，
         # 把多个 head 拼回来的 n_embd 维结果再混合一次，送回残差主干。Linear 的本质是 y = xW^T + b，
-        # 这里输入最后一维是 n_embd，所以 in_features=n_embd；QKV 总共三份，所以 out_features=3*n_embd。
+        # 这里输入最后一维是 n_embd，所以 in_features=n_embd；out_features 由实际 Q/K/V 宽度之和决定。
         # 问题（已回答）：为什么融合 QKV、投影到 3 倍，多个 head 和残差主干是什么？
-        # 回答：输入 token 向量最后一维是 n_embd；一个 Linear 输出 3*n_embd 再切三段，数学上等价于论文中独立的 Wq/Wk/Wv。
+        # 回答：输入 token 向量最后一维是 n_embd；融合 Linear 再按 Q/K/V 的实际宽度切分，数学上等价于论文中独立的 Wq/Wk/Wv。
         # 论文写数学结构，融合只是工程实现，可减少 kernel launch/读输入次数。各 head 输出拼成 n_embd 后由 c_proj 混合；残差主干是持续传递的 x。
         # 问题（已回答）：attention 结构怎样，c_proj 是否分别投影 Q/K/V？
         # 回答：x -> c_attn -> Q,K,V -> 分头 -> softmax(QK^T/sqrt(d))V -> 拼头 -> c_proj -> residual。
         # c_attn 分别产生 Q/K/V；c_proj 只作用于 attention 聚合并拼头后的结果，不再分别处理三者。
         self.fused_qkv = config.fused_qkv
         if self.fused_qkv:
-            # Production-style implementation: one kernel produces [Q | K | V].
-            self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
+            # One kernel produces [Q | K | V]. For GQA, K/V are narrower than Q.
+            self.c_attn = nn.Linear(
+                config.n_embd,
+                self.q_size + 2 * self.kv_size,
+                bias=config.bias,
+            )
             self.q_proj = None
             self.k_proj = None
             self.v_proj = None
@@ -56,9 +66,9 @@ class CausalSelfAttention(nn.Module):
             # Teaching implementation: the three equations are visible as
             # three independent Linear modules.
             self.c_attn = None
-            self.q_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
-            self.k_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
-            self.v_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+            self.q_proj = nn.Linear(config.n_embd, self.q_size, bias=config.bias)
+            self.k_proj = nn.Linear(config.n_embd, self.kv_size, bias=config.bias)
+            self.v_proj = nn.Linear(config.n_embd, self.kv_size, bias=config.bias)
         self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
         # 问题（已回答）:Dropout是一个函数吗？
         # 回答：nn.Dropout 是一个 Module，不只是普通函数。训练时它按概率随机把部分元素置 0 并缩放剩余元素，
@@ -85,10 +95,25 @@ class CausalSelfAttention(nn.Module):
         """Project hidden states into Q/K/V using fused or teaching layout."""
 
         if self.c_attn is not None:
-            return self.c_attn(x).split(x.size(-1), dim=-1)
+            return self.c_attn(x).split((self.q_size, self.kv_size, self.kv_size), dim=-1)
         if self.q_proj is None or self.k_proj is None or self.v_proj is None:
             raise RuntimeError("separate Q/K/V projections were not initialized")
         return self.q_proj(x), self.k_proj(x), self.v_proj(x)
+
+    def expand_kv_heads(self, tensor: torch.Tensor) -> torch.Tensor:
+        """Map compact KV heads to query heads for the attention matmuls.
+
+        The returned tensor is used only for the current computation. KV cache
+        entries remain compact with ``num_key_value_heads`` heads.
+        """
+
+        if tensor.size(1) != self.num_key_value_heads:
+            raise ValueError(
+                f"expected {self.num_key_value_heads} KV heads, got {tensor.size(1)}"
+            )
+        if self.num_key_value_groups == 1:
+            return tensor
+        return tensor.repeat_interleave(self.num_key_value_groups, dim=1)
 
     @property
     def rotary(self):
@@ -102,22 +127,23 @@ class CausalSelfAttention(nn.Module):
         # batch 是样本数，seq_len 是当前上下文 token 数，channels 通常等于 n_embd。
         batch, seq_len, channels = x.shape
         # 问题（已回答）:为什么可以这样得到qkv？c_attn是在做什么以及为什么要split？为什么要按照channels分？以及为什么dim是2？
-        # 回答：self.c_attn(x) 把最后一维从 channels 投影到 3*channels，里面依次放 Q、K、V。
-        # split(channels, dim=2) 表示沿最后一维切成三段，每段长度 channels；dim=2 是因为 x 的维度是 [B,T,C]，
-        # 第 2 维就是 embedding/channel 维。
+        # 回答：self.c_attn(x) 的最后一维依次放 Q、K、V。Q 宽度是 channels，K/V 各为
+        # num_key_value_heads*head_dim；MHA 时三段才都等于 channels。dim=-1 是 [B,T,C] 的 embedding/channel 维。
         q, k, v = self.project_qkv(x)
 
         # 问题（已回答）:这里是在做什么 为什么这样做 对应公式的哪一步？为什么要转置？为什么传入四个参数？
-        # 回答：这一步把 [B,T,C] 拆成多头形式 [B,T,H,D]，其中 H=n_head、D=head_dim，然后转成 [B,H,T,D]。
-        # 这样每个 head 可以独立计算 Attention(Q,K,V)=softmax(QK^T/sqrt(D))V。view 的四个参数就是目标 shape。
+        # 回答：Q 拆成 [B,T,H,D]，K/V 拆成 [B,T,Hkv,D]；GQA 在计算 attention 时让一组 Q heads 共享一个 KV head。
+        # MHA 中 Hkv=H，MQA 中 Hkv=1。view 的四个参数就是各自目标 shape。
         # transpose(1,2) 把 head 维提前，是为了后续矩阵乘法能在每个 batch、每个 head 上并行计算。
         # 问题（已回答）：transpose 后形状如何，为什么 Tensor 能调用它？
         # 回答：[B,T,H,D] 经 transpose(1,2) 变为 [B,H,T,D]，交换两个维度的视图而不逐元素搬运。
         # q/k/v 都是 torch.Tensor 实例，transpose 是 Tensor 自带方法。
         q = q.view(batch, seq_len, self.n_head, self.head_dim).transpose(1, 2)
-        k = k.view(batch, seq_len, self.n_head, self.head_dim).transpose(1, 2)
-        v = v.view(batch, seq_len, self.n_head, self.head_dim).transpose(1, 2)
+        k = k.view(batch, seq_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
+        v = v.view(batch, seq_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
         q, k = self.position_encoding.apply_qk(q, k, positions)
+        attention_k = self.expand_kv_heads(k)
+        attention_v = self.expand_kv_heads(v)
 
         # 问题（已回答）:为什么转置还可以是负数？@是什么意思？
         # 回答：负数维度是从后往前数，-1 是最后一维，-2 是倒数第二维；k.transpose(-2,-1) 把 [B,H,T,D] 变成 [B,H,D,T]。
@@ -125,7 +151,7 @@ class CausalSelfAttention(nn.Module):
         # 问题（已回答）：注意力分数为何只由 Q/K 得到，形状为何是 [B,H,T,T]？
         # 回答：QK^T 比较每个 query 位置与每个 key 位置，因此两个 T 维形成所有位置对；V 不参与“匹配打分”，
         # softmax 后的 [B,H,T,T] 权重再乘 V，才得到汇总内容 [B,H,T,D]。
-        scores = (q @ k.transpose(-2, -1)) / math.sqrt(self.head_dim)
+        scores = (q @ attention_k.transpose(-2, -1)) / math.sqrt(self.head_dim)
         position_bias = self.position_encoding.attention_bias(
             positions,
             positions,
@@ -149,7 +175,7 @@ class CausalSelfAttention(nn.Module):
         # 回答：attention weights dropout 随机丢掉一部分“看向其他 token 的连接”，是 Transformer 里常见正则化。
         # 后面 resid_dropout 作用在输出投影后，两者位置不同：一个正则化注意力分布，一个正则化残差分支输出。
         weights = self.attn_dropout(weights)
-        y = weights @ v
+        y = weights @ attention_v
 
         # 问题（已回答）:contiguous的作用是什么？为什么要变成view？
         # 回答：transpose 后张量的内存步长可能不是连续的，view 要求按连续内存解释 shape。
@@ -176,8 +202,8 @@ class CausalSelfAttention(nn.Module):
         batch, seq_len, channels = x.shape
         q, k, v = self.project_qkv(x)
         q = q.view(batch, seq_len, self.n_head, self.head_dim).transpose(1, 2)
-        k = k.view(batch, seq_len, self.n_head, self.head_dim).transpose(1, 2)
-        v = v.view(batch, seq_len, self.n_head, self.head_dim).transpose(1, 2)
+        k = k.view(batch, seq_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
+        v = v.view(batch, seq_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
         q, k = self.position_encoding.apply_qk(q, k, positions)
 
         past_len = 0
@@ -191,7 +217,9 @@ class CausalSelfAttention(nn.Module):
         if total_len > self.causal_mask.size(-1):
             raise ValueError("KV cache length exceeds block_size; use a longer block_size or fewer generated tokens")
 
-        scores = (q @ k.transpose(-2, -1)) / math.sqrt(self.head_dim)
+        attention_k = self.expand_kv_heads(k)
+        attention_v = self.expand_kv_heads(v)
+        scores = (q @ attention_k.transpose(-2, -1)) / math.sqrt(self.head_dim)
         key_positions = torch.arange(total_len, device=x.device)
         position_bias = self.position_encoding.attention_bias(
             positions,
@@ -205,7 +233,7 @@ class CausalSelfAttention(nn.Module):
         scores = scores.masked_fill(mask == 0, float("-inf"))
         weights = F.softmax(scores, dim=-1)
         weights = self.attn_dropout(weights)
-        y = weights @ v
+        y = weights @ attention_v
         y = y.transpose(1, 2).contiguous().view(batch, seq_len, channels)
         return self.resid_dropout(self.c_proj(y)), (k, v)
 
@@ -434,9 +462,20 @@ class MiniGPT(nn.Module):
         top_k: int | None = None,
         greedy: bool = False,
     ) -> torch.Tensor:
-        if idx.size(1) + max_new_tokens > self.config.block_size:
+        if max_new_tokens < 0:
+            raise ValueError("max_new_tokens must be non-negative")
+        if max_new_tokens == 0:
+            return idx
+        if idx.size(1) == 0:
+            raise ValueError("the KV-cache path requires a non-empty prompt")
+
+        # The final sampled token is returned without another model forward, so
+        # only max_new_tokens - 1 generated tokens ever enter the cache.
+        required_cache_len = idx.size(1) + max_new_tokens - 1
+        if required_cache_len > self.config.block_size:
             raise ValueError(
-                "The teaching KV-cache path requires prompt_len + max_new_tokens <= block_size."
+                "The teaching KV-cache path requires "
+                "prompt_len + max_new_tokens - 1 <= block_size."
             )
 
         logits, past_key_values = self.forward_with_cache(idx)

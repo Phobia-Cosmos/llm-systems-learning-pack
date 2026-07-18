@@ -82,6 +82,7 @@ def main() -> None:
         "num_hidden_layers": config.n_layer,
         "n_head": config.n_head,
         "num_attention_heads": config.n_head,
+        "num_key_value_heads": config.num_key_value_heads,
         "n_embd": config.n_embd,
         "hidden_size": config.n_embd,
         "dropout": config.dropout,
@@ -97,7 +98,7 @@ def main() -> None:
         "hidden_act": config.activation,
         "intermediate_size": config.intermediate_size,
         "tie_word_embeddings": True,
-        "torch_dtype": "float16",
+        "torch_dtype": str(next(model.parameters()).dtype).removeprefix("torch."),
     }
     (out_dir / "config.json").write_text(json.dumps(config_json, ensure_ascii=False, indent=2) + "\n")
 

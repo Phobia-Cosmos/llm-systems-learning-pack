@@ -8,8 +8,8 @@
 - `HFByteBPETokenizer`: 可训练的 Byte-level BPE 教学实现。
 - `HFTokenizerAdapter`: 复用标准 Hugging Face fast tokenizer。
 - `MiniGPT`: decoder-only Transformer。
-- `CausalSelfAttention`: 带 causal mask 的多头自注意力。
-- learned absolute position 与 RoPE 两种位置编码，可通过配置切换。
+- `CausalSelfAttention`: 带 causal mask 的 MHA/GQA/MQA 自注意力与紧凑 KV cache。
+- learned、sinusoidal、RoPE、ALiBi 与 NoPE 位置模式，可通过配置切换。
 - `TransformerBlock`: LayerNorm、attention、MLP、残差连接。
 - `train.py`: next-token prediction 训练脚本。
 - `generate.py`: 从 checkpoint 采样生成文本。
@@ -67,6 +67,16 @@ python train.py --device cuda --max-steps 1000
 
 ```bash
 python train.py --device cuda --position-encoding rope --rope-theta 10000 --checkpoint-name minillm-rope.pt
+```
+
+训练 GQA 或 MQA 版本：
+
+```bash
+# 4 个 query heads、2 个 KV heads：GQA
+python train.py --n-head 4 --num-key-value-heads 2 --position-encoding rope --checkpoint-name minillm-gqa.pt
+
+# KV heads=1：MQA；省略该参数或设为 --n-head 则保持旧 MHA
+python train.py --n-head 4 --num-key-value-heads 1 --position-encoding rope --checkpoint-name minillm-mqa.pt
 ```
 
 选择 tokenizer：
@@ -186,8 +196,8 @@ corpus -> CharTokenizer -> 完整词表 -> shifted x/y
 - 观察 loss 如何下降。
 - 理解 token、embedding、attention、MLP、采样之间的关系。
 - 作为读论文时的实验底座。
-- 对比 learned/sinusoidal/RoPE/ALiBi/NoPE、LayerNorm/RMSNorm/ScaleNorm 和多种 dense/gated MLP。
-- 后续扩展 GQA、LoRA、量化、RAG、指令微调。
+- 对比 learned/sinusoidal/RoPE/ALiBi/NoPE、LayerNorm/RMSNorm/ScaleNorm、多种 dense/gated MLP，以及 MHA/GQA/MQA。
+- 后续扩展训练 resume、LoRA、量化、RAG、指令微调。
 
 它不适合：
 
@@ -197,15 +207,15 @@ corpus -> CharTokenizer -> 完整词表 -> shifted x/y
 
 ## 结构组件公平 benchmark
 
-位置编码、Norm 和 MLP 已有可复现的三组消融基准：
+位置编码、Norm、MLP 和 attention 已有可复现的四组消融基准：
 
 ```bash
-/home/undefined/Disk/python-envs/ai-core-py312/bin/python \
+/home/undefined/UbuntuData/python-envs/research/bin/python \
   scripts/benchmark_components.py \
   --run-name components_cpu_100step
 ```
 
-默认比较 12 个变体、3 个模型随机种子，每个变体严格执行 100 次参数更新。tokenizer 只在 train split 上建立；所有变体复用相同的训练 batch、完整验证目标、optimizer、token 数和 greedy prompt；同名同 shape 的公共参数也具有相同初值。
+新运行默认比较 15 个变体（包含 MHA/GQA/MQA）、3 个模型随机种子，每个变体严格执行 100 次参数更新。tokenizer 只在 train split 上建立；所有变体复用相同的训练 batch、完整验证目标、optimizer、token 数和 greedy prompt；同名同 shape 的公共参数也具有相同初值。
 
 输出为：
 
@@ -213,7 +223,7 @@ corpus -> CharTokenizer -> 完整词表 -> shifted x/y
 - `benchmarks/results/components_cpu_100step.csv`：适合后续画图或数据分析的扁平记录。
 - `benchmarks/results/components_cpu_100step.md`：便于阅读的均值、标准差与相对基线差。
 
-当前 CPU 小基准的 36 条逐 seed 记录全部满足普通 greedy 与 KV-cache greedy token 完全一致。loss 和 tokens/s 只用于这个约 21K 参数、约 1K 字符语料的教学回归，不能据此给真实大模型的结构优劣排名。详细契约见 `benchmarks/README.md`。
+仓库中已有的历史 CPU 小基准仍是加入 attention suite 前的 12 变体、36 条逐 seed 记录；新默认矩阵会产生 45 条，并额外记录 Q/KV heads、每 token 每层 KV cache bytes 和相对 MHA 压缩比。loss 和 tokens/s 只用于教学回归，不能据此给真实大模型的结构优劣排名。详细契约见 `benchmarks/README.md`。
 
 ## 后续扩展路线
 
@@ -221,7 +231,7 @@ corpus -> CharTokenizer -> 完整词表 -> shifted x/y
 
 1. 已完成 position、Norm、MLP 模块化与三 seed CSV/JSON benchmark，并保留旧 checkpoint 兼容。
 2. 为 RoPE + Byte-BPE + RMSNorm + SwiGLU 训练正式 checkpoint，补齐 native/nano-vLLM/vLLM 端到端对齐。
-3. 给 attention 增加 GQA，并保持 MHA 作为对照。
+3. 已完成可选 GQA/MQA、紧凑 KV cache、attention benchmark 与 nano-vLLM/vLLM loader，并保持 MHA/旧 checkpoint 兼容。
 4. 加 `Dataset/DataLoader`、checkpoint resume、学习率调度、warmup、梯度累积和混合精度。
 5. 扩展为更长训练预算、更多语料与 GPU/engine 性能 benchmark。
 6. 完成 SFT loss mask，再加入 LoRA。
@@ -256,7 +266,7 @@ corpus -> CharTokenizer -> 完整词表 -> shifted x/y
 /home/undefined/Desktop/ai/.venv-sglang/bin/python scripts/run_nanovllm_minigpt.py
 ```
 
-当前 MiniGPT 通过独立模型模块注册，走 nano-vLLM 的 `LLM.generate()`、scheduler、sampler、FlashAttention 和 paged KV cache。learned position 与 RoPE export 都可以加载；教学模型的总序列长度仍受训练配置中的 `block_size` 限制。
+当前 MiniGPT 通过独立模型模块注册，走 nano-vLLM 的 `LLM.generate()`、scheduler、sampler、FlashAttention 和 paged KV cache。learned/RoPE 与 MHA/GQA/MQA export 都可由后端配置和 loader 识别；教学模型的总序列长度仍受训练配置中的 `block_size` 限制。
 
 ### 通过 vLLM 运行 RoPE MiniLLM
 

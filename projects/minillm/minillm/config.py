@@ -27,12 +27,27 @@ class GPTConfig:
     mlp_type: str = "dense"
     activation: str = "gelu"
     intermediate_size: int | None = None
+    # Keep this field at the end so positional construction of older configs
+    # keeps the same argument order. ``None`` is the legacy MHA default.
+    num_key_value_heads: int | None = None
 
     def __post_init__(self) -> None:
         if self.position_encoding not in SUPPORTED_POSITION_ENCODINGS:
             raise ValueError(f"position_encoding must be one of {SUPPORTED_POSITION_ENCODINGS}")
+        if self.n_head <= 0:
+            raise ValueError("n_head must be positive")
+        if self.n_embd <= 0:
+            raise ValueError("n_embd must be positive")
         if self.n_embd % self.n_head != 0:
             raise ValueError("n_embd must be divisible by n_head")
+        if self.num_key_value_heads is None:
+            self.num_key_value_heads = self.n_head
+        if self.num_key_value_heads <= 0:
+            raise ValueError("num_key_value_heads must be positive")
+        if self.num_key_value_heads > self.n_head:
+            raise ValueError("num_key_value_heads must not exceed n_head")
+        if self.n_head % self.num_key_value_heads != 0:
+            raise ValueError("n_head must be divisible by num_key_value_heads")
         if self.position_encoding == "rope" and (self.n_embd // self.n_head) % 2 != 0:
             raise ValueError("RoPE requires an even head_dim")
         if self.rope_theta <= 0:

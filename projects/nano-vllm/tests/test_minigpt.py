@@ -10,7 +10,7 @@ from nanovllm.layers.layernorm import RMSNorm, ScaleNorm
 from nanovllm.layers.linear import MergedColumnParallelLinear, QKVParallelLinear
 from nanovllm.layers.position_encoding import SinusoidalPositionEmbedding
 from nanovllm.layers.rotary_embedding import get_rope
-from nanovllm.models.minigpt import MiniGPTCharTokenizer, MiniGPTConfig
+from nanovllm.models.minigpt import MiniGPTAttention, MiniGPTCharTokenizer, MiniGPTConfig
 from nanovllm.models.registry import create_model, load_model_config, load_tokenizer, supported_model_types
 
 
@@ -43,6 +43,48 @@ class MiniGPTConfigTests(unittest.TestCase):
         # TODO:这个是在测试什么？
         with self.assertRaisesRegex(ValueError, "Conflicting n_layer"):
             MiniGPTConfig(n_layer=2, num_hidden_layers=3)
+
+    def test_grouped_query_attention_heads_are_normalized(self):
+        config = MiniGPTConfig(n_head=8, num_key_value_heads=2, n_embd=32)
+
+        self.assertEqual(config.num_attention_heads, 8)
+        self.assertEqual(config.num_key_value_heads, 2)
+
+    def test_query_heads_must_be_divisible_by_kv_heads(self):
+        with self.assertRaisesRegex(
+            ValueError, "num_attention_heads must be divisible by num_key_value_heads"
+        ):
+            MiniGPTConfig(n_head=6, num_key_value_heads=4, n_embd=24)
+
+
+class MiniGPTAttentionTests(unittest.TestCase):
+
+    def test_grouped_query_attention_uses_distinct_q_and_kv_sizes(self):
+        config = MiniGPTConfig(n_head=4, num_key_value_heads=2, n_embd=16)
+        with (
+            patch("torch.distributed.get_world_size", return_value=1),
+            patch("torch.distributed.get_rank", return_value=0),
+        ):
+            attention = MiniGPTAttention(config)
+
+        self.assertEqual(attention.num_heads, 4)
+        self.assertEqual(attention.num_kv_heads, 2)
+        self.assertEqual(attention.q_size, 16)
+        self.assertEqual(attention.kv_size, 8)
+        self.assertEqual(attention.c_attn.total_num_kv_heads, 2)
+        self.assertEqual(attention.attn.num_kv_heads, 2)
+
+    def test_tensor_parallel_size_must_partition_kv_heads(self):
+        config = MiniGPTConfig(n_head=4, num_key_value_heads=1, n_embd=16)
+        with (
+            patch("torch.distributed.get_world_size", return_value=2),
+            patch("torch.distributed.get_rank", return_value=0),
+            self.assertRaisesRegex(
+                ValueError,
+                "num_key_value_heads=1 must be divisible by tensor_parallel_size=2",
+            ),
+        ):
+            MiniGPTAttention(config)
 
 
 class MiniGPTRegistryTests(unittest.TestCase):
@@ -208,6 +250,30 @@ class FusedQKVLoaderTests(unittest.TestCase):
         layer.bias.weight_loader(layer.bias, loaded_bias)
 
         expected_rows = torch.tensor([2, 3, 6, 7, 10, 11])
+        torch.testing.assert_close(layer.weight, loaded_weight[expected_rows])
+        torch.testing.assert_close(layer.bias, loaded_bias[expected_rows])
+
+    def test_fused_gqa_weight_is_partitioned_per_component(self):
+        with (
+            patch("torch.distributed.get_world_size", return_value=2),
+            patch("torch.distributed.get_rank", return_value=1),
+        ):
+            layer = QKVParallelLinear(
+                hidden_size=16,
+                head_size=4,
+                total_num_heads=4,
+                total_num_kv_heads=2,
+                bias=True,
+            )
+
+        loaded_weight = torch.arange(32 * 16, dtype=layer.weight.dtype).reshape(32, 16)
+        loaded_bias = torch.arange(32, dtype=layer.bias.dtype)
+        layer.weight.weight_loader(layer.weight, loaded_weight)
+        layer.bias.weight_loader(layer.bias, loaded_bias)
+
+        expected_rows = torch.tensor(
+            [*range(8, 16), *range(20, 24), *range(28, 32)]
+        )
         torch.testing.assert_close(layer.weight, loaded_weight[expected_rows])
         torch.testing.assert_close(layer.bias, loaded_bias[expected_rows])
 

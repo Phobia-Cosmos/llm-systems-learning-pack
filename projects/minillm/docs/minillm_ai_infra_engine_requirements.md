@@ -325,7 +325,7 @@ POST /v1/chat/completions
 | SFT | prompt/response/loss mask | 未完成 |
 | LoRA | adapter 训练与合并 | 未完成 |
 | 偏好优化 | DPO/RLHF/奖励模型 | 未完成 |
-| 评估 | ppl、benchmark、回归测试 | 只有简单生成观察 |
+| 评估 | ppl、benchmark、回归测试 | 已有组件/推理基准与单元回归；长预算质量评测待补 |
 | HF 格式 | PreTrainedModel/save_pretrained | 只有 HF-like |
 | 原生推理 | PyTorch generate/KV cache | 已有 |
 | 推理引擎 | vLLM/SGLang native backend | nano-vLLM 与 vLLM 已验证；SGLang 待实现 |
@@ -340,9 +340,9 @@ POST /v1/chat/completions
 
 1. 字符 tokenizer -> BPE/SentencePiece。
 2. learned position embedding -> RoPE：已完成，并保留兼容模式。
-3. LayerNorm -> RMSNorm。
-4. GELU MLP -> SwiGLU。
-5. MHA -> GQA/MQA 可选。
+3. LayerNorm -> RMSNorm：已完成可选实现。
+4. GELU MLP -> SwiGLU：已完成可选实现。
+5. MHA -> GQA/MQA 可选：已完成紧凑 KV cache、导出与引擎 loader。
 6. 原生 SFT + loss mask。
 7. LoRA fine-tuning。
 8. 真正 HF `PreTrainedModel`。
@@ -352,4 +352,4 @@ POST /v1/chat/completions
 12. OpenAI-compatible server。
 13. 量化压缩和 kernel 优化。
 
-当前最应该做的下一步是：先固定 RoPE+BPE 评测基线，再依次实现可选 RMSNorm、SwiGLU、GQA 和训练 resume/AMP，随后做 SFT loss mask 与 LoRA。详细顺序见 `docs/rope_implementation_and_roadmap.md`。
+当前最应该做的下一步是：训练 RoPE+BPE+RMSNorm+SwiGLU 的 MHA/GQA 正式 checkpoint 并固定三引擎基线；下一代码迭代实现 resume、warmup/cosine LR、AMP 和 gradient accumulation，随后做 SFT loss mask 与 LoRA。详细顺序见 `docs/rope_implementation_and_roadmap.md`。

@@ -25,15 +25,18 @@ def split_qkv_parameters(
     """
 
     if attention.c_attn is not None:
-        channels = attention.c_proj.in_features
         weight = attention.c_attn.weight
         bias = attention.c_attn.bias
         result: dict[str, tuple[torch.Tensor, torch.Tensor | None]] = {}
-        for index, name in enumerate(("q", "k", "v")):
-            start = index * channels
-            stop = start + channels
+        start = 0
+        for name, size in zip(
+            ("q", "k", "v"),
+            (attention.q_size, attention.kv_size, attention.kv_size),
+        ):
+            stop = start + size
             part_bias = None if bias is None else bias[start:stop]
             result[name] = (weight[start:stop], part_bias)
+            start = stop
         return result
 
     if attention.q_proj is None or attention.k_proj is None or attention.v_proj is None:
@@ -117,15 +120,25 @@ def trace_forward(
             batch_size, current_len, block.attn.n_head, block.attn.head_dim
         ).transpose(1, 2)
         k_heads_before_position = k_flat.view(
-            batch_size, current_len, block.attn.n_head, block.attn.head_dim
+            batch_size,
+            current_len,
+            block.attn.num_key_value_heads,
+            block.attn.head_dim,
         ).transpose(1, 2)
-        v_heads = v_flat.view(
-            batch_size, current_len, block.attn.n_head, block.attn.head_dim
+        v_heads_grouped = v_flat.view(
+            batch_size,
+            current_len,
+            block.attn.num_key_value_heads,
+            block.attn.head_dim,
         ).transpose(1, 2)
 
         q_heads = q_heads_before_position
-        k_heads = k_heads_before_position
-        q_heads, k_heads = block.attn.position_encoding.apply_qk(q_heads, k_heads, positions)
+        k_heads_grouped = k_heads_before_position
+        q_heads, k_heads_grouped = block.attn.position_encoding.apply_qk(
+            q_heads, k_heads_grouped, positions
+        )
+        k_heads = block.attn.expand_kv_heads(k_heads_grouped)
+        v_heads = block.attn.expand_kv_heads(v_heads_grouped)
 
         raw_scores = q_heads @ k_heads.transpose(-2, -1)
         scaled_scores_without_position = raw_scores / math.sqrt(block.attn.head_dim)
@@ -184,6 +197,8 @@ def trace_forward(
                 "q_heads_before_position": _snapshot(q_heads_before_position),
                 "k_heads_before_position": _snapshot(k_heads_before_position),
                 "q_heads": _snapshot(q_heads),
+                "k_heads_grouped": _snapshot(k_heads_grouped),
+                "v_heads_grouped": _snapshot(v_heads_grouped),
                 "k_heads": _snapshot(k_heads),
                 "v_heads": _snapshot(v_heads),
                 "raw_scores": _snapshot(raw_scores),

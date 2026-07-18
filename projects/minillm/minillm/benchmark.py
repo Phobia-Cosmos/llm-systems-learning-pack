@@ -21,8 +21,8 @@ from .model import MiniGPT
 from .tokenizer import CharTokenizer
 
 
-BENCHMARK_SCHEMA_VERSION = 1
-SUPPORTED_BENCHMARK_SUITES = ("position", "norm", "mlp")
+BENCHMARK_SCHEMA_VERSION = 2
+SUPPORTED_BENCHMARK_SUITES = ("position", "norm", "mlp", "attention")
 
 
 @dataclass(frozen=True)
@@ -91,7 +91,25 @@ class BenchmarkSettings:
             raise ValueError("model_seeds must not contain duplicates")
 
 
-def component_variant_specs(suites: Iterable[str] = SUPPORTED_BENCHMARK_SUITES) -> list[VariantSpec]:
+def _gqa_num_key_value_heads(n_head: int) -> int:
+    """Pick a distinct, valid GQA head count, preferring two query heads per KV head."""
+
+    proper_divisors = [
+        candidate for candidate in range(n_head - 1, 1, -1) if n_head % candidate == 0
+    ]
+    if not proper_divisors:
+        raise ValueError(
+            "the attention benchmark requires n_head to have a divisor strictly between "
+            f"1 and n_head so MHA, GQA, and MQA are distinct; got n_head={n_head}"
+        )
+    return proper_divisors[0]
+
+
+def component_variant_specs(
+    suites: Iterable[str] = SUPPORTED_BENCHMARK_SUITES,
+    *,
+    n_head: int = 4,
+) -> list[VariantSpec]:
     requested = tuple(suites)
     unknown = sorted(set(requested) - set(SUPPORTED_BENCHMARK_SUITES))
     if unknown:
@@ -143,6 +161,26 @@ def component_variant_specs(suites: Iterable[str] = SUPPORTED_BENCHMARK_SUITES) 
                         "norm_type": "rmsnorm",
                         "mlp_type": name,
                         "activation": effective_activations[name],
+                    },
+                )
+            )
+    if "attention" in requested:
+        gqa_heads = _gqa_num_key_value_heads(n_head)
+        for name, num_key_value_heads in (
+            ("mha", n_head),
+            ("gqa", gqa_heads),
+            ("mqa", 1),
+        ):
+            specs.append(
+                VariantSpec(
+                    suite="attention",
+                    name=name,
+                    overrides={
+                        "position_encoding": "rope",
+                        "norm_type": "rmsnorm",
+                        "mlp_type": "dense",
+                        "activation": "gelu",
+                        "num_key_value_heads": num_key_value_heads,
                     },
                 )
             )
@@ -417,6 +455,14 @@ def run_variant(
     output_ids = full_output[0].detach().cpu().tolist()
     completion_ids = output_ids[len(prompt_token_ids) :]
     config = model.config
+    parameter = next(model.parameters())
+    dtype = str(parameter.dtype).removeprefix("torch.")
+    head_dim = config.n_embd // config.n_head
+    kv_cache_elements_per_token_per_layer = 2 * config.num_key_value_heads * head_dim
+    kv_cache_bytes_per_token_per_layer = (
+        kv_cache_elements_per_token_per_layer * parameter.element_size()
+    )
+    mha_kv_cache_elements = 2 * config.n_head * head_dim
     trained_tokens = len(train_batches) * settings.batch_size * settings.block_size
     peak_cuda_memory = (
         int(torch.cuda.max_memory_allocated(device)) if device.type == "cuda" else None
@@ -432,9 +478,16 @@ def run_variant(
         "mlp_type": config.mlp_type,
         "activation": config.activation,
         "intermediate_size": config.intermediate_size,
+        "num_query_heads": config.n_head,
+        "num_key_value_heads": config.num_key_value_heads,
         "parameter_count": model.parameter_count(),
         "resolved_config": asdict(config),
-        "dtype": str(next(model.parameters()).dtype).removeprefix("torch."),
+        "dtype": dtype,
+        "kv_cache_elements_per_token_per_layer": kv_cache_elements_per_token_per_layer,
+        "kv_cache_bytes_per_token_per_layer": kv_cache_bytes_per_token_per_layer,
+        "kv_cache_compression_ratio_vs_mha": (
+            mha_kv_cache_elements / kv_cache_elements_per_token_per_layer
+        ),
         "initial_train_loss": initial_train_loss,
         "final_train_loss": final_train_loss,
         "initial_val_loss": initial_val_loss,
@@ -540,7 +593,11 @@ def run_component_benchmark(
         block_size=settings.block_size,
     )
 
-    selected_specs = list(specs) if specs is not None else component_variant_specs(suites)
+    selected_specs = (
+        list(specs)
+        if specs is not None
+        else component_variant_specs(suites, n_head=settings.n_head)
+    )
     if not selected_specs:
         raise ValueError("at least one benchmark variant is required")
 
@@ -656,7 +713,12 @@ def aggregate_results(
     rows: Sequence[dict[str, object]],
     specs: Sequence[VariantSpec],
 ) -> list[dict[str, object]]:
-    preferred_baselines = {"position": "learned", "norm": "layernorm", "mlp": "dense"}
+    preferred_baselines = {
+        "position": "learned",
+        "norm": "layernorm",
+        "mlp": "dense",
+        "attention": "mha",
+    }
     available_by_suite: dict[str, list[str]] = {}
     for spec in specs:
         available_by_suite.setdefault(spec.suite, []).append(spec.name)
@@ -699,6 +761,18 @@ def aggregate_results(
                 "seed_count": len(variant_rows),
                 "parameter_count": int(variant_rows[0]["parameter_count"]),
                 "intermediate_size": int(variant_rows[0]["intermediate_size"]),
+                "num_query_heads": int(variant_rows[0]["num_query_heads"]),
+                "num_key_value_heads": int(variant_rows[0]["num_key_value_heads"]),
+                "kv_cache_elements_per_token_per_layer": int(
+                    variant_rows[0]["kv_cache_elements_per_token_per_layer"]
+                ),
+                "kv_cache_bytes_per_token_per_layer": int(
+                    variant_rows[0]["kv_cache_bytes_per_token_per_layer"]
+                ),
+                "kv_cache_compression_ratio_vs_mha": float(
+                    variant_rows[0]["kv_cache_compression_ratio_vs_mha"]
+                ),
+                "resolved_config": variant_rows[0]["resolved_config"],
                 "final_val_loss_mean": loss_mean,
                 "final_val_loss_std": loss_std,
                 "final_train_loss_mean": train_loss_mean,
@@ -747,7 +821,14 @@ CSV_FIELDS = (
     "mlp_type",
     "activation",
     "intermediate_size",
+    "num_query_heads",
+    "num_key_value_heads",
     "parameter_count",
+    "resolved_config",
+    "dtype",
+    "kv_cache_elements_per_token_per_layer",
+    "kv_cache_bytes_per_token_per_layer",
+    "kv_cache_compression_ratio_vs_mha",
     "initial_train_loss",
     "final_train_loss",
     "initial_val_loss",
@@ -795,6 +876,9 @@ def write_benchmark_outputs(
         writer.writeheader()
         for row in rows:
             csv_row = dict(row)
+            csv_row["resolved_config"] = json.dumps(
+                csv_row["resolved_config"], sort_keys=True, separators=(",", ":")
+            )
             csv_row["prompt_token_ids"] = json.dumps(csv_row["prompt_token_ids"])
             csv_row["completion_token_ids"] = json.dumps(csv_row["completion_token_ids"])
             writer.writerow({field: csv_row.get(field) for field in CSV_FIELDS})
@@ -829,13 +913,15 @@ def write_benchmark_outputs(
             [
                 f"## {suite}",
                 "",
-                "| variant | seeds | params | final train loss | final val loss | paired Δ vs baseline | val ppl | train tok/s | KV tok/s | example ids | cache parity |",
-                "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |",
+                "| variant | Q/KV heads | seeds | params | KV elems/token/layer | KV bytes/token/layer | KV compression vs MHA | final train loss | final val loss | paired Δ vs baseline | val ppl | train tok/s | KV tok/s | example ids | cache parity |",
+                "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |",
             ]
         )
         for row in suite_rows:
             lines.append(
-                "| {variant} | {seed_count} | {parameter_count:,} | "
+                "| {variant} | {num_query_heads}/{num_key_value_heads} | {seed_count} | {parameter_count:,} | "
+                "{kv_cache_elements_per_token_per_layer:,} | {kv_cache_bytes_per_token_per_layer:,} | "
+                "{kv_cache_compression_ratio_vs_mha:.1f}× | "
                 "{final_train_loss_mean:.4f} ± {final_train_loss_std:.4f} | "
                 "{final_val_loss_mean:.4f} ± {final_val_loss_std:.4f} | "
                 "{paired_val_loss_delta_vs_baseline_mean:+.4f} ± {paired_val_loss_delta_vs_baseline_std:.4f} | "

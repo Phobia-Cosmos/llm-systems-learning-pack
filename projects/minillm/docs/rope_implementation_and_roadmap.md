@@ -112,8 +112,9 @@ KV cache 保存的是已经应用 RoPE 的历史 K 和未旋转的 V。decode �
 | learned checkpoint 兼容 | 通过 |
 | RoPE 模型无 absolute position 参数 | 通过 |
 | full forward 与 token-by-token KV cache logits | 通过 |
-| MiniLLM 测试 | 32 项通过 |
-| nano-vLLM MiniGPT/RoPE 测试 | 10 项通过 |
+| MiniLLM 测试 | 54 项通过、1 项 CUDA 测试跳过，另有 48 个 subtests 通过 |
+| nano-vLLM MiniGPT 测试 | 15 项通过，另有 3 个 subtests 通过 |
+| vLLM MiniGPT 直接单元测试 | 5 项通过（含融合 GQA loader）；当前机器未做 GQA CUDA engine 端到端实测 |
 | native 与 nano-vLLM 生成 | 通过 |
 | native 与 vLLM greedy token IDs | 完全一致 |
 
@@ -133,9 +134,9 @@ vLLM 排查时还修复了一个已有 loader 问题：checkpoint 使用 `mlp.ne
 
 ## 6. 结构组件公平基准
 
-位置、Norm 和 MLP 已接入 `scripts/benchmark_components.py`。默认使用 3 个 seed、每个变体 100 次更新，输出逐 seed CSV/JSON 和 Markdown 聚合。公平性约束包括：train-only tokenizer、相同 raw split 与 batch schedule、相同公共参数初值、显式 AdamW 配置、完整 validation target 覆盖，以及固定 greedy prompt。
+位置、Norm、MLP 和 MHA/GQA/MQA attention 已接入 `scripts/benchmark_components.py`。默认使用 3 个 seed、每个变体 100 次更新，输出逐 seed CSV/JSON 和 Markdown 聚合。公平性约束包括：train-only tokenizer、相同 raw split 与 batch schedule、相同公共参数初值、显式 AdamW 配置、完整 validation target 覆盖，以及固定 greedy prompt。
 
-当前记录位于 `benchmarks/results/components_cpu_100step.{json,csv,md}`。36 条逐 seed 记录的普通生成和 KV-cache 生成 token IDs 全部一致。由于模型约 21K 参数、语料约 1K 字符、训练仅 100 步，这组结果的用途是回归与教学，不是宣称某种 position/Norm/MLP 在大模型上普遍更优。
+当前记录位于 `benchmarks/results/components_cpu_100step.{json,csv,md}`。这份 checked-in 记录早于 attention suite，共 36 条逐 seed 结果，普通生成和 KV-cache 生成 token IDs 全部一致。新默认矩阵为 15 个变体、45 条逐 seed 结果。由于模型约 21K 参数、语料约 1K 字符、训练仅 100 步，这组结果的用途是回归与教学，不是宣称某种结构在大模型上普遍更优。
 
 ## 7. 推荐的最小化迭代路线
 
@@ -145,7 +146,7 @@ vLLM 排查时还修复了一个已有 loader 问题：checkpoint 使用 `mlp.ne
 | --- | --- | --- | --- | --- |
 | 1 | RMSNorm 可选后端 | 已完成 | normalization 与内存访问 | LayerNorm/RMSNorm 可训练、回放并进入三 seed benchmark |
 | 2 | SwiGLU 可选 MLP | 已完成 | gated MLP、参数量与 FLOPs | Dense/SwiGLU/GEGLU/ReGLU 有等预算 loss 和速度记录 |
-| 3 | GQA 可选 attention | 下一步 | Q heads 与 KV heads 分离 | KV cache 显存下降，MHA 结果不回归 |
+| 3 | GQA 可选 attention | 已完成 | Q heads 与 KV heads 分离 | native CPU 全模式、nano-vLLM/vLLM loader 与构造单测通过，KV cache 按 Hkv/H 缩小，旧 checkpoint 兼容；GPU engine 实测待补 |
 | 4 | 训练基础设施 | 未开始 | resume、LR schedule、AMP、grad accumulation | 中断后可复现续训，记录 val loss/ppl |
 | 5 | SFT + response loss mask | 未开始 | 预训练与指令微调的目标差异 | prompt token 不计 loss，response 可稳定生成 |
 | 6 | LoRA | 未开始 | 参数高效微调 | adapter 保存/合并，和 full fine-tune 对比 |
@@ -158,9 +159,9 @@ vLLM 排查时还修复了一个已有 loader 问题：checkpoint 使用 `mlp.ne
 
 结构模块和 CPU 公平基准已经建立，下一批工作按以下顺序推进：
 
-1. 训练 RoPE + Byte-BPE + RMSNorm + SwiGLU checkpoint，在 native、nano-vLLM、vLLM 三条路径比较 logits、KV cache 和 greedy token IDs。
-2. 实现 GQA/MQA 配置、投影 shape、KV cache、export 与三引擎 loader，同时保留默认 MHA checkpoint 兼容。
-3. 补 checkpoint resume、cosine LR、warmup、AMP 和 gradient accumulation。
+1. 训练 RoPE + Byte-BPE + RMSNorm + SwiGLU 的 MHA/GQA checkpoint，在 native、nano-vLLM、vLLM 三条路径比较 logits、KV cache 和 greedy token IDs。
+2. GQA/MQA 配置、紧凑投影/cache、HF-like export、attention benchmark 与三条 loader 路径已经实现；GPU engine 实测随正式 checkpoint 一起补齐。
+3. 下一代码迭代是 checkpoint resume、cosine LR、warmup、AMP 和 gradient accumulation。
 4. 把 benchmark 扩展到更长预算、多个数据 seed、GPU 峰值显存及 engine 吞吐。
 5. 再开始 SFT/loss mask。模型是否“更会回答问题”主要由数据和训练目标决定，不是只靠结构开关。
 

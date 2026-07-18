@@ -345,19 +345,33 @@ def _native_layer_trace(
     if block.attn.c_attn is None or not hasattr(block.mlp, "net"):
         raise ValueError("the current baseline expects fused QKV and the dense MiniLLM MLP")
     attention_norm = block.ln_1(hidden)
-    qkv = block.attn.c_attn(attention_norm)
-    q_raw, k_raw, v_raw = qkv.split(model.config.n_embd, dim=-1)
-    q_raw = q_raw.view(batch_size, query_len, model.config.n_head, -1).transpose(1, 2)
-    k_raw = k_raw.view(batch_size, query_len, model.config.n_head, -1).transpose(1, 2)
-    v_raw = v_raw.view(batch_size, query_len, model.config.n_head, -1).transpose(1, 2)
+    q_flat, k_flat, v_flat = block.attn.project_qkv(attention_norm)
+    qkv = torch.cat((q_flat, k_flat, v_flat), dim=-1)
+    q_raw = q_flat.view(
+        batch_size, query_len, block.attn.n_head, block.attn.head_dim
+    ).transpose(1, 2)
+    k_raw = k_flat.view(
+        batch_size,
+        query_len,
+        block.attn.num_key_value_heads,
+        block.attn.head_dim,
+    ).transpose(1, 2)
+    v_raw = v_flat.view(
+        batch_size,
+        query_len,
+        block.attn.num_key_value_heads,
+        block.attn.head_dim,
+    ).transpose(1, 2)
     query, key_new = block.attn.position_encoding.apply_qk(q_raw, k_raw, positions)
 
     if past_key_values is None:
-        key, value = key_new, v_raw
+        compact_key, compact_value = key_new, v_raw
     else:
-        key = torch.cat((past_key_values[0][0], key_new), dim=2)
-        value = torch.cat((past_key_values[0][1], v_raw), dim=2)
-    total_len = key.shape[2]
+        compact_key = torch.cat((past_key_values[0][0], key_new), dim=2)
+        compact_value = torch.cat((past_key_values[0][1], v_raw), dim=2)
+    key = block.attn.expand_kv_heads(compact_key)
+    value = block.attn.expand_kv_heads(compact_value)
+    total_len = compact_key.shape[2]
     scores = (query @ key.transpose(-2, -1)) / math.sqrt(block.attn.head_dim)
     position_bias = block.attn.position_encoding.attention_bias(
         positions,
@@ -382,7 +396,7 @@ def _native_layer_trace(
     mlp_fc2 = block.mlp.net[2](mlp_activation)
     layer_output = attention_residual + mlp_fc2
 
-    present = [(key, value)]
+    present = [(compact_key, compact_value)]
     hidden_after_layers = layer_output
     for layer_index, next_block in enumerate(model.blocks[1:], start=1):
         layer_past = None if past_key_values is None else past_key_values[layer_index]
@@ -404,6 +418,8 @@ def _native_layer_trace(
         "v_raw": v_raw,
         "query": query,
         "key_new": key_new,
+        "compact_key": compact_key,
+        "compact_value": compact_value,
         "key": key,
         "value": value,
         "scores": scores,
@@ -655,8 +671,10 @@ class NanoVLLMTorchBaseline:
         self.model = model
         self.batch_size = batch_size
         self.page_size = page_size
-        self.heads = model.config.n_head
-        self.head_dim = model.config.n_embd // model.config.n_head
+        attention = model.blocks[0].attn
+        self.heads = attention.n_head
+        self.num_key_value_heads = attention.num_key_value_heads
+        self.head_dim = attention.head_dim
         self.pages_per_sequence = math.ceil((max_context_length + 1) / page_size)
         total_pages = batch_size * self.pages_per_sequence
         device = model.token_embedding.weight.device
@@ -664,7 +682,12 @@ class NanoVLLMTorchBaseline:
         self.block_tables = torch.arange(
             total_pages, device=device, dtype=torch.int32
         ).view(batch_size, self.pages_per_sequence)
-        cache_shape = (total_pages, page_size, self.heads, self.head_dim)
+        cache_shape = (
+            total_pages,
+            page_size,
+            self.num_key_value_heads,
+            self.head_dim,
+        )
         self.key_caches = [
             torch.empty(cache_shape, device=device, dtype=dtype)
             for _ in range(model.config.n_layer)
@@ -735,11 +758,11 @@ class NanoVLLMTorchBaseline:
             if block.attn.c_attn is None or not hasattr(block.mlp, "net"):
                 raise ValueError("the current baseline expects fused QKV and a dense MLP")
             attention_norm = block.ln_1(hidden)
-            qkv = block.attn.c_attn(attention_norm)
-            query_raw, key_raw, value = qkv.split(self.model.config.n_embd, dim=-1)
-            query_raw = query_raw.view(-1, self.heads, self.head_dim)
-            key_raw = key_raw.view(-1, self.heads, self.head_dim)
-            value = value.view(-1, self.heads, self.head_dim)
+            query_flat, key_flat, value_flat = block.attn.project_qkv(attention_norm)
+            qkv = torch.cat((query_flat, key_flat, value_flat), dim=-1)
+            query_raw = query_flat.view(-1, self.heads, self.head_dim)
+            key_raw = key_flat.view(-1, self.num_key_value_heads, self.head_dim)
+            value = value_flat.view(-1, self.num_key_value_heads, self.head_dim)
             query, key = _flat_rope(self.model, query_raw, key_raw, positions)
             _paged_store_pair(
                 key,
@@ -752,11 +775,16 @@ class NanoVLLMTorchBaseline:
             outputs = []
             first_attention_trace = None
             if is_prefill:
+                expanded_key = block.attn.expand_kv_heads(key)
+                expanded_value = block.attn.expand_kv_heads(value)
                 for sequence_index in range(self.batch_size):
                     start = sequence_index * context_length
                     end = start + context_length
                     output, attention_trace = _flat_attention(
-                        query[start:end], key[start:end], value[start:end], 0,
+                        query[start:end],
+                        expanded_key[start:end],
+                        expanded_value[start:end],
+                        0,
                         self.head_dim**-0.5,
                     )
                     outputs.append(output)
@@ -771,10 +799,12 @@ class NanoVLLMTorchBaseline:
                         self.block_tables[sequence_index],
                         sequence_length,
                     )
+                    expanded_key = block.attn.expand_kv_heads(gathered_key)
+                    expanded_value = block.attn.expand_kv_heads(gathered_value)
                     output, attention_trace = _flat_attention(
                         query[sequence_index : sequence_index + 1],
-                        gathered_key,
-                        gathered_value,
+                        expanded_key,
+                        expanded_value,
                         sequence_length - 1,
                         self.head_dim**-0.5,
                     )
@@ -794,13 +824,15 @@ class NanoVLLMTorchBaseline:
 
             if layer_index == 0 and trace:
                 if is_prefill:
-                    first_key = key[:context_length]
-                    first_value = value[:context_length]
+                    first_key = expanded_key[:context_length]
+                    first_value = expanded_value[:context_length]
                 else:
                     first_key, first_value = _paged_gather_pair(
                         self.key_caches[0], self.value_caches[0], self.block_tables[0],
                         context_length + 1,
                     )
+                    first_key = block.attn.expand_kv_heads(first_key)
+                    first_value = block.attn.expand_kv_heads(first_value)
                 layer_trace = {
                     "input_ids": input_ids,
                     "positions": positions,
@@ -1481,6 +1513,7 @@ def write_baseline_outputs(
 def _render_markdown(payload: dict[str, Any]) -> str:
     environment = payload["environment"]
     config = payload["model_config"]
+    num_key_value_heads = config.get("num_key_value_heads") or config["n_head"]
     lines = [
         "# MiniLLM / nano-vLLM PyTorch-cuBLAS inference baseline",
         "",
@@ -1509,7 +1542,7 @@ def _render_markdown(payload: dict[str, Any]) -> str:
         "",
         "## Model and workloads",
         "",
-        f"Model: `L={config['n_layer']}, C={config['n_embd']}, H={config['n_head']}, D={config['n_embd'] // config['n_head']}, V={config['vocab_size']}, block_size={config['block_size']}`. Prompt token count: `{payload['prompt']['token_count']}`. nano-vLLM KV page size: `{payload['page_size']}`.",
+        f"Model: `L={config['n_layer']}, C={config['n_embd']}, H={config['n_head']}, Hkv={num_key_value_heads}, D={config['n_embd'] // config['n_head']}, V={config['vocab_size']}, block_size={config['block_size']}`. Prompt token count: `{payload['prompt']['token_count']}`. nano-vLLM KV page size: `{payload['page_size']}`.",
         f"The decode row measures the first incremental pass: one new token is processed while attention reads the prompt plus that token. The call count for a {payload['workloads'][0]['generated_tokens']}-token generation is exact, but later decode passes have progressively longer KV lengths and are not assigned the first-step latency.",
         "",
         "| Workload | MiniLLM prefill | nano prefill | MiniLLM decode | nano decode | dtype |",

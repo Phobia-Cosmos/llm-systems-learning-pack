@@ -9,7 +9,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from minillm.benchmark import (
+from minillm.benchmark import (  # noqa: E402
     BenchmarkSettings,
     SUPPORTED_BENCHMARK_SUITES,
     environment_summary,
@@ -18,9 +18,19 @@ from minillm.benchmark import (
 )
 
 
+def format_run_summary(payload: dict) -> str:
+    return (
+        f"wrote {len(payload['aggregates'])} variants / "
+        f"{len(payload['results'])} result rows"
+    )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Fairly compare MiniLLM position, normalization, and MLP variants."
+        description=(
+            "Fairly compare MiniLLM position, normalization, MLP, and "
+            "MHA/GQA/MQA attention variants."
+        )
     )
     parser.add_argument("--data", default="data/tiny_corpus.txt")
     parser.add_argument("--out-dir", default="benchmarks/results")
@@ -28,14 +38,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--suites",
         default=",".join(SUPPORTED_BENCHMARK_SUITES),
-        help="Comma-separated subset of: position,norm,mlp",
+        help="Comma-separated subset of: position,norm,mlp,attention",
     )
     parser.add_argument("--max-steps", type=int, default=100)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--block-size", type=int, default=32)
     parser.add_argument("--eval-batches", type=int, default=4)
     parser.add_argument("--n-layer", type=int, default=1)
-    parser.add_argument("--n-head", type=int, default=4)
+    parser.add_argument(
+        "--n-head",
+        type=int,
+        default=4,
+        help=(
+            "Number of query heads. The attention suite uses this for MHA, 1 for MQA, "
+            "and the largest proper divisor for GQA (so it must be composite)."
+        ),
+    )
     parser.add_argument("--n-embd", type=int, default=32)
     parser.add_argument("--lr", type=float, default=3e-3)
     parser.add_argument("--weight-decay", type=float, default=0.01)
@@ -91,7 +109,7 @@ def main() -> None:
         csv_path=csv_path,
         markdown_path=markdown_path,
     )
-    print(f"wrote {len(payload['results'])} variants")
+    print(format_run_summary(payload))
     print(json_path)
     print(csv_path)
     print(markdown_path)

@@ -51,7 +51,7 @@ class MiniGPTConfig(PretrainedConfig):
         bias: bool = True,
         # 问题（已回答）：n_head、num_attention_heads、num_key_value_heads 和 tie_word_embeddings 是什么？
         # 回答：n_head 是 MiniGPT 原始字段，num_attention_heads 是 HF 标准别名，二者都表示 Q head 数；
-        # num_key_value_heads 是独立 K/V head 数，MHA 中等于 Q heads，GQA/MQA 中更少。MiniGPT 只支持 MHA。
+        # num_key_value_heads 是独立 K/V head 数：MHA 中等于 Q heads，GQA/MQA 中更少，且必须整除 Q heads。
         # tie_word_embeddings=True 表示输入 token embedding 与输出 lm_head 共用同一权重矩阵，节省参数并共享词义空间。
         max_position_embeddings: int | None = None,
         num_hidden_layers: int | None = None,
@@ -87,8 +87,12 @@ class MiniGPTConfig(PretrainedConfig):
         n_embd = _resolve_alias("n_embd", n_embd, "hidden_size", hidden_size, 128)
         norm_eps = _resolve_alias("norm_eps", norm_eps, "layer_norm_epsilon", layer_norm_epsilon, 1e-5)
         activation = _resolve_alias("activation", activation, "hidden_act", hidden_act, "gelu")
-        if num_key_value_heads is not None and num_key_value_heads != n_head:
-            raise ValueError("MiniGPT uses multi-head attention, so num_key_value_heads must equal n_head")
+        if num_key_value_heads is None:
+            num_key_value_heads = n_head
+        if num_key_value_heads <= 0:
+            raise ValueError("num_key_value_heads must be positive")
+        if n_head % num_key_value_heads != 0:
+            raise ValueError("num_attention_heads must be divisible by num_key_value_heads")
         if n_embd % n_head != 0:
             raise ValueError("n_embd must be divisible by n_head")
         if position_encoding not in {"learned", "sinusoidal", "rope", "alibi", "none"}:
@@ -121,7 +125,7 @@ class MiniGPTConfig(PretrainedConfig):
         self.num_hidden_layers = n_layer
         self.n_head = n_head
         self.num_attention_heads = n_head
-        self.num_key_value_heads = n_head
+        self.num_key_value_heads = num_key_value_heads
         self.n_embd = n_embd
         self.hidden_size = n_embd
         self.head_dim = n_embd // n_head
@@ -200,13 +204,20 @@ class MiniGPTAttention(nn.Module):
         tp_size = dist.get_world_size()
         if config.n_head % tp_size != 0:
             raise ValueError(f"n_head={config.n_head} must be divisible by tensor_parallel_size={tp_size}")
+        if config.num_key_value_heads % tp_size != 0:
+            raise ValueError(
+                f"num_key_value_heads={config.num_key_value_heads} must be divisible by "
+                f"tensor_parallel_size={tp_size}"
+            )
         self.num_heads = config.n_head // tp_size
+        self.num_kv_heads = config.num_key_value_heads // tp_size
         self.head_dim = config.head_dim
         self.q_size = self.num_heads * self.head_dim
-        # 问题（已回答）：为什么 MiniGPT 没有单独的 kv_size，bias 又是什么？
-        # 回答：MiniGPT 使用普通 MHA，K/V head 数等于 Q head 数，所以 Q/K/V 本 rank 宽度都等于 q_size，
-        # 不需像 Qwen GQA 那样保存较小 kv_size。bias 是 Linear 的可训练加法向量；config.bias 决定 QKV 和输出投影
-        # 是否创建它，必须与训练 checkpoint 结构一致，和 KV cache 大小无关。
+        # 问题（已回答）：q_size、kv_size 和 bias 是什么？
+        # 回答：q_size 是本 rank 的 Q heads 总宽度，kv_size 是本 rank 的 K/V heads 总宽度；MHA 中两者相等，
+        # GQA/MQA 中 kv_size 更小。bias 是 Linear 的可训练加法向量；config.bias 决定 QKV 和输出投影
+        # 是否创建它，必须与训练 checkpoint 结构一致。KV cache 只保存较小的 K/V heads。
+        self.kv_size = self.num_kv_heads * self.head_dim
         self.rotary = (
             get_rope(
                 self.head_dim,
@@ -221,7 +232,7 @@ class MiniGPTAttention(nn.Module):
             config.n_embd,
             self.head_dim,
             config.n_head,
-            config.n_head,
+            config.num_key_value_heads,
             bias=config.bias,
         )
         self.c_proj = RowParallelLinear(config.n_embd, config.n_embd, bias=config.bias)
@@ -239,16 +250,16 @@ class MiniGPTAttention(nn.Module):
             num_heads=self.num_heads,
             head_dim=self.head_dim,
             scale=self.head_dim**-0.5,
-            num_kv_heads=self.num_heads,
+            num_kv_heads=self.num_kv_heads,
             alibi_slopes=alibi_slopes,
         )
 
     def forward(self, hidden_states: torch.Tensor, positions: torch.Tensor) -> torch.Tensor:
         qkv = self.c_attn(hidden_states)
-        q, k, v = qkv.split([self.q_size, self.q_size, self.q_size], dim=-1)
+        q, k, v = qkv.split([self.q_size, self.kv_size, self.kv_size], dim=-1)
         q = q.view(-1, self.num_heads, self.head_dim)
-        k = k.view(-1, self.num_heads, self.head_dim)
-        v = v.view(-1, self.num_heads, self.head_dim)
+        k = k.view(-1, self.num_kv_heads, self.head_dim)
+        v = v.view(-1, self.num_kv_heads, self.head_dim)
         if self.rotary is not None:
             q, k = self.rotary(positions, q, k)
         output = self.attn(q, k, v)
