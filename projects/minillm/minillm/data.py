@@ -15,6 +15,7 @@ def split_train_val(token_ids: list[int], val_fraction: float = 0.1) -> tuple[to
     # torch.long 是 PyTorch 的 int64 张量 dtype；Python 里的 int/long 是普通标量概念，
     # 不能直接表达“整批数据在 GPU/CPU 上以 int64 张量方式参与运算”。
     data = torch.tensor(token_ids, dtype=torch.long)
+    # TODO：只有一维tensor可以这样操作的吧？高维tensor可以直接使用len吗？
     split = max(1, int(len(data) * (1.0 - val_fraction)))
     return data[:split], data[split:]
 
@@ -35,6 +36,8 @@ def get_batch(
     # .to(device) 把数据移动到 CPU/CUDA/MPS 中当前模型所在设备，否则模型和数据不在同一设备会报错。
     # randint's upper bound is exclusive. ``len(data) - block_size`` keeps the
     # final valid start (whose target ends exactly at len(data)) reachable.
+
+    # TODO：第三个参数只能使用元组表达是吗？为什么随机数需要三个参数？每一个参数的作用是什么？
     starts = torch.randint(0, len(data) - block_size, (batch_size,))
     x = torch.stack([data[i : i + block_size] for i in starts])
     y = torch.stack([data[i + 1 : i + block_size + 1] for i in starts])

@@ -79,11 +79,15 @@ class LLMEngine:
 
     def generate(
         self,
+        # TODO：list[list[int]]指的是多用户同时输入转换为token id了吧？
         prompts: list[str] | list[list[int]],
         sampling_params: SamplingParams | list[SamplingParams],
+        # TODO:这个变量的作用是什么？
         use_tqdm: bool = True,
     ) -> list[str]:
+        # TODO：这个函数的作用是什么？
         pbar = tqdm(total=len(prompts), desc="Generating", dynamic_ncols=True, disable=not use_tqdm)
+        # TODO：如果是多个prompt但是只有一个sampling param那就复制每一个prompt相同的采样参数？
         if not isinstance(sampling_params, list):
             sampling_params = [sampling_params] * len(prompts)
         for prompt, sp in zip(prompts, sampling_params):

@@ -85,6 +85,7 @@ class Sequence:
     # 问题（已回答）：__getstate__ 是什么？
     # 回答：pickle 序列化时调用它。prefill 传完整 token_ids，decode 只传 last_token 和调度元数据，
     # 可减少跨进程共享内存的数据量；__setstate__ 负责恢复。
+    # TODO：调度元数据是什么？
     def __getstate__(self):
         last_state = self.last_token if not self.is_prefill else self.token_ids
         return (self.num_tokens, self.num_prompt_tokens, self.num_cached_tokens, self.num_scheduled_tokens, self.block_table, last_state)

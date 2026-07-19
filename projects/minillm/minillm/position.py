@@ -20,6 +20,7 @@ class SinusoidalPositionEmbedding(nn.Module):
             raise ValueError("sinusoidal_theta must be positive")
 
         positions = torch.arange(max_seq_len, dtype=torch.float32).unsqueeze(1)
+        # TODO：这个freqs返回的是一个什么形状的张量？
         frequencies = torch.exp(
             torch.arange(0, hidden_size, 2, dtype=torch.float32)
             * (-math.log(base) / hidden_size)
@@ -54,15 +55,20 @@ def get_alibi_slopes(num_heads: int) -> torch.Tensor:
     if num_heads <= 0:
         raise ValueError("num_heads must be positive")
     closest_power_of_two = 2 ** math.floor(math.log2(num_heads))
+    # TODO：这个base的作用是什么？为什么是2的2.几次方？
     base = 2 ** (-(2 ** -(math.log2(closest_power_of_two) - 3)))
+    # TODO：这个返回的是什么？形状是什么？
     slopes = torch.pow(
         torch.tensor(base, dtype=torch.float32),
         torch.arange(1, closest_power_of_two + 1, dtype=torch.float32),
     )
+    # TODO：这个的原理是什么？
     if closest_power_of_two == num_heads:
         return slopes
 
+    # TODO：为什么里面又有一个2倍的closest_power_of_two?
     extra_base = 2 ** (-(2 ** -(math.log2(2 * closest_power_of_two) - 3)))
+    # TODO:这里显示的是什么？
     remaining = num_heads - closest_power_of_two
     extra_powers = torch.arange(1, 2 * remaining + 1, 2, dtype=torch.float32)
     return torch.cat(
@@ -70,7 +76,7 @@ def get_alibi_slopes(num_heads: int) -> torch.Tensor:
         dim=0,
     )
 
-
+# TODO：这个class的作用是什么？为什么里面的函数什么都没有做就返回了？
 class AttentionPositionEncoding(nn.Module):
     """Position hooks that run inside attention."""
 

@@ -7,6 +7,7 @@ from nanovllm.engine.sequence import Sequence
 
 class Block:
 
+    # TODO：一个block存储多少个token？这个是paged attention使用的存储方式吗？
     def __init__(self, block_id):
         self.block_id = block_id
         self.ref_count = 0

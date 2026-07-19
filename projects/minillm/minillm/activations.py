@@ -24,7 +24,7 @@ SUPPORTED_ACTIVATIONS = (
     "identity",
 )
 
-
+# TODO：类似于大的GPT、llama也都是这种方式实现激活函数的吗？使用下面的factory？
 class SquaredReLU(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return F.relu(x).square()

@@ -30,8 +30,10 @@ class RotaryEmbedding(nn.Module):
 
     def _apply_rotary(self, x: torch.Tensor, positions: torch.Tensor) -> torch.Tensor:
         # x is [B,H,T,D]; positions may be [T] or [B,T].
+        # TODO：这里的index_select如何使用的？为什么要使用view？
         cos = self.cos.index_select(0, positions.reshape(-1)).view(*positions.shape, -1)
         sin = self.sin.index_select(0, positions.reshape(-1)).view(*positions.shape, -1)
+        # TODO：为什么position会有多种不同的情况？为什么一定要补齐到3维？
         if positions.dim() == 1:
             cos = cos.unsqueeze(0).unsqueeze(0)
             sin = sin.unsqueeze(0).unsqueeze(0)
@@ -41,8 +43,10 @@ class RotaryEmbedding(nn.Module):
         else:
             raise ValueError("positions must have shape [T] or [B,T]")
 
+        # TODO：这个默认是存储在哪里的 为什么要传送？
         cos = cos.to(device=x.device, dtype=x.dtype)
         sin = sin.to(device=x.device, dtype=x.dtype)
         first, second = torch.chunk(x.float(), 2, dim=-1)
+        # TODO：这里用数学如何表示表达式？
         rotated = torch.cat((first * cos - second * sin, second * cos + first * sin), dim=-1)
         return rotated.to(x.dtype)
