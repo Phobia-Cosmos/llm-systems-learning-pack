@@ -32,6 +32,7 @@ class Sequence:
         # 问题（已回答）：cached tokens、block_table 和 num_scheduled_tokens 分别是什么？
         # 回答：K/V 存在全局 GPU cache 池；num_cached_tokens 是可复用前缀长度；block_table 映射物理块；
         # num_scheduled_tokens 是 scheduler 本轮准备计算的 token 数。
+        # TODO：这几个参数是和kvcache相关的吗？
         self.num_cached_tokens = 0
         self.num_scheduled_tokens = 0
         self.is_prefill = True
@@ -90,6 +91,7 @@ class Sequence:
         last_state = self.last_token if not self.is_prefill else self.token_ids
         return (self.num_tokens, self.num_prompt_tokens, self.num_cached_tokens, self.num_scheduled_tokens, self.block_table, last_state)
 
+    # TODO：这里传入的是什么参数？这个state为什么可以赋值给全部的变量？
     def __setstate__(self, state):
         self.num_tokens, self.num_prompt_tokens, self.num_cached_tokens, self.num_scheduled_tokens, self.block_table, last_state = state
         if isinstance(last_state, list):

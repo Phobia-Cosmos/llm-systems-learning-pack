@@ -3,6 +3,7 @@ import torch
 
 
 @dataclass(slots=True)
+# TODO：这个存储的是什么？一次调用过程的上下文还是整个batch中多个请求的context？
 class Context:
     is_prefill: bool = False
     # 问题（已回答）：cu_seqlens_q 和 cu_seqlens_k 是什么？

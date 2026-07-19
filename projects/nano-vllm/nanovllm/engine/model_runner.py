@@ -32,6 +32,7 @@ class ModelRunner:
         dist.init_process_group("nccl", "tcp://localhost:2333", world_size=self.world_size, rank=rank)
         torch.cuda.set_device(rank)
         default_dtype = torch.get_default_dtype()
+
         # 问题（已回答）：嵌套 getattr 为什么传第三个参数？
         # 回答：getattr(obj, name, default) 的第三项是属性不存在时的默认值；优先读 dtype，缺失时回退到
         # torch_dtype，再缺失就得到 None，从而兼容不同 Transformers config 命名。
@@ -42,18 +43,23 @@ class ModelRunner:
             model_dtype = getattr(torch, model_dtype)
         if model_dtype is not None:
             torch.set_default_dtype(model_dtype)
+
         # 问题（已回答）：rank、CUDA device 和 default device 的关系是什么？
         # 回答：rank 先确定进程负责哪张卡，set_device(rank) 绑定当前 CUDA 卡；set_default_device("cuda")
         # 再让模型构造期间未显式指定 device 的参数直接创建在该卡上，避免先在 CPU 建模再搬运。
         torch.set_default_device("cuda")
+
         self.model = create_model(hf_config)
         # 问题（已回答）：next(self.model.parameters()).dtype 在取什么？
         # 回答：它读取模型第一个参数的实际 dtype，作为 KV cache dtype 和 cache block 字节数计算依据。
+        # TODO：一个模型都有哪些参数？
         self.model_dtype = next(self.model.parameters()).dtype
+
         load_model(self.model, config.model)
         self.sampler = Sampler()
         self.warmup_model()
         self.allocate_kv_cache()
+
         if not self.enforce_eager:
             self.capture_cudagraph()
         torch.set_default_device("cpu")
@@ -133,10 +139,12 @@ class ModelRunner:
         # 回答：Sequence 封装一条请求。构造 num_seqs 条最大形状假请求可触发 kernel/JIT/临时显存分配，
         # 避免第一次真实请求承担这些开销。
         num_seqs = min(max_num_batched_tokens // seq_len, self.config.max_num_seqs)
+        # TODO:这里传入seq len个0模拟的是seq len个token是吗？也就是最大容量的token的请求有最大限制个？
         seqs = [Sequence([0] * seq_len) for _ in range(num_seqs)]
         for seq in seqs:
             seq.num_scheduled_tokens = seq_len
         self.run(seqs, True)
+        # TODO：为什么又清空缓存？
         torch.cuda.empty_cache()
 
     def allocate_kv_cache(self):
@@ -144,10 +152,12 @@ class ModelRunner:
         hf_config = config.hf_config
         free, total = torch.cuda.mem_get_info()
         used = total - free
+        # TODO：为什么需要peak和current？
         peak = torch.cuda.memory_stats()["allocated_bytes.all.peak"]
         current = torch.cuda.memory_stats()["allocated_bytes.all.current"]
         num_kv_heads = hf_config.num_key_value_heads // self.world_size
         head_dim = getattr(hf_config, "head_dim", hf_config.hidden_size // hf_config.num_attention_heads)
+        # TODO：为什么需要block_size？
         block_bytes = (
             2
             * hf_config.num_hidden_layers
@@ -156,6 +166,7 @@ class ModelRunner:
             * head_dim
             * self.model_dtype.itemsize
         )
+        # TODO：为什么要- peak + current？
         config.num_kvcache_blocks = int(total * config.gpu_memory_utilization - used - peak + current) // block_bytes
         assert config.num_kvcache_blocks > 0
         self.kv_cache = torch.empty(
@@ -169,17 +180,22 @@ class ModelRunner:
         )
         layer_id = 0
         for module in self.model.modules():
+            # TODO：如何判断哪些module包含这些属性？
             if hasattr(module, "k_cache") and hasattr(module, "v_cache"):
                 module.k_cache = self.kv_cache[0, layer_id]
                 module.v_cache = self.kv_cache[1, layer_id]
                 layer_id += 1
 
+    # TODO:这个函数的作用是什么？
     def prepare_block_tables(self, seqs: list[Sequence]):
         max_len = max(len(seq.block_table) for seq in seqs)
+        # TODO：初始化block节点，对应的是kvcache的映射是吗？
         block_tables = [seq.block_table + [-1] * (max_len - len(seq.block_table)) for seq in seqs]
+        # TODO：这里是为了让我们的tensor是在GPU上生成的是吗？
         block_tables = torch.tensor(block_tables, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
         return block_tables
 
+    # TODO：这个函数在做什么以及会有什么影响吗？
     def prepare_prefill(self, seqs: list[Sequence]):
         input_ids = []
         positions = []
@@ -190,6 +206,7 @@ class ModelRunner:
         slot_mapping = []
         block_tables = None
         for seq in seqs:
+            # TODO：为什么seqlen_q和seqlen_k使用的都是cache和schedule token？
             start = seq.num_cached_tokens
             seqlen_q = seq.num_scheduled_tokens
             end = start + seqlen_q
@@ -200,11 +217,14 @@ class ModelRunner:
             cu_seqlens_k.append(cu_seqlens_k[-1] + seqlen_k)
             max_seqlen_q = max(seqlen_q, max_seqlen_q)
             max_seqlen_k = max(seqlen_k, max_seqlen_k)
+
+            # TODO：这个是什么意思？block table何时会被赋值？Seq初始化时这个字段为空？为什么不为空就要跳过这个seq的处理？
             if not seq.block_table:    # warmup
                 continue
             start_block = start // self.block_size
             end_block = (end + self.block_size - 1) // self.block_size
             for i in range(start_block, end_block):
+                # TODO：这里面存储的是什么？
                 slot_start = seq.block_table[i] * self.block_size
                 if i == start_block:
                     slot_start += start % self.block_size
@@ -213,6 +233,7 @@ class ModelRunner:
                 else:
                     slot_end = seq.block_table[i] * self.block_size + end - i * self.block_size
                 slot_mapping.extend(range(slot_start, slot_end))
+        # TODO：这里在判断什么？
         if cu_seqlens_k[-1] > cu_seqlens_q[-1]:    # prefix cache
             block_tables = self.prepare_block_tables(seqs)
         input_ids = torch.tensor(input_ids, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
@@ -223,6 +244,7 @@ class ModelRunner:
         set_context(True, cu_seqlens_q, cu_seqlens_k, max_seqlen_q, max_seqlen_k, slot_mapping, None, block_tables)
         return input_ids, positions
 
+    # TODO：为什么decode需要准备的参数变少了？
     def prepare_decode(self, seqs: list[Sequence]):
         input_ids = []
         positions = []
@@ -237,66 +259,85 @@ class ModelRunner:
         positions = torch.tensor(positions, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
         slot_mapping = torch.tensor(slot_mapping, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
         context_lens = torch.tensor(context_lens, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
+        # TODO：为什么decode需要额外准备block table而prefill不需要？
         block_tables = self.prepare_block_tables(seqs)
         set_context(False, slot_mapping=slot_mapping, context_lens=context_lens, block_tables=block_tables)
         return input_ids, positions
 
     def prepare_sample(self, seqs: list[Sequence]):
         temperatures = [seq.temperature for seq in seqs]
+        # TODO：pin_memory代表缓存？为什么最后还要加上cuda？non_blocking=True代表什么意思？
         temperatures = torch.tensor(temperatures, dtype=torch.float32, pin_memory=True).cuda(non_blocking=True)
         return temperatures
 
     @torch.inference_mode()
     def run_model(self, input_ids: torch.Tensor, positions: torch.Tensor, is_prefill: bool):
+        # TODO：为什么input_ids.size(0) > 512也要直接计算？
         if is_prefill or self.enforce_eager or input_ids.size(0) > 512:
+            # TODO：这个函数是在哪里定义的？self.model(input_ids, positions)为什么传入的是这个？为什么要用sle.model包住？
             return self.model.compute_logits(self.model(input_ids, positions))
         else:
+            # TODO：这些graph字段都是什么意思？
             bs = input_ids.size(0)
             context = get_context()
+            # TODO：这个next是什么意思？为什么要判断x是否大于等于bs？
             graph = self.graphs[next(x for x in self.graph_bs if x >= bs)]
             graph_vars = self.graph_vars
+            # TODO：这些一开始都是什么数据类型的？input_ids？为什么需要[:bs]？
             graph_vars["input_ids"][:bs] = input_ids
             graph_vars["positions"][:bs] = positions
+            # TODO：这是在做什么？
             graph_vars["slot_mapping"].fill_(-1)
             graph_vars["slot_mapping"][:bs] = context.slot_mapping
             graph_vars["context_lens"].zero_()
             graph_vars["context_lens"][:bs] = context.context_lens
             graph_vars["block_tables"][:bs, :context.block_tables.size(1)] = context.block_tables
+            # TODO：这个是什么？做了哪些操作？
             graph.replay()
             return self.model.compute_logits(graph_vars["outputs"][:bs])
 
     def run(self, seqs: list[Sequence], is_prefill: bool) -> list[int]:
         input_ids, positions = self.prepare_prefill(seqs) if is_prefill else self.prepare_decode(seqs)
+        # TODO：为什么只有rank0才需要温度？
         temperatures = self.prepare_sample(seqs) if self.rank == 0 else None
         logits = self.run_model(input_ids, positions, is_prefill)
         token_ids = self.sampler(logits, temperatures).tolist() if self.rank == 0 else None
         reset_context()
         return token_ids
 
+    # TODO：这个注释的作用是什么？为什么需要构建一个cuda graph？哪些情况下需要构建这一个cuda 图？
     @torch.inference_mode()
     def capture_cudagraph(self):
         config = self.config
         hf_config = config.hf_config
+        # TODO：bs和token大小的关系是什么？
         max_bs = min(self.config.max_num_seqs, 512)
         max_num_blocks = (config.max_model_len + self.block_size - 1) // self.block_size
+
         input_ids = torch.zeros(max_bs, dtype=torch.int64)
         positions = torch.zeros(max_bs, dtype=torch.int64)
         slot_mapping = torch.zeros(max_bs, dtype=torch.int32)
         context_lens = torch.zeros(max_bs, dtype=torch.int32)
         block_tables = torch.zeros(max_bs, max_num_blocks, dtype=torch.int32)
         outputs = torch.zeros(max_bs, hf_config.hidden_size)
+        # TODO：为什么需要这样一个graph bs？
         self.graph_bs = [1, 2, 4, 8] + list(range(16, max_bs + 1, 16))
         self.graphs = {}
         self.graph_pool = None
 
+        # TODO：一个bs指的是什么？为什么是reversed顺序？
         for bs in reversed(self.graph_bs):
+            # TODO：这里一个graph指的是什么？
             graph = torch.cuda.CUDAGraph()
             set_context(False, slot_mapping=slot_mapping[:bs], context_lens=context_lens[:bs], block_tables=block_tables[:bs])
+            # TODO：为什么调用model就会自动输出了呢？他会被转到model的哪一个函数处理呢？这里不是cuda graph？在哪里warm up？CPU？
             outputs[:bs] = self.model(input_ids[:bs], positions[:bs])    # warmup
+
             with torch.cuda.graph(graph, self.graph_pool):
                 outputs[:bs] = self.model(input_ids[:bs], positions[:bs])    # capture
             if self.graph_pool is None:
                 self.graph_pool = graph.pool()
+                # TODO：这里存入的graph指的是什么？
             self.graphs[bs] = graph
             torch.cuda.synchronize()
             reset_context()

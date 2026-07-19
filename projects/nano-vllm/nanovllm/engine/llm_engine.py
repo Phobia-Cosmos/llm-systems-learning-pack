@@ -18,6 +18,7 @@ class LLMEngine:
         config_fields = {field.name for field in fields(Config)}
         config_kwargs = {k: v for k, v in kwargs.items() if k in config_fields}
         config = Config(model, **config_kwargs)
+
         self.max_model_len = config.max_model_len
         Sequence.block_size = config.kvcache_block_size
         # 问题（已回答）：这两个数组、spawn context 和 Event 分别做什么？
@@ -30,11 +31,13 @@ class LLMEngine:
         # 问题（已回答）：循环里只是定义进程，还没有启动吗？
         # 回答：ctx.Process(...) 只构造进程对象；紧接着 process.start() 已真正启动子进程并执行 ModelRunner。
         for i in range(1, config.tensor_parallel_size):
+            # TODO：这里的一个Event表示什么东西？
             event = ctx.Event()
             process = ctx.Process(target=ModelRunner, args=(config, i, event))
             process.start()
             self.ps.append(process)
             self.events.append(event)
+            # TODO：rank 0 model runner的作用是什么？为什么要区别不同rank？
         self.model_runner = ModelRunner(config, 0, self.events)
         self.tokenizer = load_tokenizer(config.model, config.hf_config)
         # 问题（已回答）：分词器需要 eos_token_id 吗？
@@ -43,6 +46,7 @@ class LLMEngine:
         config.eos = self.tokenizer.eos_token_id
         self.scheduler = Scheduler(config)
         self._exited = False
+        # TODO：这个是什么？atexit？
         atexit.register(self.exit)
 
     def exit(self):
@@ -51,6 +55,7 @@ class LLMEngine:
         self._exited = True
         self.model_runner.call("exit")
         for p in self.ps:
+            # TODO：这个join是什么意思？
             p.join()
 
     def add_request(self, prompt: str | list[int], sampling_params: SamplingParams):
@@ -92,10 +97,12 @@ class LLMEngine:
             sampling_params = [sampling_params] * len(prompts)
         for prompt, sp in zip(prompts, sampling_params):
             self.add_request(prompt, sp)
+
         outputs = {}
         prefill_throughput = decode_throughput = 0.
         while not self.is_finished():
             t = perf_counter()
+            
             output, num_tokens = self.step()
             if num_tokens > 0:
                 prefill_throughput = num_tokens / (perf_counter() - t)
@@ -109,6 +116,7 @@ class LLMEngine:
                 outputs[seq_id] = token_ids
                 pbar.update(1)
         pbar.close()
+
         outputs = [outputs[seq_id] for seq_id in sorted(outputs.keys())]
         outputs = [{"text": self.tokenizer.decode(token_ids), "token_ids": token_ids} for token_ids in outputs]
         return outputs
