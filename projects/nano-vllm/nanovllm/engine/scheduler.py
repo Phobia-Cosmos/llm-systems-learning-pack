@@ -110,7 +110,7 @@ class Scheduler:
             # TODO：这里是在判断什么东西？直到本seq的所有token全部处理完成才到下一个语句是吗？
             if is_prefill and seq.num_cached_tokens < seq.num_tokens:
                 continue
-            # TODO：这里是什么意思？prefill不是已经处理完成了吗？
+            # TODO：这里是什么意思？prefill不是已经处理完成了吗？这里指的是处理到seq的末尾了是吗 需要加eos了？
             seq.append_token(token_id)
             if (not seq.ignore_eos and token_id == self.eos) or seq.num_completion_tokens == seq.max_tokens:
                 seq.status = SequenceStatus.FINISHED
