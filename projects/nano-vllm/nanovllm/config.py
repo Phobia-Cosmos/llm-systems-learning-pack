@@ -16,7 +16,8 @@ class Config:
     # 问题（已回答）：单序列最大 token 数指的是一个请求的最大 token 数量吗？单 GPU 是否不需要 TP？
     # 回答：是，max_model_len 限制一条请求的总上下文长度，通常包括 prompt 和已经生成的 token；它不同于
     # max_num_batched_tokens，后者限制一次调度中所有请求合计处理的 token。只有一张 GPU 时 TP 必须为 1，
-    # 不会带来切分收益；TP 可以用于同一机器的多张 GPU，也可以跨节点，并非只有“集群”才使用。
+    # 不会带来切分收益。TP 这一技术本身可扩展到跨节点，但当前 ModelRunner 固定用 localhost rendezvous，并按 rank
+    # 选择本机 GPU，所以本仓库实现的是单机多卡，不能直接当作已支持跨节点。
     max_num_seqs: int = 512
     max_model_len: int = 4096
     gpu_memory_utilization: float = 0.9

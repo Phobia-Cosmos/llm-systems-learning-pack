@@ -32,7 +32,9 @@ class Sequence:
         # 问题（已回答）：cached tokens、block_table 和 num_scheduled_tokens 分别是什么？
         # 回答：K/V 存在全局 GPU cache 池；num_cached_tokens 是可复用前缀长度；block_table 映射物理块；
         # num_scheduled_tokens 是 scheduler 本轮准备计算的 token 数。
-        # TODO：这几个参数是和kvcache相关的吗？
+        # 问题（已回答）：这几个参数都和 KV cache 有关吗？
+        # 回答：num_cached_tokens、num_scheduled_tokens 和 block_table 是调度/KV 元数据；is_prefill 选择数据准备与
+        # attention 路径。它们不保存 K/V 数值，真实 cache Tensor 在 ModelRunner 中；temperature 等字段也与 KV 无关。
         self.num_cached_tokens = 0
         self.num_scheduled_tokens = 0
         self.is_prefill = True
@@ -86,12 +88,16 @@ class Sequence:
     # 问题（已回答）：__getstate__ 是什么？
     # 回答：pickle 序列化时调用它。prefill 传完整 token_ids，decode 只传 last_token 和调度元数据，
     # 可减少跨进程共享内存的数据量；__setstate__ 负责恢复。
-    # TODO：调度元数据是什么？
+    # 问题（已回答）：调度元数据是什么？
+    # 回答：这里指 worker 执行本轮模型所需的长度、缓存进度、scheduled token 数和物理 block 映射；decode 还需要
+    # last_token。seq_id、队列状态和停止条件由 rank 0 的 scheduler 使用，无需随命令复制给其他 TP worker。
     def __getstate__(self):
         last_state = self.last_token if not self.is_prefill else self.token_ids
         return (self.num_tokens, self.num_prompt_tokens, self.num_cached_tokens, self.num_scheduled_tokens, self.block_table, last_state)
 
-    # TODO：这里传入的是什么参数？这个state为什么可以赋值给全部的变量？
+    # 问题（已回答）：__setstate__ 传入什么，为什么 state 能赋值给多个变量？
+    # 回答：pickle 反序列化时把 __getstate__ 返回的六元素 tuple 原样传入。Python 的序列解包按位置一一赋值；
+    # last_state 在 prefill 是完整 token list，在 decode 是单个 last_token，据类型恢复 worker 所需的最小状态。
     def __setstate__(self, state):
         self.num_tokens, self.num_prompt_tokens, self.num_cached_tokens, self.num_scheduled_tokens, self.block_table, last_state = state
         if isinstance(last_state, list):

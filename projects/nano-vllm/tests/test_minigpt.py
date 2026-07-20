@@ -322,6 +322,6 @@ class RotaryEmbeddingTests(unittest.TestCase):
 if __name__ == "__main__":
     # 问题（已回答）：这个主函数判断和 unittest.main() 做什么，如何运行上面的测试？
     # 回答：文件被直接执行时 __name__ 才等于 "__main__"；unittest.main() 会发现当前模块中继承
-    # unittest.TestCase 且名称以 test 开头的方法并执行。可运行 python3 tests/test_minigpt.py，或用
-    # python3 -m unittest tests.test_minigpt 运行整个模块，也可在模块路径后指定某个测试类或测试方法。
+    # unittest.TestCase 且名称以 test 开头的方法并执行。可运行 python3 tests/test_minigpt.py，或在仓库根目录用
+    # python3 -m unittest discover -s tests -p 'test_minigpt.py'；也可把具体测试类/方法路径交给 unittest runner。
     unittest.main()
