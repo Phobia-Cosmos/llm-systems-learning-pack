@@ -52,7 +52,10 @@ class ModelRunner:
         self.model = create_model(hf_config)
         # 问题（已回答）：next(self.model.parameters()).dtype 在取什么？
         # 回答：它读取模型第一个参数的实际 dtype，作为 KV cache dtype 和 cache block 字节数计算依据。
-        # TODO：一个模型都有哪些参数？
+        # 问题（已回答）：一个模型通常有哪些参数？
+        # 回答：parameters() 遍历注册在 nn.Module 中的可训练张量；本项目主要包括 token/position embedding、
+        # Q/K/V 与输出投影、MLP 投影、可选 bias、Norm scale 和 lm_head。RoPE 表、ALiBi slope、KV cache
+        # 属于 buffer 或运行时状态，不是 Parameter。这里的参数刚构造后会由 safetensors checkpoint 覆盖。
         self.model_dtype = next(self.model.parameters()).dtype
 
         load_model(self.model, config.model)
@@ -117,12 +120,19 @@ class ModelRunner:
         # 才知道后续读取多少字节。这里不是 5 字节，切片右端 n+4 不包含自身。
         self.shm.buf[0:4] = n.to_bytes(4, "little")
         self.shm.buf[4:n+4] = data
+
+        # 问题（已回答）：这里通知什么，worker 会读取刚写入的命令吗？
+        # 回答：是。rank 0 已先把完整 payload 写进共享内存，再逐个 set Event；每个非零 rank 从 wait() 醒来，
+        # 读取同一条方法名和参数并执行自己的模型分片。Event 只传“数据已就绪”的信号，实际命令仍在共享内存中。
         for event in self.event:
             # 问题（已回答）：event.set() 做什么？
             # 回答：把 Event 置为已通知，使阻塞在 wait() 的 worker 立即醒来读取命令。
             event.set()
 
     def call(self, method_name, *args):
+        # 问题（已回答）：只有一个 GPU 时 call 是否不需要执行？
+        # 回答：仍必须在当前 rank 调用目标方法来完成真正的 run/exit；单 GPU 只是不需要 write_shm 广播。
+        # 多 GPU 时 rank 0 先唤醒其他 rank，然后自己也执行同一方法，使所有 rank 同步参与 TP 前向和 collective。
         if self.world_size > 1 and self.rank == 0:
             self.write_shm(method_name, *args)
         method = getattr(self, method_name, None)
@@ -139,12 +149,18 @@ class ModelRunner:
         # 回答：Sequence 封装一条请求。构造 num_seqs 条最大形状假请求可触发 kernel/JIT/临时显存分配，
         # 避免第一次真实请求承担这些开销。
         num_seqs = min(max_num_batched_tokens // seq_len, self.config.max_num_seqs)
-        # TODO:这里传入seq len个0模拟的是seq len个token是吗？也就是最大容量的token的请求有最大限制个？
+        # 问题（已回答）：[0] * seq_len 模拟什么，假请求数量怎样受限？
+        # 回答：每个 0 都是一个合法的占位 token id，因此一条假 Sequence 含 seq_len 个 token；num_seqs 同时受
+        # 总 token 预算 max_num_batched_tokens 和 max_num_seqs 限制。它模拟的是允许预算内的最大 prefill 形状，
+        # 不是生成真实文本，也不会写入尚未分配的 KV cache。
         seqs = [Sequence([0] * seq_len) for _ in range(num_seqs)]
         for seq in seqs:
             seq.num_scheduled_tokens = seq_len
         self.run(seqs, True)
-        # TODO：为什么又清空缓存？
+        # 问题（已回答）：warmup 后为什么再次 empty_cache？
+        # 回答：warmup 期间编译和算子执行可能让 PyTorch caching allocator 保留不再使用的临时块；empty_cache
+        # 把这些空闲 reserved 块还给 CUDA driver，便于随后按真实可用显存分配 KV cache。已加载模型参数不会被清除，
+        # 而 reset 后记录的 peak 统计仍可用于估算下一次前向所需的瞬时显存。
         torch.cuda.empty_cache()
 
     def allocate_kv_cache(self):
@@ -152,12 +168,17 @@ class ModelRunner:
         hf_config = config.hf_config
         free, total = torch.cuda.mem_get_info()
         used = total - free
-        # TODO：为什么需要peak和current？
+        # 问题（已回答）：为什么同时读取 peak 和 current？
+        # 回答：current 是 warmup 结束后仍常驻的 PyTorch tensor 显存，peak 是一次最坏前向达到的峰值；
+        # 二者之差 peak-current 近似下一次执行还要预留的临时激活/工作区。只看当前空闲量就把它全给 KV cache，
+        # 真实运行到峰值时仍会 OOM。
         peak = torch.cuda.memory_stats()["allocated_bytes.all.peak"]
         current = torch.cuda.memory_stats()["allocated_bytes.all.current"]
         num_kv_heads = hf_config.num_key_value_heads // self.world_size
         head_dim = getattr(hf_config, "head_dim", hf_config.hidden_size // hf_config.num_attention_heads)
-        # TODO：为什么需要block_size？
+        # 问题（已回答）：计算一个 KV block 的字节数为什么需要 block_size？
+        # 回答：一个物理 block 为连续 block_size 个 token 预留每层的 K 和 V；每个 token 在当前 rank 上各有
+        # num_kv_heads * head_dim 个元素。因此 block_size 决定单块容量，block 越大元数据越少但尾块浪费可能越多。
         block_bytes = (
             2
             * hf_config.num_hidden_layers
@@ -166,7 +187,10 @@ class ModelRunner:
             * head_dim
             * self.model_dtype.itemsize
         )
-        # TODO：为什么要- peak + current？
+        # 问题（已回答）：KV cache 预算为什么写成 -peak + current？
+        # 回答：这两项合起来就是减去 peak-current，即为下一次前向的瞬时峰值增量留出空间。完整预算是
+        # “利用率允许的总显存 - 当前设备已用显存 - 运行时额外峰值”，再除以每块字节数得到可分配块数。
+        # 这是 warmup 估算而非绝对保证，其他进程占用或新形状产生更大工作区时仍可能改变余量。
         config.num_kvcache_blocks = int(total * config.gpu_memory_utilization - used - peak + current) // block_bytes
         assert config.num_kvcache_blocks > 0
         self.kv_cache = torch.empty(
@@ -180,13 +204,16 @@ class ModelRunner:
         )
         layer_id = 0
         for module in self.model.modules():
-            # TODO：如何判断哪些module包含这些属性？
+            # 问题（已回答）：如何判断哪些 module 应绑定这一层的 KV cache？
+            # 回答：Attention.__init__ 统一创建 k_cache 和 v_cache 属性，所以递归遍历 model.modules() 并用 hasattr
+            # 做结构化识别；普通 Linear/Norm 没有这两个属性会被跳过。每发现一个 attention module，就把全局 cache
+            # 对应 layer_id 的 view 赋给它，所有层共享一笔大分配但读写各自的层切片。
             if hasattr(module, "k_cache") and hasattr(module, "v_cache"):
                 module.k_cache = self.kv_cache[0, layer_id]
                 module.v_cache = self.kv_cache[1, layer_id]
                 layer_id += 1
 
-    # TODO:这个函数的作用是什么？
+    # TODO:这个函数的作用是什么？为什么要全部扩充到最大的长度？
     def prepare_block_tables(self, seqs: list[Sequence]):
         max_len = max(len(seq.block_table) for seq in seqs)
         # TODO：初始化block节点，对应的是kvcache的映射是吗？
@@ -195,10 +222,11 @@ class ModelRunner:
         block_tables = torch.tensor(block_tables, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
         return block_tables
 
-    # TODO：这个函数在做什么以及会有什么影响吗？
+    # TODO：这个函数在做什么以及会有什么影响吗？将这次请求的所有seqs全部转换为input和position？
     def prepare_prefill(self, seqs: list[Sequence]):
         input_ids = []
         positions = []
+        # TODO：这里面存储的都是位置数据吧？
         cu_seqlens_q = [0]
         cu_seqlens_k = [0]
         max_seqlen_q = 0
@@ -206,15 +234,19 @@ class ModelRunner:
         slot_mapping = []
         block_tables = None
         for seq in seqs:
-            # TODO：为什么seqlen_q和seqlen_k使用的都是cache和schedule token？
+            # TODO：为什么seqlen_q和seqlen_k使用的都是cache和schedule token？意思是这些seqlen_q也要存放到和start同一个空间是吗？为什么seqlen_k就是end？
             start = seq.num_cached_tokens
             seqlen_q = seq.num_scheduled_tokens
             end = start + seqlen_q
             seqlen_k = end
+
+            # TODO:seq[]会调用Sequence的哪一个函数？
             input_ids.extend(seq[start:end])
             positions.extend(range(start, end))
             cu_seqlens_q.append(cu_seqlens_q[-1] + seqlen_q)
             cu_seqlens_k.append(cu_seqlens_k[-1] + seqlen_k)
+
+            # TODO：为什么要获得多个seq中调度最多的token数量？
             max_seqlen_q = max(seqlen_q, max_seqlen_q)
             max_seqlen_k = max(seqlen_k, max_seqlen_k)
 
@@ -231,11 +263,13 @@ class ModelRunner:
                 if i != end_block - 1:
                     slot_end = seq.block_table[i] * self.block_size + self.block_size
                 else:
+                    # TODO：请用画图的方式解释这个end的含义？
                     slot_end = seq.block_table[i] * self.block_size + end - i * self.block_size
                 slot_mapping.extend(range(slot_start, slot_end))
-        # TODO：这里在判断什么？
+        # TODO：这里在判断什么？为什么会出现key的长度大于q？
         if cu_seqlens_k[-1] > cu_seqlens_q[-1]:    # prefix cache
             block_tables = self.prepare_block_tables(seqs)
+
         input_ids = torch.tensor(input_ids, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
         positions = torch.tensor(positions, dtype=torch.int64, pin_memory=True).cuda(non_blocking=True)
         cu_seqlens_q = torch.tensor(cu_seqlens_q, dtype=torch.int32, pin_memory=True).cuda(non_blocking=True)
@@ -270,27 +304,29 @@ class ModelRunner:
         temperatures = torch.tensor(temperatures, dtype=torch.float32, pin_memory=True).cuda(non_blocking=True)
         return temperatures
 
+    # TODO:为什么需要这个@?这个代表什么意思？
     @torch.inference_mode()
     def run_model(self, input_ids: torch.Tensor, positions: torch.Tensor, is_prefill: bool):
-        # TODO：为什么input_ids.size(0) > 512也要直接计算？
+        # TODO：为什么input_ids.size(0) > 512也要直接计算？这个代表什么意思？为什么prefill阶段不需要graph？
         if is_prefill or self.enforce_eager or input_ids.size(0) > 512:
-            # TODO：这个函数是在哪里定义的？self.model(input_ids, positions)为什么传入的是这个？为什么要用sle.model包住？
+            # TODO：这个函数是在哪里定义的？self.model(input_ids, positions)为什么传入的是这个？为什么要用self.model包住？
             return self.model.compute_logits(self.model(input_ids, positions))
         else:
-            # TODO：这些graph字段都是什么意思？
+            # TODO：这些graph字段都是什么意思？为什么需要bs这个字段？
             bs = input_ids.size(0)
             context = get_context()
-            # TODO：这个next是什么意思？为什么要判断x是否大于等于bs？
+            # TODO：这个next是什么意思？为什么要判断x是否大于等于bs？这里是从graphs中取出什么东西？
             graph = self.graphs[next(x for x in self.graph_bs if x >= bs)]
             graph_vars = self.graph_vars
-            # TODO：这些一开始都是什么数据类型的？input_ids？为什么需要[:bs]？
+            # TODO：这些一开始都是什么数据类型的？input_ids？为什么需要[:bs]？这两个数组中存储的都是什么？为什么是二维的？
             graph_vars["input_ids"][:bs] = input_ids
             graph_vars["positions"][:bs] = positions
-            # TODO：这是在做什么？
+            # TODO：这是在做什么？为什么要先fill -1然后在使用context的slot mapping？
             graph_vars["slot_mapping"].fill_(-1)
             graph_vars["slot_mapping"][:bs] = context.slot_mapping
             graph_vars["context_lens"].zero_()
             graph_vars["context_lens"][:bs] = context.context_lens
+            # TODO：这个数据类型也给我标注出来 这个是在做什么？
             graph_vars["block_tables"][:bs, :context.block_tables.size(1)] = context.block_tables
             # TODO：这个是什么？做了哪些操作？
             graph.replay()
@@ -298,10 +334,12 @@ class ModelRunner:
 
     def run(self, seqs: list[Sequence], is_prefill: bool) -> list[int]:
         input_ids, positions = self.prepare_prefill(seqs) if is_prefill else self.prepare_decode(seqs)
-        # TODO：为什么只有rank0才需要温度？
+        # TODO：为什么只有rank0才需要温度？为什么只有rank0才可以做这个事情？
         temperatures = self.prepare_sample(seqs) if self.rank == 0 else None
+
         logits = self.run_model(input_ids, positions, is_prefill)
         token_ids = self.sampler(logits, temperatures).tolist() if self.rank == 0 else None
+        # TODO：为什么要reset context 指的是一批请求处理完成吗？
         reset_context()
         return token_ids
 

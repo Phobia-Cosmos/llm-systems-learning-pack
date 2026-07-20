@@ -10,8 +10,9 @@
 #include <torch/types.h>
 #include <vector>
 
+// TODO:这个也不一定是32吧？我们是否可以改变这个值的大小来观察这个变量对于性能的影响？
 #define WARP_SIZE 32
-// TODO:reinterpret_cast是什么？这几个宏的作用是什么？
+// TODO:reinterpret_cast是什么？这几个宏的作用是什么？为什么还需要使用[0]?
 #define INT4(value) (reinterpret_cast<int4 *>(&(value))[0])
 #define FLOAT4(value) (reinterpret_cast<float4 *>(&(value))[0])
 #define HALF2(value) (reinterpret_cast<half2 *>(&(value))[0])
@@ -228,6 +229,7 @@ __global__ void elementwise_add_f16x8_pack_kernel(half *a, half *b, half *c,
     }                                                                          \
   }
 
+  // TODO：下面几行和PYBIND11_MODULE的作用分别是什么？
 TORCH_BINDING_ELEM_ADD(f32, torch::kFloat32, float, 1)
 TORCH_BINDING_ELEM_ADD(f32x4, torch::kFloat32, float, 4)
 TORCH_BINDING_ELEM_ADD(f16, torch::kHalf, half, 1)

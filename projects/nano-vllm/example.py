@@ -15,6 +15,10 @@ def main():
     llm = LLM(path, enforce_eager=True, tensor_parallel_size=1)
 
     sampling_params = SamplingParams(temperature=0.6, max_tokens=256)
+    # 问题（已回答）：这里是一位用户的多个问题吗，同一模型怎样处理多用户并发请求？
+    # 回答：prompts 只是两条独立请求，不记录用户归属；离线示例会先全部入队，再由 scheduler 动态组成批次。
+    # 在线多用户场景应在 LLMEngine 外提供服务层，把各用户请求汇入一个由单线程/协程独占的 engine step 循环，
+    # 并维护 request_id、响应队列、取消与限流。不要让多个线程并发调用同一个同步 generate 实例。
     prompts = [
         "introduce yourself",
         "list all prime numbers within 100",

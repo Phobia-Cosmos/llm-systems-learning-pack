@@ -3,7 +3,10 @@ import torch
 
 
 @dataclass(slots=True)
-# TODO：这个存储的是什么？一次调用过程的上下文还是整个batch中多个请求的context？
+# 问题（已回答）：Context 存储一次调用还是整个 batch 中多个请求的上下文？
+# 回答：它是当前 ModelRunner 进程中“一次模型执行”的 batch 级元数据，字段共同描述本轮所有 scheduled sequences；
+# 它不是某一条请求的长期状态，也不会跨 step 累积。prepare_prefill/prepare_decode 在 forward 前设置，所有 attention
+# 层读取同一个 Context，run 完成后 reset；模块全局变量也意味着同一进程内的模型调用必须串行。
 class Context:
     is_prefill: bool = False
     # 问题（已回答）：cu_seqlens_q 和 cu_seqlens_k 是什么？

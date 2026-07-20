@@ -44,6 +44,7 @@ def run_benchmark(
     mean_time = total_time / iters
     out_info = f"out_{tag}"
     out_val = out.item()
+    # TODO：这个是什么意思？以i8开头会怎么样？
     if tag.startswith("i8"):
         print(f"{out_info:>17}: {out_val:<15}, time:{mean_time:.8f}ms")
     else:

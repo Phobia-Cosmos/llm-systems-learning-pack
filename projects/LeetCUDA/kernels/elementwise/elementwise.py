@@ -5,7 +5,7 @@ from typing import Optional
 import torch
 from torch.utils.cpp_extension import load
 
-# TODO:这个使用来做什么的？
+# TODO:这个使用来做什么的？不要使用反向传播？
 torch.set_grad_enabled(False)
 
 # Load the CUDA kernel as a python module
@@ -32,17 +32,20 @@ def run_benchmark(
     perf_func: callable,
     a: torch.Tensor,
     b: torch.Tensor,
+    # TODO：这个tag传入的是什么？
     tag: str,
+    # TODO：这个Optional是什么意思？
     out: Optional[torch.Tensor] = None,
     warmup: int = 10,
     iters: int = 1000,
     show_all: bool = False,
 ):
     # torch.dot vs custom dot_prod kernel
-    # TODO:这个是什么意思？
+    # TODO:这个是什么意思？out何时会变成None？为什么要fill_(0)?
     if out is not None:
         out.fill_(0)
     # warmup
+    # TODO:为什么一个要传入out一个不传入？请你给我一个具体例子 为什么会有这两种不同的情况？
     if out is not None:
         for i in range(warmup):
             perf_func(a, b, out)
@@ -67,7 +70,7 @@ def run_benchmark(
     mean_time = total_time / iters
     out_info = f"out_{tag}"
 
-    # TODO：这一些列操作分别在做什么？
+    # TODO：这一些列操作分别在做什么？各个函数的作用分别是什么？round的作用是什么？
     out_val = out.flatten().detach().cpu().numpy().tolist()[:2]
     out_val = [round(v, 8) for v in out_val]
 
@@ -84,17 +87,18 @@ SKs = [(S, K) for S in Ss for K in Ks]
 for S, K in SKs:
     print("-" * 85)
     print(" " * 40 + f"S={S}, K={K}")
-    # TODO:这里在做什么？为什么c是0？
+    # TODO:这里在做什么？为什么c是0？randn是生成S*K的tensor张量是吗？为什么一定要contiguous？如果不连续会有什么情况 这里也需要对比实现吧？
     a = torch.randn((S, K)).cuda().float().contiguous()
     b = torch.randn((S, K)).cuda().float().contiguous()
     c = torch.zeros_like(a).cuda().float().contiguous()
 
     run_benchmark(lib.elementwise_add_f32, a, b, "f32", c)
     run_benchmark(lib.elementwise_add_f32x4, a, b, "f32x4", c)
-    # TODO:partial是什么意思？为什么最后都要运行一个partial？
+    # TODO:partial是什么意思？为什么最后都要运行一个partial？torch.add是naive实现吗？
     run_benchmark(partial(torch.add, out=c), a, b, "f32_th")
 
     print("-" * 85)
+    # TODO：half就是float16是吗？
     a_f16 = a.half().contiguous()
     b_f16 = b.half().contiguous()
     c_f16 = c.half().contiguous()

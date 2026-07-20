@@ -41,7 +41,10 @@ class RotaryEmbedding(nn.Module):
         # 将指数均匀铺满整个旋转维度。t 是位置 0..max_position-1；einsum("i,j->ij") 在这里是外积，
         # 得到 freqs[position,dim_pair]=position*inv_freq，随后对它取 cos/sin 作为旋转系数。
 
-        # TODO：其中的arange是生成rotary dim/2大小的数组？第三个参数2代表间隔2生成？这个得到的是一个数组 其中每个元素相同吗？
+        # 问题（已回答）：这里的 arange 会生成 rotary_dim/2 个数吗，步长 2 是什么，各元素相同吗？
+        # 回答：rotary_dim 为偶数时，arange(0, rotary_dim, 2) 生成 [0,2,...,rotary_dim-2]，长度正好
+        # 是 rotary_dim/2；第三个位置参数 2 是步长。各元素不同，所以除以 rotary_dim 并以 base 为底
+        # 计算后，会得到从快到慢的不同旋转频率，而不是一组相同数值。
         inv_freq = 1.0 / (base**(torch.arange(0, rotary_dim, 2, dtype=torch.float) / rotary_dim))
         t = torch.arange(max_position_embeddings, dtype=torch.float)
         freqs = torch.einsum("i,j -> ij", t, inv_freq)
@@ -53,8 +56,13 @@ class RotaryEmbedding(nn.Module):
         # 广播到 query/key 的 [N,H,D]。head_size/rotary_dim 必须相等且为偶数，base 为正，position id 必须小于 S；
         # query 和 key 的 token 维要与 positions 对应，最后一维必须为 D。
 
-        # TODO：为什么要能沿 head 维广播到 query/key 的 [N,H,D]
-        # TODO：这里的S、D、N分别代表什么意思？为什么position id必须要小于S？为什么query 和 key 的 token 维要与 positions 对应？
+        # 问题（已回答）：为什么要沿 head 维广播，[S,1,D] 与 [N,H,D] 中的 S、N、H、D 是什么？
+        # 回答：S 是预计算支持的最大位置数，N 是本轮打包后的 token 数，H 是本 rank 的 attention head 数，
+        # D 是每个 head 的维度。相同 token 位置应对所有 head 使用同一组旋转角，因此缓存保留大小为 1 的 head
+        # 轴即可同时广播到 Q heads 和数量可能不同的 KV heads，也避免为每个 head 重复存表。
+        # 问题（已回答）：为什么 position id 必须小于 S，query/key 的 token 维为什么要与 positions 对应？
+        # 回答：forward 用 positions 直接索引缓存的 S 行，越界 id 没有可用的 cos/sin；每个 positions[n]
+        # 都描述 query[n] 和 key[n] 的绝对位置，所以三者的 N 维必须一一对应，才能给每个 token 施加正确旋转。
         cache = torch.cat((cos, sin), dim=-1).unsqueeze_(1)
         # 问题（已回答）：为什么注册 buffer，它的生命周期是什么？
         # 回答：cos/sin 表不是可训练参数，但必须随 Module 一起迁移 device/dtype，并能被 PyTorch 发现，因此注册为 buffer。

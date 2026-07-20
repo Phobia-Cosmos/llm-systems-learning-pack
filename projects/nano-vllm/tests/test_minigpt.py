@@ -25,7 +25,13 @@ class MiniGPTConfigTests(unittest.TestCase):
             n_embd=128,
         )
 
-        # TODO：为什么需要这个属性？这个属性代表什么意思？num_key_value_heads是什么？rope_theta是可以随便设置的吗？mlp为什么是dense,除了dense还有哪些值？intermediate_size是FFN升维后的大小是吗？
+        # 问题（已回答）：为什么测试这些标准属性，它们代表什么？
+        # 回答：MiniGPTConfig 同时接受 n_layer/n_head/n_embd 等教学命名和 HF 标准命名；这些断言验证二者被
+        # 规范化为同一组层数、Q head 数、隐藏维度、每头维度及最大位置，供通用 engine 读取而不会出现歧义。
+        # 问题（已回答）：num_key_value_heads、rope_theta、mlp_type 和 intermediate_size 分别是什么？
+        # 回答：num_key_value_heads 是独立 K/V head 数，默认等于 Q heads 即 MHA；rope_theta 是训练配置确定的
+        # RoPE 频率基数，加载 checkpoint 推理时不能随意改变。默认 dense MLP 是 Linear-激活-Linear，另支持
+        # swiglu/geglu/reglu；intermediate_size 是 FFN 中间宽度，dense 默认是 hidden_size 的四倍。
         self.assertEqual(config.max_position_embeddings, 64)
         self.assertEqual(config.num_hidden_layers, 3)
         self.assertEqual(config.num_attention_heads, 4)
@@ -40,7 +46,9 @@ class MiniGPTConfigTests(unittest.TestCase):
         self.assertEqual(config.intermediate_size, 512)
 
     def test_conflicting_aliases_are_rejected(self):
-        # TODO:这个是在测试什么？
+        # 问题（已回答）：这个 assertRaisesRegex 在测试什么？
+        # 回答：n_layer 和 num_hidden_layers 是同一配置的两个别名；同时传入互相冲突的值必须抛出 ValueError，
+        # 并让错误消息包含 "Conflicting n_layer"，防止实现静默选择其中一个而构造出意外层数的模型。
         with self.assertRaisesRegex(ValueError, "Conflicting n_layer"):
             MiniGPTConfig(n_layer=2, num_hidden_layers=3)
 
@@ -312,5 +320,8 @@ class RotaryEmbeddingTests(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    # TODO：这个函数的主函数是什么？如何测试我们上面的函数？
+    # 问题（已回答）：这个主函数判断和 unittest.main() 做什么，如何运行上面的测试？
+    # 回答：文件被直接执行时 __name__ 才等于 "__main__"；unittest.main() 会发现当前模块中继承
+    # unittest.TestCase 且名称以 test 开头的方法并执行。可运行 python3 tests/test_minigpt.py，或用
+    # python3 -m unittest tests.test_minigpt 运行整个模块，也可在模块路径后指定某个测试类或测试方法。
     unittest.main()

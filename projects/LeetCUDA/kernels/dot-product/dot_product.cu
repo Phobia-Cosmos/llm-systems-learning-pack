@@ -19,10 +19,14 @@
 
 // FP32
 // Warp Reduce Sum
+// TODO：为什么要使用template 但是elementwise中就没有使用这个？#pragma unroll作用是什么？__forceinline__作用？
 template <const int kWarpSize = WARP_SIZE>
+// TODO：这个函数的作用是什么？
 __device__ __forceinline__ float warp_reduce_sum_f32(float val) {
 #pragma unroll
+// TODO：为什么按照kWarpSize以及mask来进行计算？
   for (int mask = kWarpSize >> 1; mask >= 1; mask >>= 1) {
+    // TODO：__shfl_xor_sync函数的作用是什么？为什么要这样写？
     val += __shfl_xor_sync(0xffffffff, val, mask);
   }
   return val;
@@ -35,23 +39,32 @@ template <const int NUM_THREADS = 256>
 __global__ void dot_prod_f32_f32_kernel(float *a, float *b, float *y, int N) {
   int tid = threadIdx.x;
   int idx = blockIdx.x * NUM_THREADS + tid;
+  // TODO：constexpr作用是什么？
   constexpr int NUM_WARPS = (NUM_THREADS + WARP_SIZE - 1) / WARP_SIZE;
+  // TODO：为什么是按照warp size进行分配？每一个warp能存储的是什么有多大？为什么要使用shared？
   __shared__ float reduce_smem[NUM_WARPS];
 
   // keep the data in register is enough for warp operaion.
+  // TODO：prod是什么？
   float prod = (idx < N) ? a[idx] * b[idx] : 0.0f;
+
+  // TODO：为什么要求出warp以及lane？
   int warp = tid / WARP_SIZE;
   int lane = tid % WARP_SIZE;
   // perform warp sync reduce.
+  // TODO：为什么需要使用这个函数？为什么需要reduce？
   prod = warp_reduce_sum_f32<WARP_SIZE>(prod);
   // warp leaders store the data to shared memory.
   if (lane == 0)
     reduce_smem[warp] = prod;
   __syncthreads(); // make sure the data is in shared memory.
+
   // the first warp compute the final sum.
+  // TODO：上面不是计算完成了吗 为什么还要再次计算一次？为什么这里按照lane取reduce_smem中的数值？但是上述存储时使用的是warp？
   prod = (lane < NUM_WARPS) ? reduce_smem[lane] : 0.0f;
   if (warp == 0)
     prod = warp_reduce_sum_f32<NUM_WARPS>(prod);
+    // TODO：tid为0又代表什么意思？为什么这个函数中要区分tid、warp、和lane分别为0的情况？atomicAdd作用又是什么 为什么不能使用传统的add？
   if (tid == 0)
     atomicAdd(y, prod);
 }
