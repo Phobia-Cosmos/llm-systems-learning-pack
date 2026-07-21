@@ -13,6 +13,8 @@
   </div>
 </div>
 
+> 新增统一 Triton 与 `torch.compile` 后端、逐 kernel 原理/naive 差异和实测基准：见 [`kernels/README.md`](kernels/README.md)。
+
 📚 **LeetCUDA**: It includes **Tensor/CUDA Cores, TF32/F16/BF16/F8**, [📖200+ CUDA Kernels🔥](#cuda-kernel) with PyTorch, [📖100+ LLM/CUDA🔥](#my-blogs-part-1) blogs, [📖HGEMM⚡️](./kernels/hgemm) which can achieve `98%~100%` TFLOPS of **cuBLAS**, and [📖flash-attn⚡️](./kernels/flash-attn) using Tensor Cores with pure MMA PTX. ♥️ Please consider to leave a ⭐️ Star to support me, my bro ~ ♥️
 
 <div align="center">

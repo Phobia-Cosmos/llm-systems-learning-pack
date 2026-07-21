@@ -25,6 +25,7 @@ else:
     PyNCCLCommunicator = Any
 
 
+# TODO：这个又是什么缓存？
 @functools.cache
 def _load_nccl_module() -> Module:
     return load_aot("pynccl", cuda_files=["pynccl.cu"], extra_ldflags=["-lnccl"])

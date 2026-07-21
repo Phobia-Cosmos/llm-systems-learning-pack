@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 _LOG_LEVEL = None
 
-
+# TODO：为什么一个函数内部可以存在class？
 def init_logger(
     name: str,
     suffix: str = "",
@@ -31,15 +31,18 @@ def init_logger(
         }
 
         level = level or os.getenv("LOG_LEVEL", "").upper()
+        # TODO：第二个代表默认INFO？
         _LOG_LEVEL = LEVEL_MAP.get(level, logging.INFO)
 
     if strip_file:
         suffix = os.path.basename(suffix)
 
+    # TODO：这个是在做什么？
     if suffix:
         suffix = f"|{suffix}"
 
     if use_pid is None:
+        # TODO：LOG_PID这个是我们自定义的吗？
         use_pid = os.getenv("LOG_PID", "0").lower() in ("1", "true", "yes")
 
     if use_pid:
@@ -63,6 +66,7 @@ def init_logger(
         RESET = "\033[0m"
         BOLD = "\033[1m"
 
+        # TODO：record是什么类型？
         def format(self, record):
             from minisgl.distributed import try_get_tp_info
 
@@ -109,11 +113,13 @@ def init_logger(
         if tp_info.is_primary():
             getattr(logger, _which)(msg, *args, **kwargs)
 
+    # TODO：这里是在做什么？
     if TYPE_CHECKING:
 
         class WrapperLogger(logging.Logger):
             """Custom logger to handle the color formatter."""
 
+            # TODO：这里定义的这些函数如何使用 会有什么效果？
             def info_rank0(self, msg, *args, **kwargs): ...
             def warning_rank0(self, msg, *args, **kwargs): ...
             def debug_rank0(self, msg, *args, **kwargs): ...

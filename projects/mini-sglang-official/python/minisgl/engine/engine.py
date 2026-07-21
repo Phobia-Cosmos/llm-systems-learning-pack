@@ -21,6 +21,7 @@ logger = init_logger(__name__)
 
 
 class ForwardOutput(NamedTuple):
+    # TODO：为什么要区分GPU和CPU？下面的event的作用是什么？
     next_tokens_gpu: torch.Tensor
     next_tokens_cpu: torch.Tensor
     copy_done_event: torch.cuda.Event
@@ -28,15 +29,22 @@ class ForwardOutput(NamedTuple):
 
 class Engine:
     def __init__(self, config: EngineConfig):
+        # TODO：如何初始化我们的cuda？
         assert not torch.cuda.is_initialized()
         set_tp_info(rank=config.tp_info.rank, size=config.tp_info.size)
         _adjust_config(config)
 
+        # TODO：为什么获取device还需要额外传入参数？会有什么效果？
+        # 只是创建一个设备描述 指定一个设备对象
         self.device = torch.device(f"cuda:{config.tp_info.rank}")
+        # 修改当前 CUDA device 之后一些没有明确指定 device 的 CUDA 操作可能默认使用 GPU 2。
         torch.cuda.set_device(self.device)
         torch.manual_seed(42)
+
+        # TODO：为什么要声明一个Stream？这个是用来做什么的？
         self.stream = torch.cuda.Stream()
         torch.cuda.set_stream(self.stream)
+
         self.dtype = config.dtype
         self.ctx = Context(config.page_size)
         set_global_ctx(self.ctx)
@@ -118,8 +126,10 @@ class Engine:
                 timeout=timedelta(seconds=config.distributed_timeout),
                 init_method=config.distributed_addr,
             )
+            # TODO：这个WORLD是什么？
             tp_cpu_group = torch.distributed.group.WORLD
             assert tp_cpu_group is not None
+            # TODO：这里计算的最大字节指的是哪些部分的组成？
             max_bytes = (
                 config.max_forward_len * config.model_config.hidden_size * self.dtype.itemsize
             )
@@ -216,10 +226,12 @@ def _align_up_32(num: int) -> int:
 
 
 def _adjust_config(config: EngineConfig):
+    # TODO：为什么这里还可以在定义一个def？
     def override(attr: str, value: Any):  # this is dangerous, use with caution
         object.__setattr__(config, attr, value)
 
     if config.attention_backend == "auto":
+        # TODO：这里的fa和fi是什么？为什么sm100就可以支持trtllm？
         backend = "trtllm" if is_sm100_supported() else ("fa,fi" if is_sm90_supported() else "fi")
         override("attention_backend", backend)
         logger.info_rank0(f"Auto-selected attention backend: {config.attention_backend}")

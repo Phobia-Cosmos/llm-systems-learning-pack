@@ -18,6 +18,7 @@ def is_arch_supported(major: int, minor: int = 0) -> bool:
     arch = _get_torch_cuda_version()
     if arch is None:
         return False
+    # TODO：这个是如何组织？
     return arch >= (major, minor)
 
 

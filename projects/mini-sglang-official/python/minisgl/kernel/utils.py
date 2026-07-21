@@ -6,21 +6,26 @@ from typing import TYPE_CHECKING, List, NamedTuple, Tuple, TypeAlias, Union
 if TYPE_CHECKING:
     from tvm_ffi import Module
 
+# TODO：这里在我们的情境中指向的是那一个文件？
 KERNEL_PATH = pathlib.Path(__file__).parent / "csrc"
 DEFAULT_INCLUDE = [str(KERNEL_PATH / "include")]
 DEFAULT_CFLAGS = ["-std=c++20", "-O3"]
 DEFAULT_CUDA_CFLAGS = ["-std=c++20", "-O3", "--expt-relaxed-constexpr"]
 DEFAULT_LDFLAGS = []
+
+# TODO：这个是什么东西？类型是什么？
 CPP_TEMPLATE_TYPE: TypeAlias = Union[int, float, bool]
 
 
 class CppArgList(list[str]):
+    # TODO：这个返回的是什么？把这一系列list[str]拼起来吗？
     def __str__(self) -> str:
         return ", ".join(self)
 
 
 class KernelConfig(NamedTuple):
     num_threads: int
+    # TODO：这个属性代表什么？use_pdl是什么？
     max_occupancy: int
     use_pdl: bool
 
@@ -50,6 +55,7 @@ def make_cpp_args(*args: CPP_TEMPLATE_TYPE) -> CppArgList:
     return CppArgList(_convert(arg) for arg in args)
 
 
+# TODO：这个函数的作用是什么？
 def load_aot(
     *args: str,
     cpp_files: List[str] | None = None,

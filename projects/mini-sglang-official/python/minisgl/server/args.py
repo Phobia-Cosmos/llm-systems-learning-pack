@@ -15,11 +15,13 @@ from minisgl.utils import init_logger
 class ServerArgs(SchedulerConfig):
     server_host: str = "127.0.0.1"
     server_port: int = 1919
+    # TODO：代表启动的数量吗？
     num_tokenizer: int = 0
     silent_output: bool = False
 
     @property
     def share_tokenizer(self) -> bool:
+        # TODO：为什么共享tokenizer就需要让self.num_tokenizer == 0？
         return self.num_tokenizer == 0
 
     @property
