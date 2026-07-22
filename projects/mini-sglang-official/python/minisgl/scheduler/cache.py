@@ -13,10 +13,14 @@ if TYPE_CHECKING:
 
 
 class CacheManager:
+    # TODO：为什么page_table是张量？
+    # 解答：它按“请求表行、逻辑 token 位置”保存 KV pool 的物理槽号；做成 GPU int32 张量后，调度器和 attention kernel 都能并行索引且无需逐项 CPU 传输。
     def __init__(self, num_pages: int, page_size: int, page_table: torch.Tensor, type: str):
         # The `_free_slots` follows a page-aligned manner. For example, if page_size = 2,
         # the `_free_slots` may look like [0, 2, 4, 6, ...], and each slot represents a page.
         device = page_table.device
+        # TODO：这些slots是用来存储什么东西的？
+        # 解答：它们不是 token 或 K/V 内容，而是尚未分配的物理 KV 页起始槽号；page_size=P 时，一个值 s 代表连续槽位 [s, s+P)。
         self.free_slots = torch.arange(num_pages, dtype=torch.int32, device=device) * page_size
         self.prefix_cache = create_prefix_cache(device=device, type=type)
         self.device = device

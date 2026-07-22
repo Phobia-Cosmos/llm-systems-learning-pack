@@ -12,6 +12,8 @@ def _concat_prefix(prefix: str, name: str) -> str:
     return f"{prefix}.{name}" if prefix else name
 
 
+# TODO：为什么要定义这样的类？这个类型是用来做什么的？请你帮我举一个具体的例子来解释这个BaseOP中处理的load和存state。
+# 解答：BaseOP 是该项目不用 torch.nn.Module 时的轻量算子/权重容器，统一 forward 和递归权重装载。比如 model.layers.0.self_attn.qkv_proj.weight 会由嵌套 BaseOP 收集成同名 state_dict 键，load 时按键取出并替换对应 Tensor。
 class BaseOP:
     @abstractmethod
     def forward(self, *args: Any, **kwargs: Any) -> Any: ...
@@ -53,6 +55,8 @@ class BaseOP:
             raise RuntimeError(f"Unexpected keys in state_dict: {list(state_dict.keys())}")
 
 
+# TODO：这个OP有何不同的特点吗？
+# 解答：StateLessOP 表示没有独立 checkpoint 权重需要保存/加载的算子；它仍可有派生缓存、函数句柄或运行时元数据，只是 state_dict 不会新增自己的权重条目（传入共享 result 时会原样保留已有条目）。
 class StateLessOP(BaseOP):
     def __init__(self):
         super().__init__()
@@ -62,11 +66,15 @@ class StateLessOP(BaseOP):
         state_dict: _STATE_DICT,
         *,
         prefix: str = "",
+        # TODO：这个属性的作用是什么？
+        # 解答：_internal 标记这是父 BaseOP 发起的递归调用；只有最外层调用结束时才检查是否还剩未消费的权重键，避免子对象把兄弟对象的键误报为 unexpected。
         _internal: bool = False,
     ) -> None:
         if not _internal and state_dict:
             raise RuntimeError(f"Unexpected keys in state_dict: {list(state_dict.keys())}")
 
+    # TODO：为什么这个不要像BaseOP那样处理？
+    # 解答：它按约定不拥有需要持久化的 Tensor，递归扫描只会做无用工作甚至误收运行时缓存，所以直接复用 result 或返回空字典。
     def state_dict(self, *, prefix: str = "", result: _STATE_DICT | None = None) -> _STATE_DICT:
         return result if result is not None else {}
 

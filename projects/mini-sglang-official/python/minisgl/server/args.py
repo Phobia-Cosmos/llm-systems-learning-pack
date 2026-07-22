@@ -16,12 +16,14 @@ class ServerArgs(SchedulerConfig):
     server_host: str = "127.0.0.1"
     server_port: int = 1919
     # TODO：代表启动的数量吗？
+    # 解答：是专用 tokenizer worker 的进程数；detokenizer 另有一个 worker，而 0 不代表无法分词，它表示由 detokenizer worker 兼任 tokenizer。
     num_tokenizer: int = 0
     silent_output: bool = False
 
     @property
     def share_tokenizer(self) -> bool:
         # TODO：为什么共享tokenizer就需要让self.num_tokenizer == 0？
+        # 解答：这是本配置采用的约定：没有专用 tokenizer 进程时，前端把 TokenizeMsg 发到 detokenizer 的同一地址，由同一个 tokenize_worker 同时处理编码和解码。
         return self.num_tokenizer == 0
 
     @property

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 class DistributedInfo:  # should not export from here
     rank: int
     # TODO：代表集群的数量是吗（内部GPU）？
+    # 解答：size 是当前张量并行组的 world size，通常等于参与的 GPU/进程数，不是机器集群的个数。
     size: int
 
     def __post_init__(self):
@@ -26,6 +27,7 @@ def set_tp_info(rank: int, size: int) -> None:
     _TP_INFO = DistributedInfo(rank, size)
 
 # TODO：一定需要一个get和try吗？
+# 解答：get_tp_info 用于“必须已初始化”的路径，未设置就立即报错；try_get_tp_info 用于可选查询，允许返回 None。
 def get_tp_info() -> DistributedInfo:
     if _TP_INFO is None:
         raise RuntimeError("TP info has not been set")

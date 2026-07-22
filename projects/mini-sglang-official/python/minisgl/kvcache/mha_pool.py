@@ -25,6 +25,7 @@ class MHAKVCache(BaseKVCachePool):
     ) -> None:
         tp_info = get_tp_info()
         local_kv_heads = div_even(num_kv_heads, tp_info.size, allow_replicate=True)
+
         self._kv_buffer = torch.empty(
             (2, num_layers, num_pages, page_size, local_kv_heads, head_dim),
             device=device,
@@ -42,6 +43,8 @@ class MHAKVCache(BaseKVCachePool):
     def v_cache(self, index: int) -> torch.Tensor:
         return self._v_buffer[index]
 
+    # TODO:out_loc代表写入的地址是吗？
+    # 解答：是，但它是扁平化后的 token 槽位下标而非字节地址；同一组下标会把当前层的新 K/V 写入对应缓存位置。
     def store_kv(
         self, k: torch.Tensor, v: torch.Tensor, out_loc: torch.Tensor, layer_id: int
     ) -> None:

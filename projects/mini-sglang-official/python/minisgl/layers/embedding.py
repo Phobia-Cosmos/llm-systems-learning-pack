@@ -10,7 +10,8 @@ from minisgl.utils import div_ceil, nvtx_annotate
 
 from .base import BaseOP
 
-
+# TODO：如果我们有多个及其或者GPU,这里的意思是会将我们的词表划分？还是说这个词表是共用的 每一个只用一部分？如果说只用一部分的话 如何能处理全部的不同文本呢？不是要和全部的kv做运算吗？
+# 解答：TP 按词表行切分 embedding，每个 rank 只存一段，但所有 rank 都看到相同 token id；所属 rank 取出向量，其余 rank 输出零，再 all-reduce 得到完整 embedding。它与 KV cache 的注意力计算是两件事。
 class VocabParallelEmbedding(BaseOP):
     def __init__(
         self,
@@ -23,8 +24,12 @@ class VocabParallelEmbedding(BaseOP):
         self.tp_size = tp_info.size
         self.num_embeddings = num_embeddings
         self.num_embeddings_tp = div_ceil(num_embeddings, self.tp_size)
+
         start_idx = self.num_embeddings_tp * tp_rank
         finish_idx = min(start_idx + self.num_embeddings_tp, num_embeddings)
+
+        # TODO：为什么vocab要划分？
+        # 解答：输入 embedding 可分摊大词表权重显存，复用同一权重的 LM head 也能分摊 logits 矩阵乘；最终 LM head 再 all-gather 各 rank 的词表分片。
         self.vocab_range = (start_idx, finish_idx - start_idx)
         self.weight = torch.empty(self.num_embeddings_tp, embedding_dim)
         self._comm = DistributedCommunicator()

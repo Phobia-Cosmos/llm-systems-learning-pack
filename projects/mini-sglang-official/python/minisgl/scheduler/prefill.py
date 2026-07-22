@@ -21,16 +21,22 @@ logger = init_logger(__name__)
 
 
 class ChunkedReq(Req):
+    # TODO：这个又是什么意思？我们有实现chunkedReq吗？
+    # 解答：这里已经用 Req 子类实现了“只完成 prompt 一部分”的临时运行态；PendingReq.chunked_req 会保存它，下一轮从其 cached_len 继续 prefill。
     def append_host(self, next_token: torch.Tensor) -> None:
         raise NotImplementedError("ChunkedReq should not be sampled")
 
     @property
+    # TODO：为什么这里一直是返回false？avoid being added to decode manager是什么意思？
+    # 解答：中间 chunk 产生的 next-token logits 无效，prompt 还没 prefill 完；返回 False 会让 filter_reqs 不把它放入逐 token 的 DecodeManager。
     def can_decode(self) -> bool:
         return False  # avoid being added to decode manager
 
 
 @dataclass
 class PrefillAdder:
+    # TODO:token_budget和reserved_size分别代表什么意思？什么时候会用到这个PrefillAdder？
+    # 解答：token_budget 是本批还能实际 prefill 的新 token 数；reserved_size 是已接纳请求及 in-flight decode 预留的 KV token 容量。每次构造 prefill batch 时创建它以同时约束算力预算和显存容量。
     token_budget: int
     reserved_size: int
     cache_manager: CacheManager

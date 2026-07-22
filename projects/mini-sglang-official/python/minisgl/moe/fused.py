@@ -6,6 +6,8 @@ from minisgl.moe import BaseMoeBackend
 from minisgl.utils import div_ceil
 
 
+# TODO：这里是作为一个融合算子吗还是？为什么不使用torch.compile？
+# 解答：这里封装优化过的 router softmax/top-k 路径，不是完整 MoE；sgl_kernel 可按形状选择专用 CUDA 实现。torch.compile 可作另一实现，但不能保证相同的 kernel 路径、布局和延迟。
 def fused_topk(
     hidden_states: torch.Tensor,
     gating_output: torch.Tensor,
@@ -15,13 +17,23 @@ def fused_topk(
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     from sgl_kernel import topk_softmax
 
+    # TODO：hidden_states和gating_output的关系是什么？hidden_states一般都是什么结构的？下面的M是什么 为什么要获得一个维度信息？
+    # 解答：hidden_states 为 [M, H] 的 token 隐状态，gating_output 为同一批 token 的 [M, E] router logits；M 是 token 行数，用来验证一一对应并分配每个 token 的 top-k 输出。
     assert hidden_states.shape[0] == gating_output.shape[0], "Number of tokens mismatch"
     M, _ = hidden_states.shape
+
+    # TODO：为什么要传入M和topk,生成的是一个这样的矩阵是吗？
+    # 解答：是；topk_weights 和 topk_ids 都是 [M, topk]，分别保存每个 token 入选专家的权重和专家编号，dtype 按下游 kernel 要求设为 float32/int32。
     topk_weights = torch.empty(M, topk, dtype=torch.float32, device=hidden_states.device)
     topk_ids = torch.empty(M, topk, dtype=torch.int32, device=hidden_states.device)
+
+    # TODO：这里会生成什么东西 为什么要使用这个？
+    # 解答：topk_softmax 从 [M, E] logits 计算路由概率并写入入选的 [M, topk] 权重与 id；后续据 id 将 token 按专家重排，据权重组合专家输出。
     topk_softmax(topk_weights, topk_ids, gating_output.float(), renormalize)
     if renormalize:
         topk_weights = topk_weights / (topk_weights.sum(dim=-1, keepdim=True) + 1e-8)
+    # TODO：num_token_non_padded是用来做什么的？为什么要取出这些位置并赋值为-1？
+    # 解答：它意在给 CUDA Graph 补齐行标记真实 token 数，并把其余 expert id 设为 -1 哨兵；但当前 FusedMoe.forward 未传此参数，Triton GEMM 也不直接检查 -1，因此这是尚未完整接通的 padding 路径，不能视为已保证跳过。
     if num_token_non_padded is not None:
         indices = torch.arange(0, topk_ids.shape[0], device=topk_ids.device)
         topk_ids[indices >= num_token_non_padded, :] = -1

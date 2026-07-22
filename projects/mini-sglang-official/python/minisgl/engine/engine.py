@@ -22,6 +22,7 @@ logger = init_logger(__name__)
 
 class ForwardOutput(NamedTuple):
     # TODO：为什么要区分GPU和CPU？下面的event的作用是什么？
+    # 解答：GPU 副本直接写入 token_pool 供下轮 decode，CPU 副本供请求状态和回复消息使用；event 标记异步 D2H 拷贝完成，读 CPU 张量前必须等它。
     next_tokens_gpu: torch.Tensor
     next_tokens_cpu: torch.Tensor
     copy_done_event: torch.cuda.Event
@@ -30,11 +31,13 @@ class ForwardOutput(NamedTuple):
 class Engine:
     def __init__(self, config: EngineConfig):
         # TODO：如何初始化我们的cuda？
+        # 解答：这里先断言尚未初始化，设置 TP 信息并调整配置；调整配置可能通过 get_device_capability() 触发 CUDA lazy init，随后才显式选择本 rank 的 device、创建 stream 并设置当前 stream。
         assert not torch.cuda.is_initialized()
         set_tp_info(rank=config.tp_info.rank, size=config.tp_info.size)
         _adjust_config(config)
 
         # TODO：为什么获取device还需要额外传入参数？会有什么效果？
+        # 解答：cuda:{rank} 把每个 TP 进程映射到对应 GPU；torch.device 只是描述对象，set_device 才会设置本进程后续 CUDA 操作的默认设备。
         # 只是创建一个设备描述 指定一个设备对象
         self.device = torch.device(f"cuda:{config.tp_info.rank}")
         # 修改当前 CUDA device 之后一些没有明确指定 device 的 CUDA 操作可能默认使用 GPU 2。
@@ -42,6 +45,7 @@ class Engine:
         torch.manual_seed(42)
 
         # TODO：为什么要声明一个Stream？这个是用来做什么的？
+        # 解答：CUDA stream 是按序提交 GPU kernel/拷贝的异步队列；Engine 使用专用 stream 执行模型，便于与 Scheduler 的元数据准备重叠。
         self.stream = torch.cuda.Stream()
         torch.cuda.set_stream(self.stream)
 
@@ -127,9 +131,11 @@ class Engine:
                 init_method=config.distributed_addr,
             )
             # TODO：这个WORLD是什么？
+            # 解答：WORLD 是 init_process_group 创建的默认进程组，这里包含所有 TP ranks，供 CPU/Gloo collective 和 PyNCCL 初始化协调使用。
             tp_cpu_group = torch.distributed.group.WORLD
             assert tp_cpu_group is not None
             # TODO：这里计算的最大字节指的是哪些部分的组成？
+            # 解答：它是一次最大 forward 的 hidden-state 通信上界：最大 token 数乘 hidden size 再乘 dtype 字节数，用来预配 PyNCCL 缓冲区，不包含模型权重和 KV cache。
             max_bytes = (
                 config.max_forward_len * config.model_config.hidden_size * self.dtype.itemsize
             )
@@ -227,11 +233,13 @@ def _align_up_32(num: int) -> int:
 
 def _adjust_config(config: EngineConfig):
     # TODO：为什么这里还可以在定义一个def？
+    # 解答：Python 允许嵌套函数；override 只是该配置调整过程的局部辅助函数，并用 object.__setattr__ 谨慎绕过 frozen dataclass 的限制。
     def override(attr: str, value: Any):  # this is dangerous, use with caution
         object.__setattr__(config, attr, value)
 
     if config.attention_backend == "auto":
         # TODO：这里的fa和fi是什么？为什么sm100就可以支持trtllm？
+        # 解答：fa 是 FlashAttention，fi 是 FlashInfer；该项目把 SM100/Blackwell 选到有对应优化 kernel 的 TensorRT-LLM backend，SM90/Hopper 则默认 prefill 用 fa、decode 用 fi。
         backend = "trtllm" if is_sm100_supported() else ("fa,fi" if is_sm90_supported() else "fi")
         override("attention_backend", backend)
         logger.info_rank0(f"Auto-selected attention backend: {config.attention_backend}")

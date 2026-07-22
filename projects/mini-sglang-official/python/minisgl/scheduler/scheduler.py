@@ -31,6 +31,8 @@ logger = init_logger(__name__)
 Indice2D: TypeAlias = Tuple[torch.Tensor, torch.Tensor]
 
 
+# TODO：这里的注释是什么意思？overlap scheduling？cache some other data to avoid IMA？IMA是什么？
+# 解答：overlap scheduling 会在 GPU 异步执行当前批时继续做 CPU 调度，因此必须让 Batch、采样参数和索引张量一直存活到该批完成；这里的 IMA 通常指 CUDA illegal memory access，即临时缓冲过早释放或复用导致的非法访存。
 # For overlap scheduling, we also need to cache some other data to avoid IMA
 class ForwardInput(NamedTuple):
     batch: Batch

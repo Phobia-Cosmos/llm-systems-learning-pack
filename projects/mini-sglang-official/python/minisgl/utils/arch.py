@@ -19,6 +19,7 @@ def is_arch_supported(major: int, minor: int = 0) -> bool:
     if arch is None:
         return False
     # TODO：这个是如何组织？
+    # 解答：arch 和 (major, minor) 都是 CUDA compute capability 二元组，如 (9, 0) 表示 SM90；Python 先比 major、相同再比 minor。
     return arch >= (major, minor)
 
 

@@ -8,9 +8,12 @@ from minisgl.core import SamplingParams
 
 from .utils import deserialize_type, serialize_type
 
-
+# TODO：既然没有属性 那为什么还要定义这么多的数据类型？
+# 解答：基类用来统一序列化协议和类型边界，各子类则以具体类名区分命令，并携带各自的 dataclass 字段。
 @dataclass
 class BaseBackendMsg:
+    # TODO：为什么只有decoder是静态方法？为什么这个类没有任何的属性？
+    # 解答：encoder 要序列化已存在的 self；decoder 时对象尚未创建，只需输入 json，所以是 staticmethod。基类只承载共同行为，字段在子类中。
     def encoder(self) -> Dict:
         return serialize_type(self)
 
