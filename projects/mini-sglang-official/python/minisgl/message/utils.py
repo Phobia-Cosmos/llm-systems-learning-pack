@@ -21,6 +21,7 @@ def _serialize_any(value: Any) -> Any:
         return serialize_type(value)
 
 
+# TODO：传过来的self不都是BaseBackendMsg等类型吗 为什么会是torch.Tensor？什么时候会是torch.Tensor？
 def serialize_type(self) -> Dict:
     # find all member variables
     serialized = {}

@@ -72,29 +72,35 @@ def init_logger(
 
         # TODO：record是什么类型？
         # 解答：record 是 logging.LogRecord，包含 levelname、消息参数、创建时间、模块名等一次日志事件的元数据。
+        # TODO：这个record类型是在哪里定义的？logging.Formatter内部的属性吗？
         def format(self, record):
             from minisgl.distributed import try_get_tp_info
 
             # Format timestamp like SGLang: [YYYY-MM-DD|HH:MM:SS|pid=1234]
             timestamp = self.formatTime(record, "[%Y-%m-%d|%H:%M:%S{suffix}]")
+
             nonlocal tp_info
             tp_info = tp_info or try_get_tp_info()
             if tp_info is not None and use_tp_rank is not False:
                 real_suffix = f"{suffix}|core|rank={tp_info.rank}"
             else:
                 real_suffix = suffix
+
+            # TODO：这个format会调用什么函数做哪些事情？
             timestamp = timestamp.format(suffix=real_suffix)
 
             # Get color for log level
             level_color = self.COLORS.get(record.levelname, "")
 
             # Format the message
+            # TODO：record.levelname:<8是什么？
             colored_level = f"{level_color}{record.levelname:<8}{self.RESET}"
             message = record.getMessage()
 
             # Pretty format: [timestamp] LEVEL message
             return f"{self.BOLD}{timestamp}{self.RESET} {colored_level} {message}"
 
+    # TODO：这里是从logging中返回一个默认的logger是吗？然后我们基于配置对他自定义？设置formatter、handler？
     logger = logging.getLogger(name)
     logger.setLevel(_LOG_LEVEL)
 
@@ -109,6 +115,7 @@ def init_logger(
     # Prevent propagation to root logger
     logger.propagate = False
 
+    # TODO：这个函数的作用是什么？_which是什么？为什么最后要调用一下getattr获得的logger？
     def _call_rank0(msg, *args, _which, **kwargs):
         from minisgl.distributed import get_tp_info
 
@@ -118,7 +125,7 @@ def init_logger(
         if tp_info.is_primary():
             getattr(logger, _which)(msg, *args, **kwargs)
 
-    # TODO：这里是在做什么？
+    # TODO：这里是在做什么？什么叫做动态添加的rank0方法？
     # 解答：TYPE_CHECKING 仅在静态类型检查时为 True，此分支用 WrapperLogger 告诉 IDE/检查器动态添加的 rank0 方法；真实运行总走 else。
     if TYPE_CHECKING:
 
@@ -134,6 +141,7 @@ def init_logger(
 
         return WrapperLogger(name)
     else:
+        # TODO：logger是可以自定义属性的是吗？partial是什么？为什么要返回_call_rank0 以及还要写一个_which？
         logger.info_rank0 = partial(_call_rank0, _which="info")
         logger.debug_rank0 = partial(_call_rank0, _which="debug")
         logger.critical_rank0 = partial(_call_rank0, _which="critical")
