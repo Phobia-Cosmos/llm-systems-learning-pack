@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/undefined/Disk/python-envs/sglang/bin/python
 """Boundary benchmark for MiniLLM's native teaching KV-cache implementation.
 
 The input prompts are deterministic random token IDs, so tokenizer and disk I/O
@@ -194,9 +194,20 @@ def _run_iteration(
     decode_len: int,
     device: torch.device,
     *,
+    cache_mode: str,
     annotate: bool = False,
 ) -> dict[str, Any]:
     """Run one exact-length generation and return synchronized phase timings."""
+
+    static_cache = None
+    if cache_mode == "static":
+        static_cache = model.allocate_static_kv_cache(
+            batch_size=input_ids.size(0),
+            max_len=input_ids.size(1) + max(decode_len - 1, 0),
+            device=device,
+        )
+    elif cache_mode != "legacy":
+        raise ValueError(f"unknown cache mode: {cache_mode}")
 
     use_cuda = device.type == "cuda"
     if use_cuda:
@@ -206,7 +217,10 @@ def _run_iteration(
         prefill_start.record()
     prefill_wall_started = time.perf_counter()
     with _phase_context(annotate, "minillm_prefill"):
-        logits, past_key_values = model.forward_with_cache(input_ids)
+        if static_cache is None:
+            logits, cache_state = model.forward_with_cache(input_ids)
+        else:
+            logits, cache_state = model.forward_with_static_cache(input_ids, static_cache)
         next_token = logits[:, -1, :].argmax(dim=-1, keepdim=True) if decode_len > 0 else None
     if use_cuda:
         prefill_end.record()
@@ -237,7 +251,10 @@ def _run_iteration(
             else:
                 step_wall_started = time.perf_counter()
             with _phase_context(annotate, "minillm_decode_step"):
-                logits, past_key_values = model.forward_with_cache(next_token, past_key_values)
+                if static_cache is None:
+                    logits, cache_state = model.forward_with_cache(next_token, cache_state)
+                else:
+                    logits, cache_state = model.forward_with_static_cache(next_token, cache_state)
                 next_token = logits[:, -1, :].argmax(dim=-1, keepdim=True)
             if use_cuda:
                 step_end.record()
@@ -272,6 +289,7 @@ def _run_iteration(
         "decode_step_gpu_ms": decode_step_gpu_ms,
         "decode_step_wall_ms": decode_step_wall_ms,
         "final_token_checksum": final_token_checksum,
+        "cache_mode": cache_mode,
     }
 
 
@@ -357,6 +375,7 @@ def _benchmark_case(
     warmup: int,
     repeat: int,
     seed: int,
+    cache_mode: str,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     _validate_case(case, model.config.block_size)
     generator = torch.Generator(device="cpu")
@@ -370,7 +389,13 @@ def _benchmark_case(
     ).to(device)
 
     for _ in range(warmup):
-        _run_iteration(model, input_ids, case.decode_len, device)
+        _run_iteration(
+            model,
+            input_ids,
+            case.decode_len,
+            device,
+            cache_mode=cache_mode,
+        )
 
     measurements: list[dict[str, Any]] = []
     for repeat_index in range(repeat):
@@ -381,7 +406,13 @@ def _benchmark_case(
         else:
             allocated_before = None
 
-        measurement = _run_iteration(model, input_ids, case.decode_len, device)
+        measurement = _run_iteration(
+            model,
+            input_ids,
+            case.decode_len,
+            device,
+            cache_mode=cache_mode,
+        )
         measurement["repeat_index"] = repeat_index
         if device.type == "cuda":
             allocated_after = torch.cuda.memory_allocated(device)
@@ -424,6 +455,7 @@ def _profile_case(
     output_dir: Path,
     row_limit: int,
     with_stack: bool,
+    cache_mode: str,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     generator = torch.Generator(device="cpu")
@@ -438,7 +470,13 @@ def _profile_case(
 
     # Profile a dedicated post-warmup pass so profiler overhead never pollutes
     # the normal benchmark repeats stored in the same record.
-    _run_iteration(model, input_ids, case.decode_len, device)
+    _run_iteration(
+        model,
+        input_ids,
+        case.decode_len,
+        device,
+        cache_mode=cache_mode,
+    )
     # The Kineto profiler in the registered Torch 2.9.1+cu130 environment
     # advertises CUDA activity but currently emits CPU-only events. The
     # autograd profiler still records CUDA event timings correctly here.
@@ -448,7 +486,14 @@ def _profile_case(
         profile_memory=True,
         with_stack=with_stack,
     ) as profiler:
-        _run_iteration(model, input_ids, case.decode_len, device, annotate=True)
+        _run_iteration(
+            model,
+            input_ids,
+            case.decode_len,
+            device,
+            cache_mode=cache_mode,
+            annotate=True,
+        )
 
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     stem = f"{stamp}_{_safe_filename(case.case_id)}"
@@ -578,7 +623,7 @@ def _base_record(
 ) -> dict[str, Any]:
     return {
         "schema_version": 1,
-        "benchmark": "native_minillm_forward_with_cache",
+        "benchmark": "native_minillm_kv_cache",
         "timestamp_utc": _utc_now(),
         "case_id": case.case_id,
         "status": "pending",
@@ -591,6 +636,7 @@ def _base_record(
         "ignore_eos": args.ignore_eos,
         "prompt_source": "deterministic_uniform_random_token_ids",
         "next_token_policy": "greedy_argmax",
+        "cache_mode": args.cache_mode,
         "num_requests": case.num_requests,
         "prompt_len": case.prompt_len,
         "decode_len": case.decode_len,
@@ -603,7 +649,7 @@ def _base_record(
         "semantics": (
             "Prefill consumes all P prompt tokens and selects output token 1. "
             "Generating D tokens therefore performs max(D-1,0) one-token "
-            "forward_with_cache decode calls. EOS is never inspected."
+            f"{args.cache_mode} KV-cache decode calls. EOS is never inspected."
         ),
         "model": {
             "config": asdict(model.config),
@@ -649,6 +695,12 @@ def _parse_args() -> argparse.Namespace:
         default="auto",
     )
     parser.add_argument("--seed", type=int, default=20260726)
+    parser.add_argument(
+        "--cache-mode",
+        choices=("static", "legacy"),
+        default="static",
+        help="Use the new fixed-address cache or the legacy per-step torch.cat path.",
+    )
     parser.add_argument(
         "--ignore-eos",
         action=argparse.BooleanOptionalAction,
@@ -732,6 +784,7 @@ def main() -> int:
                     warmup=args.warmup,
                     repeat=args.repeat,
                     seed=case_seed,
+                    cache_mode=args.cache_mode,
                 )
                 record.update(
                     {
@@ -751,6 +804,7 @@ def main() -> int:
                             output_dir=args.profile_dir.expanduser().resolve(),
                             row_limit=args.profile_row_limit,
                             with_stack=args.profile_with_stack,
+                            cache_mode=args.cache_mode,
                         )
                     except Exception as error:  # profiling must not erase valid timing data
                         record["profiler"] = {

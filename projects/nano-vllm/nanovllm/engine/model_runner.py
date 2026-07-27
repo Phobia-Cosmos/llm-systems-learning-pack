@@ -330,11 +330,19 @@ class ModelRunner:
 
     def prepare_sample(self, seqs: list[Sequence]):
         temperatures = [seq.temperature for seq in seqs]
+        greedy = [seq.is_greedy for seq in seqs]
+        if all(greedy):
+            # 整批 greedy 不需要温度 H2D、FP32 softmax 或随机数张量。
+            return None, True
         # 问题（已回答）：pin_memory 是 cache 吗，为什么还要 cuda(non_blocking=True)？
         # 回答：pin_memory 创建的是页锁定 CPU staging memory，不是模型/KV cache，也不能被 CUDA kernel 直接当普通 GPU Tensor 使用；
         # .cuda() 才把温度复制到当前 GPU。源内存 pinned 时 non_blocking=True 可让 H2D copy 异步排入当前 CUDA stream。
         temperatures = torch.tensor(temperatures, dtype=torch.float32, pin_memory=True).cuda(non_blocking=True)
-        return temperatures
+        if any(greedy):
+            greedy = torch.tensor(greedy, dtype=torch.bool, pin_memory=True).cuda(non_blocking=True)
+        else:
+            greedy = False
+        return temperatures, greedy
 
     # 问题（已回答）：@torch.inference_mode() 是什么，为什么需要装饰器？
     # 回答：@ 把函数交给 decorator 包装；inference_mode 在调用期间关闭 autograd 记录及额外 view/version tracking，
@@ -388,10 +396,10 @@ class ModelRunner:
         # 问题（已回答）：为什么只有 rank 0 准备温度并采样？
         # 回答：所有 rank 都必须执行模型分片和 TP collectives；Vocab Parallel LM head 最后只把各词表 shard gather 到 rank 0，
         # 因而只有它拥有完整 logits 并负责一次采样/返回结果。其他 rank 准备温度或各自随机采样既浪费又可能产生不一致 token。
-        temperatures = self.prepare_sample(seqs) if self.rank == 0 else None
+        temperatures, greedy_mask = self.prepare_sample(seqs) if self.rank == 0 else (None, None)
 
         logits = self.run_model(input_ids, positions, is_prefill)
-        token_ids = self.sampler(logits, temperatures).tolist() if self.rank == 0 else None
+        token_ids = self.sampler(logits, temperatures, greedy_mask).tolist() if self.rank == 0 else None
         # 问题（已回答）：为什么 reset_context，是否表示一批请求全部完成？
         # 回答：只表示当前一次 model invocation 已结束，清除供各 Attention 层共享的临时 batch 元数据，避免下一 step 误读；
         # Sequence 是否完成由 Scheduler.postprocess 的 EOS/max_tokens 判断，许多请求 reset 后仍会继续 decode。

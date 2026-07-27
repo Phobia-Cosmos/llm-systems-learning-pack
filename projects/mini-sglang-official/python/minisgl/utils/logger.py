@@ -73,6 +73,7 @@ def init_logger(
         # TODO：record是什么类型？
         # 解答：record 是 logging.LogRecord，包含 levelname、消息参数、创建时间、模块名等一次日志事件的元数据。
         # TODO：这个record类型是在哪里定义的？logging.Formatter内部的属性吗？
+        # 解答：LogRecord 定义在 Python 标准库 logging 中；它不是 Formatter 预先保存的属性，而是 Logger 每次记录日志时创建、再沿 Handler 传给 Formatter.format(record) 的参数。
         def format(self, record):
             from minisgl.distributed import try_get_tp_info
 
@@ -87,6 +88,7 @@ def init_logger(
                 real_suffix = suffix
 
             # TODO：这个format会调用什么函数做哪些事情？
+            # 解答：这里调用的是 str.format，不是递归调用本方法；它只把 timestamp 模板中的 {suffix} 替换为本次确定的 PID/core/rank 后缀。
             timestamp = timestamp.format(suffix=real_suffix)
 
             # Get color for log level
@@ -94,6 +96,7 @@ def init_logger(
 
             # Format the message
             # TODO：record.levelname:<8是什么？
+            # 解答：这是 f-string 的格式说明，< 表示左对齐，8 表示最小宽度为 8；例如 INFO 会补四个空格，使不同长度的日志等级列对齐。
             colored_level = f"{level_color}{record.levelname:<8}{self.RESET}"
             message = record.getMessage()
 
@@ -101,6 +104,7 @@ def init_logger(
             return f"{self.BOLD}{timestamp}{self.RESET} {colored_level} {message}"
 
     # TODO：这里是从logging中返回一个默认的logger是吗？然后我们基于配置对他自定义？设置formatter、handler？
+    # 解答：logging.getLogger(name) 从全局 registry 取得或创建同名 Logger；后续设置 level、清空旧 handler、安装 stdout Handler/ColorFormatter 并关闭向 root logger 的传播，因此得到的是标准 Logger 的项目化配置，不是复制出另一套日志系统。
     logger = logging.getLogger(name)
     logger.setLevel(_LOG_LEVEL)
 
@@ -116,6 +120,7 @@ def init_logger(
     logger.propagate = False
 
     # TODO：这个函数的作用是什么？_which是什么？为什么最后要调用一下getattr获得的logger？
+    # 解答：_call_rank0 是所有“仅主 rank 输出”方法的共同实现；_which 保存具体等级名（info/debug/warning/critical），getattr(logger, _which) 动态取得对应 bound method，随后传入原消息参数执行，避免复制四份相同的 rank 判断。
     def _call_rank0(msg, *args, _which, **kwargs):
         from minisgl.distributed import get_tp_info
 
@@ -142,6 +147,7 @@ def init_logger(
         return WrapperLogger(name)
     else:
         # TODO：logger是可以自定义属性的是吗？partial是什么？为什么要返回_call_rank0 以及还要写一个_which？
+        # 解答：普通 Python 对象若没有禁止 __dict__，可在运行时增加属性；partial 预先固定 _which，生成仍可接收 msg/*args/**kwargs 的新 callable。四个属性都复用 _call_rank0，但分别固定日志等级，返回真实 logger 后调用方即可写 logger.info_rank0(...)。
         logger.info_rank0 = partial(_call_rank0, _which="info")
         logger.debug_rank0 = partial(_call_rank0, _which="debug")
         logger.critical_rank0 = partial(_call_rank0, _which="critical")

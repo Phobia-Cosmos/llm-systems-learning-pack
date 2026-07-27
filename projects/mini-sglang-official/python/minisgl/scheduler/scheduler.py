@@ -220,6 +220,7 @@ class Scheduler(SchedulerIOMixin):
 
     def _schedule_next_batch(self) -> ForwardInput | None:
         # TODO: support other policies: e.g. DECODE first
+        # 解答：当前固定先尝试 prefill，再调度 running decode；decode-first 可保护在途请求的 ITL，却可能让新请求 TTFT 饥饿。要做成可比较策略，需把“选择阶段”抽象成独立 policy，同时保持 KV admission、preemption、取消和统计契约不变，并用同一到达流量比较 p95/p99 goodput，而不是只换 if 顺序。
         batch = (
             self.prefill_manager.schedule_next_batch(self.prefill_budget)
             or self.decode_manager.schedule_next_batch()

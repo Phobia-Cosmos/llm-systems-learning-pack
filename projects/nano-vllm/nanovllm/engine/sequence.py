@@ -58,6 +58,10 @@ class Sequence:
         return self.num_tokens - self.num_prompt_tokens
 
     @property
+    def is_greedy(self):
+        return self.temperature == 0
+
+    @property
     def prompt_token_ids(self):
         return self.token_ids[:self.num_prompt_tokens]
 

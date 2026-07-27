@@ -18,6 +18,14 @@ from minillm.tokenizer_registry import SUPPORTED_TOKENIZERS, build_tokenizer, to
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train a minimal decoder-only LLM.")
     parser.add_argument("--data", default="data/tiny_corpus.txt")
+    parser.add_argument(
+        "--val-data",
+        default=None,
+        help=(
+            "Optional pre-split validation text. When set, --data is the train split and is "
+            "the only corpus used to train a new tokenizer."
+        ),
+    )
     parser.add_argument("--out-dir", default="artifacts/checkpoints")
     parser.add_argument(
         "--checkpoint-name",
@@ -136,8 +144,13 @@ def main() -> None:
         retrain_tokenizer=args.retrain_tokenizer,
         trust_remote_code=args.trust_remote_code,
     )
-    token_ids = tokenizer.encode(text)
-    train_data, val_data = split_train_val(token_ids)
+    train_token_ids = tokenizer.encode(text)
+    if args.val_data is None:
+        train_data, val_data = split_train_val(train_token_ids)
+    else:
+        validation_text = read_text(args.val_data)
+        train_data = torch.tensor(train_token_ids, dtype=torch.long)
+        val_data = torch.tensor(tokenizer.encode(validation_text), dtype=torch.long)
 
     config = GPTConfig(
         vocab_size=tokenizer.vocab_size,

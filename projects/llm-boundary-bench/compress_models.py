@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/home/undefined/Disk/python-envs/sglang/bin/python
 """Offline TorchAO INT8 weight-only smoke benchmark for local teaching models.
 
 The script intentionally quantizes in memory and never overwrites the source
@@ -39,7 +39,7 @@ AI_ROOT = PROJECTS_DIR.parent
 DEFAULT_MINILLM_CHECKPOINT = (
     PROJECTS_DIR / "minillm" / "artifacts" / "checkpoints" / "minillm-rope.pt"
 )
-DEFAULT_QWEN_PATH = AI_ROOT / ".model_cache" / "huggingface" / "Qwen3-0.6B"
+DEFAULT_QWEN_PATH = Path("/home/undefined/Disk/cache/models/huggingface/Qwen3-0.6B")
 DEFAULT_CORPUS = PROJECTS_DIR / "minillm" / "data" / "teaching_corpus.txt"
 DEFAULT_PROMPT = "请用一句话解释模型量化。"
 

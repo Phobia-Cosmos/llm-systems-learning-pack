@@ -1,8 +1,41 @@
 from collections import deque
+from dataclasses import dataclass
 
 from nanovllm.config import Config
-from nanovllm.engine.sequence import Sequence, SequenceStatus
 from nanovllm.engine.block_manager import BlockManager
+from nanovllm.engine.scheduling_policy import BatchPhase, create_scheduling_policy
+from nanovllm.engine.sequence import Sequence, SequenceStatus
+
+
+@dataclass(slots=True)
+class _SchedulerCounters:
+    total_batches: int = 0
+    prefill_batches: int = 0
+    decode_batches: int = 0
+    prefill_tokens: int = 0
+    decode_tokens: int = 0
+    preemptions: int = 0
+    recompute_sequences: int = 0
+    recompute_batches: int = 0
+    recomputed_tokens: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class SchedulerSnapshot:
+    scheduling_policy: str
+    waiting_sequences: int
+    running_sequences: int
+    free_kv_blocks: int
+    used_kv_blocks: int
+    total_batches: int
+    prefill_batches: int
+    decode_batches: int
+    prefill_tokens: int
+    decode_tokens: int
+    preemptions: int
+    recompute_sequences: int
+    recompute_batches: int
+    recomputed_tokens: int
 
 
 class Scheduler:
@@ -22,6 +55,12 @@ class Scheduler:
         self.block_manager = BlockManager(config.num_kvcache_blocks, config.kvcache_block_size)
         self.waiting: deque[Sequence] = deque()
         self.running: deque[Sequence] = deque()
+        self.scheduling_policy = create_scheduling_policy(
+            getattr(config, "scheduling_policy", "prefill_first")
+        )
+        self._counters = _SchedulerCounters()
+        self._recomputing_seq_ids: set[int] = set()
+        self._recompute_started_seq_ids: set[int] = set()
 
     def is_finished(self):
         return not self.waiting and not self.running
@@ -29,10 +68,55 @@ class Scheduler:
     def add(self, seq: Sequence):
         self.waiting.append(seq)
 
+    def snapshot(self) -> SchedulerSnapshot:
+        """Return an immutable point-in-time view for metrics and tests."""
+        counters = self._counters
+        return SchedulerSnapshot(
+            scheduling_policy=self.scheduling_policy.name,
+            waiting_sequences=len(self.waiting),
+            running_sequences=len(self.running),
+            free_kv_blocks=len(self.block_manager.free_block_ids),
+            used_kv_blocks=len(self.block_manager.used_block_ids),
+            total_batches=counters.total_batches,
+            prefill_batches=counters.prefill_batches,
+            decode_batches=counters.decode_batches,
+            prefill_tokens=counters.prefill_tokens,
+            decode_tokens=counters.decode_tokens,
+            preemptions=counters.preemptions,
+            recompute_sequences=counters.recompute_sequences,
+            recompute_batches=counters.recompute_batches,
+            recomputed_tokens=counters.recomputed_tokens,
+        )
+
     # 问题（已回答）：返回的第二个参数表示什么？为什么要判断是否为 prefill 阶段？
     # 回答：布尔值表示本批次走 prefill 还是 decode。两阶段的输入形状、Attention 读取 KV 的方式、
     # CUDA Graph 路径以及后处理规则不同，所以 ModelRunner 和 postprocess 都必须知道当前阶段。
     def schedule(self) -> tuple[list[Sequence], bool]:
+        for phase in self.scheduling_policy.phase_order:
+            if phase is BatchPhase.PREFILL:
+                scheduled_seqs = self._schedule_prefill()
+                is_prefill = True
+            else:
+                scheduled_seqs = self._schedule_decode()
+                is_prefill = False
+            if scheduled_seqs:
+                self._record_batch(scheduled_seqs, is_prefill)
+                return scheduled_seqs, is_prefill
+
+        # 与原实现最后的 assert 相同：队列非空却无法组成任何批次说明容量/状态不一致。
+        raise RuntimeError("Scheduler has pending sequences but cannot form a runnable batch")
+
+    def _record_batch(self, seqs: list[Sequence], is_prefill: bool):
+        counters = self._counters
+        counters.total_batches += 1
+        if is_prefill:
+            counters.prefill_batches += 1
+            counters.prefill_tokens += sum(seq.num_scheduled_tokens for seq in seqs)
+        else:
+            counters.decode_batches += 1
+            counters.decode_tokens += len(seqs)
+
+    def _schedule_prefill(self) -> list[Sequence]:
         scheduled_seqs = []
         # 问题（已回答）：这一个 batch 会全部发送给模型生成 next token 吗？
         # 回答：会在一次 ModelRunner.run 中处理。decode 时每条序列只计算一个当前 token 并采样下一个 token；
@@ -40,6 +124,7 @@ class Scheduler:
         num_batched_tokens = 0
 
         # prefill
+        has_recompute = False
         while self.waiting and len(scheduled_seqs) < self.max_num_seqs:
             seq = self.waiting[0]
             # 问题（已回答）：为什么这里只看 remaining，num_batched_tokens 已经处理完成了吗？
@@ -58,7 +143,7 @@ class Scheduler:
                 # 问题（已回答）：-1 表示无法再分配吗？无法分配会怎样？break 退出哪一层？
                 # 回答：-1 表示当前空闲块不足。break 退出最近的 prefill while，不只是退出 if；若还有 running
                 # 请求，调度器随后可做 decode 并通过抢占释放块。若没有任何 running 请求且该请求永久无法容纳，
-                # 这份精简实现没有优雅拒绝路径，后面可能触发 assert，生产实现应显式报容量错误。
+                # 这份精简实现会在两个阶段都无法组批后抛出 RuntimeError；生产服务还应在 admission 时提前返回容量错误。
                 if num_cached_blocks == -1:
                     break
                 num_tokens = seq.num_tokens - num_cached_blocks * self.block_size
@@ -87,6 +172,13 @@ class Scheduler:
             seq.num_scheduled_tokens = min(num_tokens, remaining)
             num_batched_tokens += seq.num_scheduled_tokens
 
+            if seq.seq_id in self._recomputing_seq_ids:
+                has_recompute = True
+                self._counters.recomputed_tokens += seq.num_scheduled_tokens
+                if seq.seq_id not in self._recompute_started_seq_ids:
+                    self._recompute_started_seq_ids.add(seq.seq_id)
+                    self._counters.recompute_sequences += 1
+
             # 问题（已回答）：为什么只有这个条件成立才进入 RUNNING？必须达到该 token 数才能处理吗？
             # 回答：序列在本轮已经会被处理；该条件只决定处理后是否已完成全部 prefill。只有缓存前缀加本轮 token
             # 覆盖当前整条序列时，下一步才可逐 token decode，否则它仍在 WAITING 中等待下一个 prefill chunk。
@@ -94,14 +186,16 @@ class Scheduler:
                 seq.status = SequenceStatus.RUNNING
                 self.waiting.popleft()
                 self.running.append(seq)
+                self._recomputing_seq_ids.discard(seq.seq_id)
+                self._recompute_started_seq_ids.discard(seq.seq_id)
             scheduled_seqs.append(seq)
 
-        # 问题（已回答）：什么情况下这里不直接 return？为什么 scheduled_seqs 非空就代表 prefill？
-        # 回答：等待队列为空、队首暂时无法分配，或本轮没有成功放入等待请求时，scheduled_seqs 仍为空，流程才进入
-        # decode。这里的列表只可能由上面的 waiting/prefill 循环填充，因此非空就必然是 prefill 批次。
-        if scheduled_seqs:
-            return scheduled_seqs, True
+        if has_recompute:
+            self._counters.recompute_batches += 1
+        return scheduled_seqs
 
+    def _schedule_decode(self) -> list[Sequence]:
+        scheduled_seqs = []
         # decode
         # 问题（已回答）：decode 为什么也受 max_num_seqs 限制？一次最多处理多少个 seq？
         # 回答：decode 虽然每条序列只处理一个 token，但 KV 读取、Attention 和临时张量仍随序列数增长。
@@ -126,20 +220,21 @@ class Scheduler:
                 seq.is_prefill = False
                 self.block_manager.may_append(seq)
                 scheduled_seqs.append(seq)
-        assert scheduled_seqs
 
         # 问题（已回答）：为什么把反向后的 scheduled_seqs 加回 running？这是抢占 running 队列吗？
         # 回答：decode 前这些序列被 popleft 临时取出，执行后仍未完成，所以要放回队首供下一轮继续。
         # deque.extendleft 会逐项插到左端，先 reversed 才能保持原调度顺序；这里不是抢占。
-        self.running.extendleft(reversed(scheduled_seqs))
-        # 问题（已回答）：为什么这里返回 False？
-        # 回答：False 是阶段标记，表示本批次来自 running 队列并走 decode 数据准备、Attention 和后处理路径。
-        return scheduled_seqs, False
+        if scheduled_seqs:
+            self.running.extendleft(reversed(scheduled_seqs))
+        return scheduled_seqs
 
     # 问题（已回答）：为什么抢占后设为 WAITING 和 prefill？此前 prefill 不是已结束了吗？为何 deallocate？
     # 回答：抢占会释放该序列的物理 KV 映射以让出显存，token_ids 本身仍保留。没有历史 KV 就不能直接 decode，
     # 所以后续必须像 prefill 一样重新计算已有 token（也可能重新命中完整前缀缓存），并在 waiting 队列等待资源。
     def preempt(self, seq: Sequence):
+        self._counters.preemptions += 1
+        self._recomputing_seq_ids.add(seq.seq_id)
+        self._recompute_started_seq_ids.discard(seq.seq_id)
         seq.status = SequenceStatus.WAITING
         seq.is_prefill = True
         self.block_manager.deallocate(seq)

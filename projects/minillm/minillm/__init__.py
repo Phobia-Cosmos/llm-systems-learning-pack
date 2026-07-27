@@ -1,4 +1,5 @@
 from .activations import SUPPORTED_ACTIVATIONS, build_activation
+from .cache import StaticKVCache
 from .config import GPTConfig
 from .mlp import SUPPORTED_MLP_TYPES, build_mlp
 from .model import MiniGPT
@@ -13,6 +14,7 @@ from .tokenizer_base import MiniTokenizer, TokenizerBatch
 __all__ = [
     "GPTConfig",
     "MiniGPT",
+    "StaticKVCache",
     "MiniTokenizer",
     "TokenizerBatch",
     "CharTokenizer",

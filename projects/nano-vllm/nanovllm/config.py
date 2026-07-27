@@ -2,6 +2,7 @@ import os
 from dataclasses import dataclass
 from transformers import PretrainedConfig
 
+from nanovllm.engine.scheduling_policy import normalize_scheduling_policy
 from nanovllm.models.registry import load_model_config
 
 # 问题（已回答）：dataclass(slots=True) 的 slots 是什么？
@@ -28,6 +29,9 @@ class Config:
     # 回答：会，但这是本仓库的 ModelRunner 显式执行 warmup_model() 和 capture_cudagraph()，不是 PyTorch
     # 对任意程序自动完成。这里只捕获预设 batch size 的 decode 图；prefill、超出图范围的 batch 等仍走 eager。
     enforce_eager: bool = False
+    # prefill_first 保持项目原来的吞吐优先行为；decode_first 优先服务已经进入逐 token 解码的请求，
+    # 可降低其 inter-token latency，但持续有 running 请求时可能让新 prompt 等得更久。
+    scheduling_policy: str = "prefill_first"
     # 问题（已回答）：hf_config、eos 和 kvcache_block_size 是什么？
     # 回答：hf_config 是 config.json 解析出的 PretrainedConfig；eos 是结束 token id，-1 是加载前占位值。
     # block_size 是每个物理 KV block 的 token 槽位数；槽中存每层 K/V 向量，不是 token id。
@@ -45,5 +49,6 @@ class Config:
         # 模型也不是任意 AutoConfig 都能跑，必须在 nanovllm model registry 注册匹配的 config/model 后端。
         assert self.kvcache_block_size % 256 == 0
         assert 1 <= self.tensor_parallel_size <= 8
+        self.scheduling_policy = normalize_scheduling_policy(self.scheduling_policy)
         self.hf_config = load_model_config(self.model)
         self.max_model_len = min(self.max_model_len, self.hf_config.max_position_embeddings)

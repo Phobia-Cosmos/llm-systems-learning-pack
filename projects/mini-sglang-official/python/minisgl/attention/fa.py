@@ -179,4 +179,5 @@ def _fa_sgl_impl(
         pack_gqa=pack_gqa,
         causal=causal,
         ver=version,  # TODO: support FA4 on blackwell
+        # 解答：这里当前选择已集成的 FlashAttention 版本；FA4/Blackwell 需要匹配 SM100 的编译产物、dtype/head-size/page layout 与 graph capture 接口，不能仅把 version 数字改大。本机 SM89 也不会走这条 Blackwell 路径。
     )

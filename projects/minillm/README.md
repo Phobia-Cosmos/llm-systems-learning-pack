@@ -63,6 +63,28 @@ python train.py --device cpu --max-steps 100 --n-layer 1 --n-head 2 --n-embd 64 
 python train.py --device cuda --max-steps 1000
 ```
 
+现有 MiniMind JSONL 的可复现数据准备使用流式脚本，不把 1.24 GiB 原文件复制进仓库。它会做 UTF-8/JSON/字段检查、Unicode 规范化、按规范化正文 SHA-256 精确去重，再按文档或来源 hash 稳定切成 train/validation/test；同一内容不会跨 split，若数据带可靠的来源/文档 ID，还应传 `--group-field` 让同一来源留在同一 split。先用 10000 行 smoke 验证输出和 manifest：
+
+```bash
+/home/undefined/Disk/python-envs/sglang/bin/python scripts/prepare_jsonl_corpus.py \
+  --input /home/undefined/Disk/datasets/minimind/pretrain_t2t_mini.jsonl \
+  --output-dir /home/undefined/Disk/build-tmp/minillm-corpus-smoke \
+  --max-records 10000 --validation-fraction 0.1 --test-fraction 0.1
+```
+
+输出目录包含 `train.txt`、`validation.txt`、`test.txt` 与记录输入扫描 hash、过滤计数、split 统计和输出 hash 的 `manifest.json`。输出目录必须是新目录，避免把不同运行静默混在一起；完整处理时删掉 `--max-records` 并换一个新 run 目录。MiniLLM 可以直接使用已经切好的 train/validation，且新 tokenizer 只从 `train.txt` 学习：
+
+```bash
+/home/undefined/Disk/python-envs/sglang/bin/python train.py \
+  --data /home/undefined/Disk/build-tmp/minillm-corpus-smoke/train.txt \
+  --val-data /home/undefined/Disk/build-tmp/minillm-corpus-smoke/validation.txt \
+  --tokenizer byte-bpe --tokenizer-vocab-size 4096 \
+  --tokenizer-output-dir artifacts/tokenizers/minimind-smoke \
+  --device cuda --max-steps 100
+```
+
+当前 `train.py` 仍会把整个文本 split 和 token ids 读入内存，所以完整 1.24 GiB 语料应在下一步接入 mmap/packed-token Dataset、按 shard 迭代、checkpoint resume 与分布式 sampler 后再正式长训；数据切分脚本已经先固定了不会泄漏的边界和可复现 manifest。
+
 训练 RoPE 版本：
 
 ```bash

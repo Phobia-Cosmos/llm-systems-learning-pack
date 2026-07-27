@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from .cache import StaticKVCache
 from .config import GPTConfig
 from .mlp import build_mlp
 from .norm import build_norm
@@ -237,6 +238,67 @@ class CausalSelfAttention(nn.Module):
         y = y.transpose(1, 2).contiguous().view(batch, seq_len, channels)
         return self.resid_dropout(self.c_proj(y)), (k, v)
 
+    def forward_with_static_cache(
+        self,
+        x: torch.Tensor,
+        positions: torch.Tensor,
+        key_cache: torch.Tensor,
+        value_cache: torch.Tensor,
+        cache_position: int,
+    ) -> torch.Tensor:
+        """Attend through fixed storage, writing only the newly supplied tokens."""
+
+        batch, seq_len, channels = x.shape
+        q, k, v = self.project_qkv(x)
+        q = q.view(batch, seq_len, self.n_head, self.head_dim).transpose(1, 2)
+        k = k.view(batch, seq_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
+        v = v.view(batch, seq_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
+        q, k = self.position_encoding.apply_qk(q, k, positions)
+
+        expected_prefix = (batch, self.num_key_value_heads)
+        expected_suffix = self.head_dim
+        if (
+            key_cache.ndim != 4
+            or value_cache.shape != key_cache.shape
+            or key_cache.shape[:2] != expected_prefix
+            or key_cache.size(3) != expected_suffix
+        ):
+            raise ValueError(
+                "static KV storage must have shape "
+                f"[{batch}, {self.num_key_value_heads}, max_len, {self.head_dim}]"
+            )
+        if key_cache.device != k.device or value_cache.device != v.device:
+            raise ValueError("static KV storage and model inputs must be on the same device")
+        if key_cache.dtype != k.dtype or value_cache.dtype != v.dtype:
+            raise ValueError("static KV storage dtype must match the model dtype")
+        if cache_position < 0:
+            raise ValueError("cache_position must be non-negative")
+
+        total_len = cache_position + seq_len
+        if total_len > key_cache.size(2) or total_len > self.causal_mask.size(-1):
+            raise ValueError("KV cache length exceeds its capacity or block_size")
+
+        key_cache[:, :, cache_position:total_len, :].copy_(k)
+        value_cache[:, :, cache_position:total_len, :].copy_(v)
+        attention_k = self.expand_kv_heads(key_cache[:, :, :total_len, :])
+        attention_v = self.expand_kv_heads(value_cache[:, :, :total_len, :])
+        scores = (q @ attention_k.transpose(-2, -1)) / math.sqrt(self.head_dim)
+        key_positions = torch.arange(total_len, device=x.device)
+        position_bias = self.position_encoding.attention_bias(
+            positions,
+            key_positions,
+            dtype=scores.dtype,
+            device=scores.device,
+        )
+        if position_bias is not None:
+            scores = scores + position_bias
+        mask = self.causal_mask[:, :, cache_position:total_len, :total_len]
+        scores = scores.masked_fill(mask == 0, float("-inf"))
+        weights = self.attn_dropout(F.softmax(scores, dim=-1))
+        y = weights @ attention_v
+        y = y.transpose(1, 2).contiguous().view(batch, seq_len, channels)
+        return self.resid_dropout(self.c_proj(y))
+
 # 问题（已回答）:为什么nn中还有Sequential？nn中都包含哪些东西？
 # 回答：nn.Sequential 是把多个层按顺序串起来的容器，适合“输入依次经过 A、B、C”的简单网络。
 # torch.nn 里包含 Module 基类、Linear/Embedding/Conv、LayerNorm/BatchNorm/RMSNorm 类似归一化层、Dropout、激活函数、损失函数等。
@@ -277,6 +339,25 @@ class TransformerBlock(nn.Module):
         x = x + attn_out
         x = x + self.mlp(self.ln_2(x))
         return x, present_kv
+
+    def forward_with_static_cache(
+        self,
+        x: torch.Tensor,
+        positions: torch.Tensor,
+        key_cache: torch.Tensor,
+        value_cache: torch.Tensor,
+        cache_position: int,
+    ) -> torch.Tensor:
+        attn_out = self.attn.forward_with_static_cache(
+            self.ln_1(x),
+            positions,
+            key_cache,
+            value_cache,
+            cache_position,
+        )
+        x = x + attn_out
+        x = x + self.mlp(self.ln_2(x))
+        return x
 
 # 问题（已回答）:nn.Module是什么？为什么需要token_embedding和position_embedding？ModuleList是什么？nn中的Norm都有哪些选项？lm_head是什么？
 # 回答：nn.Module 是 PyTorch 所有可训练网络模块的基类，负责参数注册、设备迁移、train/eval 模式、state_dict 保存等。
@@ -405,6 +486,109 @@ class MiniGPT(nn.Module):
         logits = self.lm_head(x)
         return logits, present_key_values
 
+    def allocate_static_kv_cache(
+        self,
+        batch_size: int,
+        max_len: int | None = None,
+        *,
+        device: torch.device | str | None = None,
+        dtype: torch.dtype | None = None,
+    ) -> StaticKVCache:
+        """Allocate compact per-layer KV storage for a fixed inference batch."""
+
+        if batch_size <= 0:
+            raise ValueError("batch_size must be positive")
+        if max_len is None:
+            max_len = self.config.block_size
+        if max_len <= 0 or max_len > self.config.block_size:
+            raise ValueError("max_len must be between one and block_size")
+        if len(self.blocks) == 0:
+            raise ValueError("a static KV cache requires at least one Transformer layer")
+        if device is None:
+            device = self.token_embedding.weight.device
+        if dtype is None:
+            device_type = torch.device(device).type
+            dtype = (
+                torch.get_autocast_dtype(device_type)
+                if torch.is_autocast_enabled(device_type)
+                else self.token_embedding.weight.dtype
+            )
+
+        assert self.config.num_key_value_heads is not None
+        shape = (
+            batch_size,
+            self.config.num_key_value_heads,
+            max_len,
+            self.config.n_embd // self.config.n_head,
+        )
+        keys = [torch.empty(shape, device=device, dtype=dtype) for _ in self.blocks]
+        values = [torch.empty(shape, device=device, dtype=dtype) for _ in self.blocks]
+        return StaticKVCache(keys, values, max_len=max_len)
+
+    @torch.no_grad()
+    def forward_with_static_cache(
+        self,
+        idx: torch.Tensor,
+        cache: StaticKVCache,
+    ) -> tuple[torch.Tensor, StaticKVCache]:
+        """Run inference and append K/V in place without growing tensors."""
+
+        if idx.ndim != 2:
+            raise ValueError("idx must have shape [batch, seq_len]")
+        batch, seq_len = idx.shape
+        if seq_len <= 0:
+            raise ValueError("static KV cache forward requires at least one token")
+        if cache.num_layers != len(self.blocks):
+            raise ValueError("static KV cache layer count does not match the model")
+        if cache.batch_size != batch:
+            raise ValueError(
+                f"static KV cache batch size {cache.batch_size} does not match input batch {batch}"
+            )
+        if cache.device != idx.device:
+            raise ValueError("static KV cache and input ids must be on the same device")
+        if not 0 <= cache.length <= cache.max_len:
+            raise ValueError("static KV cache length is outside its valid range")
+
+        past_len = cache.length
+        total_len = past_len + seq_len
+        if total_len > cache.max_len or total_len > self.config.block_size:
+            raise ValueError(
+                f"sequence length {total_len} exceeds static KV capacity {cache.max_len}"
+            )
+
+        expected_shape = (
+            batch,
+            self.config.num_key_value_heads,
+            cache.max_len,
+            self.config.n_embd // self.config.n_head,
+        )
+        for key, value in zip(cache.key_caches, cache.value_caches):
+            if key.shape != expected_shape or value.shape != expected_shape:
+                raise ValueError(f"static KV cache tensors must have shape {expected_shape}")
+            if key.device != idx.device or value.device != idx.device:
+                raise ValueError("all static KV cache layers must be on the input device")
+            if key.dtype != cache.dtype or value.dtype != cache.dtype:
+                raise ValueError("all static KV cache layers must share one dtype")
+
+        positions = torch.arange(past_len, total_len, device=idx.device)
+        x = self.token_embedding(idx)
+        if self.position_embedding is not None:
+            x = x + self.position_embedding(positions).to(dtype=x.dtype)
+        x = self.drop(x)
+        for layer_idx, block in enumerate(self.blocks):
+            x = block.forward_with_static_cache(
+                x,
+                positions,
+                cache.key_caches[layer_idx],
+                cache.value_caches[layer_idx],
+                past_len,
+            )
+
+        x = self.ln_f(x)
+        logits = self.lm_head(x)
+        cache.length = total_len
+        return logits, cache
+
     def _sample_next_token(
         self,
         logits: torch.Tensor,
@@ -474,11 +658,24 @@ class MiniGPT(nn.Module):
         required_cache_len = idx.size(1) + max_new_tokens - 1
         if required_cache_len > self.config.block_size:
             raise ValueError(
-                "The teaching KV-cache path requires "
+                "The KV-cache generation path requires "
                 "prompt_len + max_new_tokens - 1 <= block_size."
             )
 
-        logits, past_key_values = self.forward_with_cache(idx)
+        # Preserve the legacy prefill call for existing instrumentation and
+        # then move its one-time result into fixed storage. Decode steps use
+        # only the static path, so K/V no longer grow via repeated cat calls.
+        logits, prefill_key_values = self.forward_with_cache(idx)
+        cache = self.allocate_static_kv_cache(
+            batch_size=idx.size(0),
+            max_len=required_cache_len,
+            device=idx.device,
+        )
+        prompt_len = idx.size(1)
+        for layer_idx, (key, value) in enumerate(prefill_key_values):
+            cache.key_caches[layer_idx][:, :, :prompt_len, :].copy_(key)
+            cache.value_caches[layer_idx][:, :, :prompt_len, :].copy_(value)
+        cache.length = prompt_len
         for step in range(max_new_tokens):
             idx_next = self._sample_next_token(
                 logits[:, -1, :],
@@ -490,7 +687,7 @@ class MiniGPT(nn.Module):
             # The final sampled token is returned immediately. Computing its
             # logits would prepare a token that the caller did not request.
             if step + 1 < max_new_tokens:
-                logits, past_key_values = self.forward_with_cache(idx_next, past_key_values)
+                logits, cache = self.forward_with_static_cache(idx_next, cache)
         return idx
 
     def parameter_count(self) -> int:

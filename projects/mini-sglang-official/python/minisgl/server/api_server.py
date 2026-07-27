@@ -262,6 +262,7 @@ async def v1_completions(req: OpenAICompletionRequest, request: Request):
         prompt = req.prompt
 
     # TODO: support more sampling parameters
+    # 解答：当前 OpenAI 兼容入口只映射引擎已经实现的 temperature/top-k/top-p/max_tokens 等子集；加入 repetition/frequency/presence penalty、seed、stop/logprobs 时，必须同步扩展请求 schema、Sampler GPU metadata、停止状态和响应字段，不能只在 API 层接收后静默丢弃。
     uid = state.new_user()
     await state.send_one(
         TokenizeMsg(
@@ -322,6 +323,7 @@ async def shell_completion(req: OpenAICompletionRequest):
     prompt = [msg.model_dump() for msg in req.messages]
 
     # TODO: support more sampling parameters
+    # 解答：该入口与上面的流式入口共享同一缺口；新增参数应先由 SamplingParams 明确定义默认值与校验，再让流式/非流式两条路径复用同一转换函数，避免相同请求在两个 endpoint 上产生不同语义。
     uid = state.new_user()
     await state.send_one(
         TokenizeMsg(

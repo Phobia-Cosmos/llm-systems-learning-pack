@@ -37,6 +37,7 @@ def create_kvcache_pool(
     device: torch.device,
 ) -> BaseKVCachePool:
     from .mha_pool import MHAKVCache  # TODO: support other variants (e.g. MLA)
+    # 解答：当前工厂只实现普通 MHA/GQA 的逐层 K/V 张量布局；MLA 会缓存低秩 latent 与独立 RoPE 分量，shape、每 token 字节数和 attention backend 接口都不同，不能只把类名替换掉，需增加新的 pool、store kernel、容量公式和 backend metadata。
 
     return MHAKVCache(
         num_kv_heads=model_config.num_kv_heads,

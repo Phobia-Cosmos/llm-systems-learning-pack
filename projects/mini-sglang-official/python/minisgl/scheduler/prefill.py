@@ -47,9 +47,11 @@ class PrefillAdder:
             return None
 
         # TODO: consider host cache match case
+        # 解答：当前只匹配 GPU radix cache；若未来加入 HiCache/CPU tier，还要把 host 命中的前缀长度、H2D 恢复成本和 GPU 页面 admission 一起计入，不能把“CPU 有副本”直接当成“GPU 已可读”。
         handle = self.cache_manager.match_req(req).cuda_handle
         cached_len = handle.cached_len
         # TODO: better estimate policy
+        # 解答：当前预算估计主要按新增 token/page 数判断能否加入本轮；生产策略还应估计 chunked prefill workspace、prefix 迁移、decode 保留量和碎片，并以真实完成/抢占计数校准，否则容易在边界处过度接纳或过度保守。
         extend_len = req.input_len - cached_len
         estimated_len = extend_len + req.output_len
 

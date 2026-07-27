@@ -22,6 +22,7 @@ def _serialize_any(value: Any) -> Any:
 
 
 # TODO：传过来的self不都是BaseBackendMsg等类型吗 为什么会是torch.Tensor？什么时候会是torch.Tensor？
+# 解答：入口通常确实是 UserMsg、DetokenizeMsg 等消息对象，但它们的字段还会嵌套 1-D CPU Tensor（例如 input_ids）；_serialize_any 遇到该字段后会递归调用 serialize_type(tensor)，因此这里必须同时处理“顶层消息”和“嵌套 Tensor”两种对象。
 def serialize_type(self) -> Dict:
     # find all member variables
     serialized = {}

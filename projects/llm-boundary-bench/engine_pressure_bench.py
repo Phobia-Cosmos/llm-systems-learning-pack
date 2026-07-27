@@ -1,10 +1,12 @@
 #!/home/undefined/Disk/python-envs/sglang/bin/python
 """Pressure benchmark for the local nano-vLLM and official Mini-SGLang engines.
 
-The benchmark feeds token IDs directly, so ``P`` is the exact prompt length and
-``D`` is the exact number of generated tokens per request.  A single engine is
-kept alive while all cases run, which avoids counting model loading and CUDA
-graph capture in every case.
+Random mode feeds token IDs directly, so ``P`` is the exact prompt length.
+Text mode runs the model's local tokenizer without padding, so ``P`` is a
+per-request truncation cap unless repeat-truncate is selected.  ``D`` is always
+the exact number of generated tokens per request.  A single engine is kept
+alive while all cases run, which avoids counting model loading and CUDA graph
+capture in every case.
 
 Examples:
 
@@ -39,7 +41,7 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable, Sequence
 
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
@@ -52,6 +54,25 @@ DEFAULT_MODELS = {
     "qwen": Path("/home/undefined/Disk/cache/models/huggingface/Qwen3-0.6B"),
 }
 DEFAULT_OUTPUT_ROOT = Path("/home/undefined/Disk/build-tmp")
+
+
+BUILTIN_TEXT_PROMPTS: dict[str, tuple[str, ...]] = {
+    "chinese": (
+        "请用三句话解释为什么推理服务需要区分首 token 延迟和逐 token 延迟，并给出一个生活中的类比。",
+        "小明有十个苹果，送给同学三个，又买了两袋、每袋四个。请先列式，再说明最后有多少个苹果。",
+    ),
+    "english": (
+        "Explain the difference between latency and throughput in an inference server, then give one concrete example.",
+        "A train leaves at 09:15 and travels for 2 hours and 47 minutes. Show the calculation and state the arrival time.",
+    ),
+    "code": (
+        "Write a Python function that returns the first non-repeating character in a string. Explain its time and space complexity.",
+        "Review this Python expression for edge cases and propose a safer version:\n\n```python\naverage = sum(values) / len(values)\n```",
+    ),
+    "long": (
+        "You are designing a small language-model inference service for a team chat application. The service receives short questions, long pasted documents, and code-review requests. During the morning peak, many users arrive at nearly the same time, while at night only one or two requests are active. The GPU has limited memory, so model weights, temporary activations, and the key-value cache must share the same capacity. Describe a design that controls admission, batches work continuously, reuses safe shared prefixes, reports time to first token and inter-token latency, and degrades predictably when the queue is full. Include the assumptions you would validate before deployment, the metrics you would put on a dashboard, and the failure tests you would run. Do not assume that an offline throughput number is sufficient evidence for production readiness.",
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -85,6 +106,12 @@ class StepSample:
     used_cuda_graph: bool | None = None
 
 
+@dataclass
+class PreparedPrompts:
+    token_ids: list[list[int]]
+    metadata: dict[str, Any]
+
+
 def _percentile(values: Iterable[float], q: float) -> float | None:
     ordered = sorted(values)
     if not ordered:
@@ -110,6 +137,208 @@ def _distribution(values: Iterable[float]) -> dict[str, float | int | None]:
 
 def _rate(count: int, milliseconds: float) -> float | None:
     return count * 1000.0 / milliseconds if count > 0 and milliseconds > 0 else None
+
+
+def _parse_positive_int_csv(raw: str, option: str) -> list[int]:
+    values: list[int] = []
+    for field in raw.split(","):
+        field = field.strip()
+        if not field:
+            continue
+        try:
+            value = int(field)
+        except ValueError as exc:
+            raise ValueError(f"{option} must be a comma-separated list of integers") from exc
+        if value < 1:
+            raise ValueError(f"{option} values must all be >= 1")
+        if value not in values:
+            values.append(value)
+    if not values:
+        raise ValueError(f"{option} did not contain any values")
+    return sorted(values)
+
+
+def _parse_temperature(raw: str) -> float | None:
+    if raw.strip().lower() == "auto":
+        return None
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("temperature must be auto or a number >= 0") from exc
+    if not math.isfinite(value) or value < 0:
+        raise argparse.ArgumentTypeError("temperature must be finite and >= 0")
+    return value
+
+
+def _grid_cases(
+    batches: Sequence[int],
+    contexts: Sequence[int],
+    decode_tokens: int,
+) -> list[BenchCase]:
+    if decode_tokens < 1:
+        raise ValueError("grid decode tokens must be >= 1")
+    return [
+        _case(f"grid-n{batch}-p{context}-d{decode_tokens}", batch, context, decode_tokens)
+        for context in sorted(set(contexts))
+        for batch in sorted(set(batches))
+    ]
+
+
+def _token_batch_digest(token_batches: Sequence[Sequence[int]]) -> str:
+    digest = hashlib.sha256()
+    for token_ids in token_batches:
+        digest.update(len(token_ids).to_bytes(8, "little"))
+        ids = array("I", token_ids)
+        if sys.byteorder != "little":
+            ids.byteswap()
+        digest.update(ids.tobytes())
+    return digest.hexdigest()
+
+
+def _text_digest(texts: Sequence[str]) -> str:
+    digest = hashlib.sha256()
+    for value in texts:
+        encoded = value.encode("utf-8")
+        digest.update(len(encoded).to_bytes(8, "little"))
+        digest.update(encoded)
+    return digest.hexdigest()
+
+
+def _load_prompt_file(path: Path) -> list[str]:
+    """Read local prompts without guessing a remote dataset format.
+
+    Plain-text files use one non-empty line per prompt.  JSONL accepts a JSON
+    string or an object containing ``prompt`` or ``text`` on each non-empty
+    line.  This deliberately keeps loading deterministic and local-only.
+    """
+
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError as exc:
+        raise ValueError(f"prompt file does not exist: {path}") from exc
+    prompts: list[str] = []
+    for line_number, line in enumerate(lines, start=1):
+        if not line.strip():
+            continue
+        if path.suffix.lower() != ".jsonl":
+            prompts.append(line)
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"invalid JSON on {path}:{line_number}: {exc.msg}") from exc
+        if isinstance(payload, str):
+            value = payload
+        elif isinstance(payload, dict):
+            value = payload.get("prompt", payload.get("text"))
+        else:
+            value = None
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(
+                f"{path}:{line_number} must be a JSON string or contain a non-empty prompt/text field"
+            )
+        prompts.append(value)
+    if not prompts:
+        raise ValueError(f"prompt file contains no non-empty prompts: {path}")
+    return prompts
+
+
+def _builtin_prompts(suite: str) -> list[str]:
+    if suite == "all":
+        # Interleave categories so even N=4 covers Chinese, English, code and
+        # long-form text instead of exhausting one category first.
+        return [
+            values[index]
+            for index in range(max(len(values) for values in BUILTIN_TEXT_PROMPTS.values()))
+            for values in BUILTIN_TEXT_PROMPTS.values()
+            if index < len(values)
+        ]
+    return list(BUILTIN_TEXT_PROMPTS[suite])
+
+
+def _tokenization_metadata(
+    *,
+    source_texts: Sequence[str],
+    decoded_texts: Sequence[str],
+    token_ids: Sequence[Sequence[int]],
+    full_token_lengths: Sequence[int],
+    tokenization_ms: float,
+    source: str,
+    length_policy: str,
+    token_cap: int,
+) -> dict[str, Any]:
+    token_lengths = [len(ids) for ids in token_ids]
+    decoded_chars = [len(text) for text in decoded_texts]
+    decoded_bytes = [len(text.encode("utf-8")) for text in decoded_texts]
+    chars_per_token = [chars / tokens for chars, tokens in zip(decoded_chars, token_lengths)]
+    bytes_per_token = [byte_count / tokens for byte_count, tokens in zip(decoded_bytes, token_lengths)]
+    return {
+        "source": source,
+        "length_policy": length_policy,
+        "token_cap_per_request": token_cap,
+        "padding": "none",
+        "tokenization_ms": tokenization_ms,
+        "request_count": len(token_ids),
+        "truncated_requests": sum(
+            full_length > token_length
+            for full_length, token_length in zip(full_token_lengths, token_lengths)
+        ),
+        "source_text_sha256": _text_digest(source_texts),
+        "prompt_tokens": _distribution(float(value) for value in token_lengths),
+        "decoded_chars": _distribution(float(value) for value in decoded_chars),
+        "decoded_bytes": _distribution(float(value) for value in decoded_bytes),
+        "chars_per_token": _distribution(chars_per_token),
+        "bytes_per_token": _distribution(bytes_per_token),
+    }
+
+
+def _prepare_text_prompts(
+    case: BenchCase,
+    *,
+    tokenizer: Any,
+    source_texts: Sequence[str],
+    source: str,
+    length_policy: str,
+) -> PreparedPrompts:
+    if not source_texts:
+        raise ValueError("text prompt source is empty")
+    selected = [source_texts[index % len(source_texts)] for index in range(case.requests)]
+    token_ids: list[list[int]] = []
+    decoded_texts: list[str] = []
+    full_token_lengths: list[int] = []
+    started = time.perf_counter()
+    for source_text in selected:
+        full_ids = list(tokenizer.encode(source_text, add_special_tokens=False))
+        if not full_ids:
+            raise ValueError("tokenizer produced an empty prompt")
+        if length_policy == "repeat-truncate" and len(full_ids) < case.prefill_tokens:
+            repeats = math.ceil(case.prefill_tokens / len(full_ids)) + 1
+            expanded = "\n\n".join(source_text for _ in range(repeats))
+            full_ids = list(tokenizer.encode(expanded, add_special_tokens=False))
+        full_token_lengths.append(len(full_ids))
+        ids = full_ids[: case.prefill_tokens]
+        if not ids:
+            raise ValueError("text prompt became empty after applying the token cap")
+        token_ids.append(ids)
+        decoded_texts.append(
+            tokenizer.decode(
+                ids,
+                skip_special_tokens=False,
+                clean_up_tokenization_spaces=False,
+            )
+        )
+    tokenization_ms = (time.perf_counter() - started) * 1000.0
+    metadata = _tokenization_metadata(
+        source_texts=selected,
+        decoded_texts=decoded_texts,
+        token_ids=token_ids,
+        full_token_lengths=full_token_lengths,
+        tokenization_ms=tokenization_ms,
+        source=source,
+        length_policy=length_policy,
+        token_cap=case.prefill_tokens,
+    )
+    return PreparedPrompts(token_ids=token_ids, metadata=metadata)
 
 
 def _read_model_config(model_path: Path) -> dict[str, Any]:
@@ -165,14 +394,7 @@ def _make_prompts(
 
 
 def _prompt_digest(prompts: list[list[int]]) -> str:
-    digest = hashlib.sha256()
-    for prompt in prompts:
-        digest.update(len(prompt).to_bytes(8, "little"))
-        ids = array("I", prompt)
-        if sys.byteorder != "little":
-            ids.byteswap()
-        digest.update(ids.tobytes())
-    return digest.hexdigest()
+    return _token_batch_digest(prompts)
 
 
 @contextmanager
@@ -209,6 +431,8 @@ class NanoAdapter:
         from nanovllm import LLM, SamplingParams
 
         self.SamplingParams = SamplingParams
+        self.temperature = args.temperature_resolved
+        self.record_output_ids = args.record_output_ids
         self.llm = LLM(
             str(model_path),
             max_model_len=args.max_model_len,
@@ -254,9 +478,10 @@ class NanoAdapter:
         prompts: list[list[int]],
         *,
         record_steps: bool,
+        decode_output: Callable[[list[int]], str] | None = None,
     ) -> dict[str, Any]:
         sampling = self.SamplingParams(
-            temperature=0.1,
+            temperature=self.temperature,
             max_tokens=case.decode_tokens,
             ignore_eos=True,
         )
@@ -314,9 +539,12 @@ class NanoAdapter:
             case,
             wall_ms=wall_ms,
             outputs=outputs,
+            prompt_lengths=[len(prompt) for prompt in prompts],
             steps=step_samples,
             arrival_ms=arrival_ms,
             record_steps=record_steps,
+            decode_output=decode_output,
+            record_output_ids=self.record_output_ids,
         )
 
     def close(self) -> None:
@@ -332,6 +560,8 @@ class MiniSGLangAdapter:
         from minisgl.llm import LLM
 
         self.SamplingParams = SamplingParams
+        self.temperature = args.temperature_resolved
+        self.record_output_ids = args.record_output_ids
         graph_max_bs = 0 if args.mode == "eager" else args.cuda_graph_max_bs
         self.llm = LLM(
             str(model_path),
@@ -434,9 +664,10 @@ class MiniSGLangAdapter:
         prompts: list[list[int]],
         *,
         record_steps: bool,
+        decode_output: Callable[[list[int]], str] | None = None,
     ) -> dict[str, Any]:
         sampling = self.SamplingParams(
-            temperature=0.0,
+            temperature=self.temperature,
             max_tokens=case.decode_tokens,
             ignore_eos=True,
         )
@@ -458,9 +689,12 @@ class MiniSGLangAdapter:
             case,
             wall_ms=wall_ms,
             outputs=token_outputs,
+            prompt_lengths=[len(prompt) for prompt in prompts],
             steps=self._step_samples,
             arrival_ms=self._arrival_ms,
             record_steps=record_steps,
+            decode_output=decode_output,
+            record_output_ids=self.record_output_ids,
         )
 
     def close(self) -> None:
@@ -474,9 +708,12 @@ def _summarize_case(
     *,
     wall_ms: float,
     outputs: list[list[int]],
+    prompt_lengths: list[int],
     steps: list[StepSample],
     arrival_ms: dict[int, list[float]],
     record_steps: bool,
+    decode_output: Callable[[list[int]], str] | None = None,
+    record_output_ids: bool = False,
 ) -> dict[str, Any]:
     output_lengths = [len(output) for output in outputs]
     if len(outputs) != case.requests:
@@ -485,6 +722,8 @@ def _summarize_case(
         raise RuntimeError(
             f"expected exactly D={case.decode_tokens} tokens per request, got {output_lengths}"
         )
+    if len(prompt_lengths) != case.requests or any(length < 1 for length in prompt_lengths):
+        raise RuntimeError("prompt lengths do not match the request batch")
 
     prefill_steps = [step for step in steps if step.phase == "prefill"]
     decode_steps = [step for step in steps if step.phase == "decode"]
@@ -492,6 +731,14 @@ def _summarize_case(
     decode_gpu_ms = sum(step.gpu_ms for step in decode_steps)
     prefill_scheduled = sum(step.logical_tokens for step in prefill_steps)
     decode_scheduled = sum(step.logical_tokens for step in decode_steps)
+    input_tokens = sum(prompt_lengths)
+    # Prefill computes output token 1.  Only the following D-1 generated
+    # tokens are fed back into the model, so the last generated token is not
+    # resident in KV when the request completes.
+    cache_lengths = [
+        prompt_length + output_length - 1
+        for prompt_length, output_length in zip(prompt_lengths, output_lengths)
+    ]
 
     ttft = [times[0] for times in arrival_ms.values() if times]
     itl = [
@@ -501,6 +748,8 @@ def _summarize_case(
     ]
     summary: dict[str, Any] = {
         "wall_ms": wall_ms,
+        "input_tokens": input_tokens,
+        "nominal_input_tokens": case.input_tokens,
         "generated_tokens": sum(output_lengths),
         "output_lengths": output_lengths,
         "scheduled_prefill_tokens": prefill_scheduled,
@@ -515,7 +764,7 @@ def _summarize_case(
         },
         "throughput": {
             "requests_per_s": _rate(case.requests, wall_ms),
-            "input_tokens_per_s_wall": _rate(case.input_tokens, wall_ms),
+            "input_tokens_per_s_wall": _rate(input_tokens, wall_ms),
             "output_tokens_per_s_wall": _rate(case.output_tokens, wall_ms),
             "prefill_scheduled_tokens_per_s_gpu": _rate(prefill_scheduled, prefill_gpu_ms),
             "decode_scheduled_tokens_per_s_gpu": _rate(decode_scheduled, decode_gpu_ms),
@@ -533,13 +782,176 @@ def _summarize_case(
         "batch": {
             "logical_size": _distribution(float(step.batch_size) for step in steps),
             "padded_size": _distribution(float(step.padded_batch_size) for step in steps),
+            "effective_prefill": _distribution(
+                float(step.batch_size) for step in prefill_steps
+            ),
+            "effective_decode": _distribution(
+                float(step.batch_size) for step in decode_steps
+            ),
             "cuda_graph_steps": sum(step.used_cuda_graph is True for step in steps),
             "eager_steps": sum(step.used_cuda_graph is False for step in steps),
         },
+        "prompt": {
+            "token_lengths": _distribution(float(length) for length in prompt_lengths),
+            "total_prefill_tokens": input_tokens,
+            "nominal_total_prefill_tokens": case.input_tokens,
+        },
+        "cache": {
+            "final_logical_length_per_request": _distribution(
+                float(length) for length in cache_lengths
+            ),
+            "final_logical_tokens_total": sum(cache_lengths),
+            "formula": "prompt_tokens + generated_tokens - 1",
+        },
+        "semantic_regression": {
+            "output_token_sha256": _token_batch_digest(outputs),
+            "per_request_output_token_sha256": [
+                _token_batch_digest([output]) for output in outputs
+            ],
+            "output_ids_preview": [output[:16] for output in outputs[:4]],
+            "output_ids": outputs if record_output_ids else None,
+        },
     }
+    if decode_output is not None:
+        generated_text = [decode_output(output) for output in outputs]
+        summary["semantic_regression"].update(
+            {
+                "generated_text": generated_text,
+                "generated_text_sha256": _text_digest(generated_text),
+            }
+        )
     if record_steps:
         summary["step_samples"] = [asdict(step) for step in steps]
     return summary
+
+
+SATURATION_METRICS = (
+    "requests_per_s",
+    "input_tokens_per_s_wall",
+    "output_tokens_per_s_wall",
+    "prefill_scheduled_tokens_per_s_gpu",
+    "decode_scheduled_tokens_per_s_gpu",
+)
+
+
+def _analyze_saturation(
+    case_records: Sequence[dict[str, Any]],
+    *,
+    metric: str,
+    threshold: float,
+) -> dict[str, Any]:
+    """Aggregate repeats and locate the first low-gain batch transition.
+
+    Cases are grouped by nominal context cap and decode length.  The cap is
+    intentionally kept separate from actual prompt lengths because text mode
+    truncates but never pads a natural prompt.
+    """
+
+    if metric not in SATURATION_METRICS:
+        raise ValueError(f"unsupported saturation metric: {metric}")
+    if not 0.0 <= threshold <= 1.0:
+        raise ValueError("saturation threshold must be in [0, 1]")
+
+    grouped: dict[tuple[int, int], dict[int, list[dict[str, Any]]]] = {}
+    for record in case_records:
+        case = record["case"]
+        grouped.setdefault(
+            (int(case["prefill_tokens"]), int(case["decode_tokens"])), {}
+        ).setdefault(int(case["requests"]), []).append(record["metrics"])
+
+    groups: list[dict[str, Any]] = []
+    for (context_cap, decode_tokens), by_batch in sorted(grouped.items()):
+        points: list[dict[str, Any]] = []
+        for batch_size, metrics_list in sorted(by_batch.items()):
+            metric_values = [
+                metrics["throughput"][metric]
+                for metrics in metrics_list
+                if metrics["throughput"].get(metric) is not None
+            ]
+            actual_prefill = [metrics["input_tokens"] for metrics in metrics_list]
+            cache_tokens = [
+                metrics["cache"]["final_logical_tokens_total"]
+                for metrics in metrics_list
+            ]
+            effective_decode = [
+                metrics["batch"]["effective_decode"]["mean"]
+                for metrics in metrics_list
+                if metrics["batch"]["effective_decode"]["mean"] is not None
+            ]
+            effective_prefill = [
+                metrics["batch"]["effective_prefill"]["mean"]
+                for metrics in metrics_list
+                if metrics["batch"]["effective_prefill"]["mean"] is not None
+            ]
+            points.append(
+                {
+                    "requested_batch": batch_size,
+                    "repeat_count": len(metrics_list),
+                    "metric_median": statistics.median(metric_values)
+                    if metric_values
+                    else None,
+                    "total_prefill_tokens_median": statistics.median(actual_prefill),
+                    "cache_tokens_median": statistics.median(cache_tokens),
+                    "effective_prefill_batch_median": statistics.median(effective_prefill)
+                    if effective_prefill
+                    else None,
+                    "effective_decode_batch_median": statistics.median(effective_decode)
+                    if effective_decode
+                    else None,
+                }
+            )
+
+        first_low_gain_batch: int | None = None
+        transitions: list[dict[str, Any]] = []
+        for previous, current in zip(points, points[1:]):
+            previous_value = previous["metric_median"]
+            current_value = current["metric_median"]
+            relative_gain = (
+                current_value / previous_value - 1.0
+                if previous_value is not None
+                and current_value is not None
+                and previous_value > 0
+                else None
+            )
+            relative_batch_increase = (
+                current["requested_batch"] / previous["requested_batch"] - 1.0
+            )
+            scaling_efficiency = (
+                relative_gain / relative_batch_increase
+                if relative_gain is not None and relative_batch_increase > 0
+                else None
+            )
+            below_threshold = relative_gain is not None and relative_gain < threshold
+            if below_threshold and first_low_gain_batch is None:
+                first_low_gain_batch = current["requested_batch"]
+            transitions.append(
+                {
+                    "from_batch": previous["requested_batch"],
+                    "to_batch": current["requested_batch"],
+                    "relative_throughput_gain": relative_gain,
+                    "relative_batch_increase": relative_batch_increase,
+                    "scaling_efficiency": scaling_efficiency,
+                    "below_threshold": below_threshold,
+                }
+            )
+        groups.append(
+            {
+                "context_token_cap": context_cap,
+                "decode_tokens": decode_tokens,
+                "first_low_gain_batch": first_low_gain_batch,
+                "points": points,
+                "transitions": transitions,
+            }
+        )
+    return {
+        "metric": metric,
+        "threshold_fraction": threshold,
+        "threshold_interpretation": (
+            "first transition where current_throughput / previous_throughput - 1 "
+            "is below threshold"
+        ),
+        "groups": groups,
+    }
 
 
 def _case(name: str, n: int, p: int, d: int) -> BenchCase:
@@ -690,7 +1102,7 @@ def _write_jsonl(handle, payload: dict[str, Any]) -> None:
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        description="Run exact-token pressure cases on one persistent local inference engine.",
+        description="Run token-ID or local-text pressure cases on one persistent inference engine.",
     )
     parser.add_argument("--engine", choices=("nano", "minisgl"), required=True)
     parser.add_argument("--model-kind", choices=("minillm", "qwen"), required=True)
@@ -703,6 +1115,71 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--cases",
         help="override preset: semicolon-separated N:P:D or NAME:N:P:D entries",
+    )
+    parser.add_argument(
+        "--grid-batches",
+        help="batch sizes for a Cartesian saturation grid, for example 1,2,4,8,16",
+    )
+    parser.add_argument(
+        "--grid-contexts",
+        help="per-request prompt token caps for a Cartesian grid, for example 128,512,2048",
+    )
+    parser.add_argument(
+        "--grid-decode-tokens",
+        type=int,
+        default=16,
+        help="generated tokens per request in a Cartesian grid",
+    )
+    parser.add_argument(
+        "--saturation-metric",
+        choices=SATURATION_METRICS,
+        default="output_tokens_per_s_wall",
+    )
+    parser.add_argument(
+        "--saturation-threshold",
+        type=float,
+        default=0.05,
+        help="relative throughput gain below which a grid transition is marked saturated",
+    )
+    parser.add_argument(
+        "--prompt-source",
+        choices=("random", "builtin", "file"),
+        default="random",
+        help="random gives exact P token IDs; text modes tokenize locally and use P only as a cap",
+    )
+    parser.add_argument(
+        "--prompt-suite",
+        choices=("all", *BUILTIN_TEXT_PROMPTS.keys()),
+        default="all",
+        help="small built-in semantic prompt suite",
+    )
+    parser.add_argument(
+        "--prompt-file",
+        type=Path,
+        help="UTF-8 prompts: one non-empty line per prompt, or prompt/text records in JSONL",
+    )
+    parser.add_argument(
+        "--text-length-policy",
+        choices=("truncate", "repeat-truncate"),
+        default="truncate",
+        help="never pads; truncate caps natural text, repeat-truncate repeats then caps for controlled pressure",
+    )
+    parser.add_argument(
+        "--record-generated-text",
+        action="store_true",
+        help="decode and store full generated text (token checksums are always stored)",
+    )
+    parser.add_argument(
+        "--record-output-ids",
+        action="store_true",
+        help="store every generated token ID; disabled by default to keep large sweeps compact",
+    )
+    parser.add_argument(
+        "--temperature",
+        type=_parse_temperature,
+        default="auto",
+        metavar="FLOAT|auto",
+        help="shared sampling temperature; auto preserves nano=0.1 and minisgl=0.0",
     )
     parser.add_argument("--mode", choices=("eager", "graph"), default="eager")
     parser.add_argument("--repeats", type=int, default=1)
@@ -738,6 +1215,22 @@ def main() -> int:
         raise ValueError("official Mini-SGLang in this workspace supports the Qwen test, not MiniLLM")
     if args.repeats < 1 or args.warmup < 0 or args.warmup_each_case < 0:
         raise ValueError("repeat and warmup counts are invalid")
+    if not 0.0 <= args.saturation_threshold <= 1.0:
+        raise ValueError("--saturation-threshold must be in [0, 1]")
+    grid_requested = args.grid_batches is not None or args.grid_contexts is not None
+    if grid_requested and (args.grid_batches is None or args.grid_contexts is None):
+        raise ValueError("--grid-batches and --grid-contexts must be provided together")
+    if grid_requested and args.cases:
+        raise ValueError("--cases cannot be combined with a Cartesian grid")
+    if args.prompt_source == "file" and args.prompt_file is None:
+        raise ValueError("--prompt-source file requires --prompt-file")
+    if args.prompt_source != "file" and args.prompt_file is not None:
+        raise ValueError("--prompt-file requires --prompt-source file")
+    args.temperature_resolved = (
+        args.temperature
+        if args.temperature is not None
+        else (0.1 if args.engine == "nano" else 0.0)
+    )
     if args.disable_overlap:
         os.environ["MINISGL_DISABLE_OVERLAP_SCHEDULING"] = "1"
 
@@ -745,15 +1238,28 @@ def main() -> int:
     if not model_path.is_dir():
         raise ValueError(f"model directory does not exist: {model_path}")
     vocab_size, model_context = _model_limits(model_path)
-    cases = _parse_cases(args.cases) if args.cases else _preset_cases(
-        args.preset, args.model_kind, args.engine
-    )
+    if grid_requested:
+        cases = _grid_cases(
+            _parse_positive_int_csv(args.grid_batches, "--grid-batches"),
+            _parse_positive_int_csv(args.grid_contexts, "--grid-contexts"),
+            args.grid_decode_tokens,
+        )
+    else:
+        cases = _parse_cases(args.cases) if args.cases else _preset_cases(
+            args.preset, args.model_kind, args.engine
+        )
     _validate_cases(cases, model_context)
     _resolve_runtime_args(args, cases, model_context)
     if args.cuda_profiler_case is not None and not 0 <= args.cuda_profiler_case < len(cases):
         raise ValueError("--cuda-profiler-case is outside the case matrix")
 
     output_path = (args.output or _default_output(args)).resolve()
+    if args.prompt_source == "builtin":
+        source_texts = _builtin_prompts(args.prompt_suite)
+    elif args.prompt_source == "file":
+        source_texts = _load_prompt_file(args.prompt_file.resolve())
+    else:
+        source_texts = []
     config_summary = {
         "engine": args.engine,
         "model_kind": args.model_kind,
@@ -766,6 +1272,32 @@ def main() -> int:
         "cuda_graph_max_bs": args.cuda_graph_max_bs,
         "page_size": args.page_size if args.engine == "minisgl" else None,
         "cache_type": args.cache_type if args.engine == "minisgl" else None,
+        "prompt": {
+            "source": args.prompt_source,
+            "suite": args.prompt_suite if args.prompt_source == "builtin" else None,
+            "file": str(args.prompt_file.resolve()) if args.prompt_file else None,
+            "source_prompt_count": len(source_texts) if source_texts else None,
+            "text_length_policy": (
+                args.text_length_policy if args.prompt_source != "random" else None
+            ),
+            "padding": "none" if args.prompt_source != "random" else None,
+            "record_generated_text": args.record_generated_text,
+            "record_output_ids": args.record_output_ids,
+        },
+        "grid": {
+            "enabled": grid_requested,
+            "saturation_metric": args.saturation_metric if grid_requested else None,
+            "saturation_threshold": args.saturation_threshold if grid_requested else None,
+        },
+        "sampling": {
+            "temperature_requested": (
+                args.temperature if args.temperature is not None else "auto"
+            ),
+            "temperature_resolved": args.temperature_resolved,
+            "strategy": "greedy" if args.temperature_resolved == 0.0 else "stochastic",
+            "ignore_eos": True,
+            "max_tokens": "case.decode_tokens",
+        },
         "cases": [asdict(case) for case in cases],
         "output": str(output_path),
     }
@@ -775,6 +1307,67 @@ def main() -> int:
 
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required")
+    tokenizer = None
+    if args.prompt_source != "random" or args.record_generated_text:
+        from transformers import AutoTokenizer
+
+        tokenizer = AutoTokenizer.from_pretrained(
+            str(model_path),
+            local_files_only=True,
+            use_fast=True,
+        )
+
+    def prepare_prompts(case: BenchCase, salt: int) -> PreparedPrompts:
+        if args.prompt_source == "random":
+            prompt_ids = _make_prompts(
+                case,
+                vocab_size=vocab_size,
+                seed=args.seed,
+                salt=salt,
+            )
+            return PreparedPrompts(
+                token_ids=prompt_ids,
+                metadata={
+                    "source": "direct_token_ids",
+                    "length_policy": "exact_random_ids",
+                    "token_cap_per_request": case.prefill_tokens,
+                    "padding": "none",
+                    "tokenization_ms": None,
+                    "request_count": case.requests,
+                    "truncated_requests": 0,
+                    "prompt_tokens": _distribution(
+                        float(len(prompt)) for prompt in prompt_ids
+                    ),
+                    "decoded_chars": None,
+                    "decoded_bytes": None,
+                    "chars_per_token": None,
+                    "bytes_per_token": None,
+                },
+            )
+        assert tokenizer is not None
+        return _prepare_text_prompts(
+            case,
+            tokenizer=tokenizer,
+            source_texts=source_texts,
+            source=(
+                f"builtin:{args.prompt_suite}"
+                if args.prompt_source == "builtin"
+                else f"file:{args.prompt_file.resolve()}"
+            ),
+            length_policy=args.text_length_policy,
+        )
+
+    decode_output: Callable[[list[int]], str] | None = None
+    if args.record_generated_text:
+        assert tokenizer is not None
+
+        def decode_output(token_ids: list[int]) -> str:
+            return tokenizer.decode(
+                token_ids,
+                skip_special_tokens=False,
+                clean_up_tokenization_spaces=False,
+            )
+
     # Mini-SGLang Engine intentionally asserts that it owns CUDA lazy
     # initialization.  Calling set_device before constructing it violates that
     # contract, whereas nano-vLLM expects rank 0 to be the active device.
@@ -785,6 +1378,7 @@ def main() -> int:
 
     adapter = None
     exit_code = 0
+    saturation_records: list[dict[str, Any]] = []
     with output_path.open("a", encoding="utf-8") as output:
         initialization_started = time.perf_counter()
         try:
@@ -833,22 +1427,16 @@ def main() -> int:
 
             for case_index, case in enumerate(cases):
                 for warmup_index in range(args.warmup_each_case):
-                    prompts = _make_prompts(
+                    prepared = prepare_prompts(
                         case,
-                        vocab_size=vocab_size,
-                        seed=args.seed,
                         salt=-(case_index + 1) * 1_000 - warmup_index,
                     )
-                    adapter.run_case(case, prompts, record_steps=False)
+                    adapter.run_case(case, prepared.token_ids, record_steps=False)
 
                 for repeat_index in range(args.repeats):
                     salt = 1 + case_index * args.repeats + repeat_index
-                    prompts = _make_prompts(
-                        case,
-                        vocab_size=vocab_size,
-                        seed=args.seed,
-                        salt=salt,
-                    )
+                    prepared = prepare_prompts(case, salt=salt)
+                    prompts = prepared.token_ids
                     digest = _prompt_digest(prompts)
                     torch.cuda.synchronize()
                     torch.cuda.reset_peak_memory_stats()
@@ -864,6 +1452,7 @@ def main() -> int:
                                 case,
                                 prompts,
                                 record_steps=args.record_steps,
+                                decode_output=decode_output,
                             )
                     finally:
                         if capture:
@@ -877,9 +1466,10 @@ def main() -> int:
                         "case_index": case_index,
                         "repeat_index": repeat_index,
                         "case": asdict(case),
-                        "prompt_source": "direct_token_ids",
-                        "prompt_seed": args.seed,
-                        "prompt_salt": salt,
+                        "prompt_source": prepared.metadata["source"],
+                        "prompt_preparation": prepared.metadata,
+                        "prompt_seed": args.seed if args.prompt_source == "random" else None,
+                        "prompt_salt": salt if args.prompt_source == "random" else None,
                         "prompt_sha256": digest,
                         "prompt_ids_preview": prompts[0][: min(16, case.prefill_tokens)],
                         "prompt_ids": prompts if args.record_prompt_ids else None,
@@ -893,6 +1483,21 @@ def main() -> int:
                         "metrics": metrics,
                     }
                     _write_jsonl(output, payload)
+                    saturation_records.append(payload)
+            if grid_requested:
+                _write_jsonl(
+                    output,
+                    {
+                        "record_type": "saturation_analysis",
+                        "schema_version": 1,
+                        "run_id": run_id,
+                        "analysis": _analyze_saturation(
+                            saturation_records,
+                            metric=args.saturation_metric,
+                            threshold=args.saturation_threshold,
+                        ),
+                    },
+                )
         except Exception as exc:
             exit_code = 1
             _write_jsonl(
