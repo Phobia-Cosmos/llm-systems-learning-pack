@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "name": "openbpe-32k",
+  "algorithm": "byte-level-bpe",
+  "normalization": "NFC",
+  "pretoken_pattern": "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
+  "vocab_size": 32768,
+  "min_frequency": 2,
+  "max_token_length": 64,
+  "special_token_ids": {
+    "<|pad|>": 0,
+    "<|unk|>": 1,
+    "<|bos|>": 2,
+    "<|eos|>": 3,
+    "<|endoftext|>": 4,
+    "<|system|>": 5,
+    "<|user|>": 6,
+    "<|assistant|>": 7,
+    "<|tool|>": 8,
+    "<|tool_call|>": 9,
+    "<|tool_result|>": 10,
+    "<|fim_prefix|>": 11,
+    "<|fim_middle|>": 12,
+    "<|fim_suffix|>": 13,
+    "<|repo_name|>": 14,
+    "<|file_sep|>": 15
+  },
+  "byte_alphabet_size": 256,
+  "corpus_manifest_sha256": "c662fc3f6f2eb950cc31cef046004c77d85ffd14a53af7fbacdd2d20c36c2cfb",
+  "training_seconds": 235.55278319120407,
+  "tokenizer_json_bytes": 2478179,
+  "tokenizer_json_sha256": "21a9e8b44a54d25bd1ebc2367810c0cf298af8afa6c2ff1f0997e124f9b52dc3"
+}

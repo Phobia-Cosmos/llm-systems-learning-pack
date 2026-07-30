@@ -1,0 +1,63 @@
+{
+  "config": {
+    "base_url": "http://127.0.0.1:30000",
+    "model": "Qwen3-8B",
+    "num_requests": 4,
+    "concurrency": 1,
+    "prompt_words": 1024,
+    "max_tokens": 64,
+    "timeout": 600,
+    "output": "/public/home/u43077/lzh/benchmarks/20260728-155836/sglang/medium-c1.json"
+  },
+  "wall_s": 4.323295034468174,
+  "successful_requests": 4,
+  "failed_requests": 0,
+  "requests_per_second": 0.9252202239517193,
+  "input_tokens_per_second": 2479.8215052465957,
+  "output_tokens_per_second": 59.21409433291004,
+  "latency_s": {
+    "p50": 1.0756387943401933,
+    "p95": 1.0981848612427711,
+    "p99": 1.0981848612427711
+  },
+  "ttft_s": {
+    "p50": 0.18053437769412994,
+    "p95": 0.2031675297766924,
+    "p99": 0.2031675297766924
+  },
+  "errors": [],
+  "results": [
+    {
+      "ok": true,
+      "latency_s": 1.0981848612427711,
+      "ttft_s": 0.2031675297766924,
+      "prompt_tokens": 2703,
+      "completion_tokens": 64,
+      "error": null
+    },
+    {
+      "ok": true,
+      "latency_s": 1.073124010115862,
+      "ttft_s": 0.17769721150398254,
+      "prompt_tokens": 2659,
+      "completion_tokens": 64,
+      "error": null
+    },
+    {
+      "ok": true,
+      "latency_s": 1.0740869604051113,
+      "ttft_s": 0.1791090089827776,
+      "prompt_tokens": 2691,
+      "completion_tokens": 64,
+      "error": null
+    },
+    {
+      "ok": true,
+      "latency_s": 1.0771906282752752,
+      "ttft_s": 0.1819597464054823,
+      "prompt_tokens": 2668,
+      "completion_tokens": 64,
+      "error": null
+    }
+  ]
+}

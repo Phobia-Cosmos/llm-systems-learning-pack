@@ -1,0 +1,47 @@
+{
+  "config": {
+    "base_url": "http://127.0.0.1:8000",
+    "model": "Qwen3-8B",
+    "num_requests": 2,
+    "concurrency": 1,
+    "prompt_words": 2800,
+    "max_tokens": 64,
+    "timeout": 900.0,
+    "output": "/public/home/u43077/lzh/benchmarks/20260728-155836/vllm/long-c1.json"
+  },
+  "wall_s": 2.735764840617776,
+  "successful_requests": 2,
+  "failed_requests": 0,
+  "requests_per_second": 0.7310569864434586,
+  "input_tokens_per_second": 5350.240555286451,
+  "output_tokens_per_second": 46.78764713238135,
+  "latency_s": {
+    "p50": 1.3676327941939235,
+    "p95": 1.3924176264554262,
+    "p99": 1.3924176264554262
+  },
+  "ttft_s": {
+    "p50": 0.4119387799873948,
+    "p95": 0.4368102513253689,
+    "p99": 0.4368102513253689
+  },
+  "errors": [],
+  "results": [
+    {
+      "ok": true,
+      "latency_s": 1.3924176264554262,
+      "ttft_s": 0.4368102513253689,
+      "prompt_tokens": 7373,
+      "completion_tokens": 64,
+      "error": null
+    },
+    {
+      "ok": true,
+      "latency_s": 1.3428479619324207,
+      "ttft_s": 0.38706730864942074,
+      "prompt_tokens": 7264,
+      "completion_tokens": 64,
+      "error": null
+    }
+  ]
+}

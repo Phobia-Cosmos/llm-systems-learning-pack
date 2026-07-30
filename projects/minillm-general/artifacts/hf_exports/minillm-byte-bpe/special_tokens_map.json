@@ -1,0 +1,11 @@
+{
+  "unk_token": "<unk>",
+  "pad_token": "<pad>",
+  "bos_token": "<bos>",
+  "eos_token": "<eos>",
+  "additional_special_tokens": [
+    "<|system|>",
+    "<|user|>",
+    "<|assistant|>"
+  ]
+}

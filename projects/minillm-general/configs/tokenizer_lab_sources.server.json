@@ -1,0 +1,158 @@
+{
+  "schema_version": 1,
+  "normalization": "NFC",
+  "minimum_characters": 64,
+  "maximum_characters_per_document": 32768,
+  "validation_modulus": 100,
+  "validation_buckets": 2,
+  "sources": [
+    {
+      "name": "minimind-zh",
+      "domain": "zh-curated",
+      "paths": [
+        "/public/home/u43077/lzh/datasets/minimind/pretrain_t2t.jsonl"
+      ],
+      "text_fields": [
+        "text"
+      ],
+      "target_train_characters": 15000000,
+      "sample_modulus": 16,
+      "sample_buckets": 1
+    },
+    {
+      "name": "fineweb2-zh",
+      "domain": "zh-web",
+      "paths": [
+        "/public/home/u43077/lzh/datasets/pretraining/fineweb2-zh-first/data/cmn_Hani/train/000_00000.parquet"
+      ],
+      "text_fields": [
+        "text"
+      ],
+      "target_train_characters": 25000000,
+      "sample_modulus": 16,
+      "sample_buckets": 1
+    },
+    {
+      "name": "fineweb-edu-en",
+      "domain": "en-educational",
+      "paths": [
+        "/public/home/u43077/lzh/datasets/pretraining/fineweb-edu-en-first/sample/10BT/000_00000.parquet"
+      ],
+      "text_fields": [
+        "text"
+      ],
+      "target_train_characters": 25000000,
+      "sample_modulus": 16,
+      "sample_buckets": 1
+    },
+    {
+      "name": "fineweb2-ar",
+      "domain": "ar-web",
+      "paths": [
+        "/public/home/u43077/lzh/datasets/tokenizer-lab/sources/fineweb2-multilingual/data/arb_Arab/train/000_00000.parquet"
+      ],
+      "text_fields": [
+        "text"
+      ],
+      "target_train_characters": 8000000,
+      "sample_modulus": 16,
+      "sample_buckets": 1
+    },
+    {
+      "name": "fineweb2-hi",
+      "domain": "hi-web",
+      "paths": [
+        "/public/home/u43077/lzh/datasets/tokenizer-lab/sources/fineweb2-multilingual/data/hin_Deva/train/000_00000.parquet"
+      ],
+      "text_fields": [
+        "text"
+      ],
+      "target_train_characters": 8000000,
+      "sample_modulus": 16,
+      "sample_buckets": 1
+    },
+    {
+      "name": "fineweb2-ja",
+      "domain": "ja-web",
+      "paths": [
+        "/public/home/u43077/lzh/datasets/tokenizer-lab/sources/fineweb2-multilingual/data/jpn_Jpan/train/000_00000.parquet"
+      ],
+      "text_fields": [
+        "text"
+      ],
+      "target_train_characters": 8000000,
+      "sample_modulus": 16,
+      "sample_buckets": 1
+    },
+    {
+      "name": "fineweb2-ko",
+      "domain": "ko-web",
+      "paths": [
+        "/public/home/u43077/lzh/datasets/tokenizer-lab/sources/fineweb2-multilingual/data/kor_Hang/train/000_00000.parquet"
+      ],
+      "text_fields": [
+        "text"
+      ],
+      "target_train_characters": 8000000,
+      "sample_modulus": 16,
+      "sample_buckets": 1
+    },
+    {
+      "name": "fineweb2-ru",
+      "domain": "ru-web",
+      "paths": [
+        "/public/home/u43077/lzh/datasets/tokenizer-lab/sources/fineweb2-multilingual/data/rus_Cyrl/train/000_00000.parquet"
+      ],
+      "text_fields": [
+        "text"
+      ],
+      "target_train_characters": 8000000,
+      "sample_modulus": 16,
+      "sample_buckets": 1
+    },
+    {
+      "name": "fineweb2-es",
+      "domain": "es-web",
+      "paths": [
+        "/public/home/u43077/lzh/datasets/tokenizer-lab/sources/fineweb2-multilingual/data/spa_Latn/train/000_00000.parquet"
+      ],
+      "text_fields": [
+        "text"
+      ],
+      "target_train_characters": 8000000,
+      "sample_modulus": 16,
+      "sample_buckets": 1
+    },
+    {
+      "name": "github-code",
+      "domain": "code-multilingual",
+      "paths": [
+        "/public/home/u43077/lzh/datasets/tokenizer-lab/sources/github-code-starter/data/train-00000-of-01126.parquet",
+        "/public/home/u43077/lzh/datasets/tokenizer-lab/sources/github-code-starter/data/train-00001-of-01126.parquet",
+        "/public/home/u43077/lzh/datasets/tokenizer-lab/sources/github-code-starter/data/train-00002-of-01126.parquet",
+        "/public/home/u43077/lzh/datasets/tokenizer-lab/sources/github-code-starter/data/train-00003-of-01126.parquet"
+      ],
+      "text_fields": [
+        "code",
+        "content",
+        "text"
+      ],
+      "target_train_characters": 35000000,
+      "sample_modulus": 4,
+      "sample_buckets": 1
+    },
+    {
+      "name": "finemath-3plus",
+      "domain": "math",
+      "paths": [
+        "/public/home/u43077/lzh/datasets/tokenizer-lab/sources/finemath-3plus/finemath-3plus/train-00000-of-00128.parquet"
+      ],
+      "text_fields": [
+        "text"
+      ],
+      "target_train_characters": 12000000,
+      "sample_modulus": 4,
+      "sample_buckets": 1
+    }
+  ]
+}

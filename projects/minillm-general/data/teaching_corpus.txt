@@ -1,0 +1,408 @@
+第 1 轮教学样例。
+MiniLLM 教学语料。
+用户: 什么是 decoder-only Transformer？
+助手: decoder-only Transformer 是只使用解码器堆叠的自回归语言模型。它根据前面的 token 预测下一个 token，典型代表是 GPT、Llama、Qwen 和 Mistral。
+用户: 为什么训练次数少时输出像随机字符？
+助手: 因为模型参数刚开始是随机初始化，训练步数少时还没有学会语料中的字符顺序、问答格式和长期依赖，所以采样结果会像随机拼接。
+用户: 什么是 token？
+助手: token 是模型处理文本的基本单位。字符级模型把每个字符当成 token，大模型通常使用 BPE 或 SentencePiece 把文本切成子词 token。
+用户: 什么是 embedding？
+助手: embedding 是把离散 token id 映射成连续向量的查表过程。模型后续的 attention 和 MLP 都在这些向量上计算。
+用户: 什么是 causal mask？
+助手: causal mask 会挡住未来位置，让当前位置只能看见自己和之前的 token。这样训练时模型不能偷看答案。
+用户: attention 的 Q K V 是什么？
+助手: Q 表示当前位置想查询什么信息，K 表示历史位置提供的索引，V 表示真正被读取的内容。QK 矩阵给出相关性，softmax 后乘 V 得到上下文表示。
+用户: logits 是什么？
+助手: logits 是模型对词表中每个 token 的原始分数，还不是概率。经过 temperature、top-k、top-p 和 softmax 后，才会得到采样概率。
+用户: 为什么要训练 loss？
+助手: loss 衡量模型预测下一个 token 的错误程度。loss.backward 会计算梯度，optimizer.step 会更新参数，让正确 token 的概率逐渐变高。
+用户: GPU 是必须的吗？
+助手: 不是。小模型可以在 CPU 上训练和推理，只是速度较慢。大模型训练通常需要 GPU，因为矩阵乘法和显存需求很高。
+用户: 训练好的模型能在 CPU 上推理吗？
+助手: 可以。训练只是在更新权重；训练完成后保存 checkpoint，CPU 加载同一份权重就能推理，只是速度通常比 GPU 慢。
+用户: 如何让 MiniLLM 输出更有意义？
+助手: 需要更清晰的语料、更多训练步数、合适的模型容量、稳定的解码方式。教学模型可以先用结构化问答语料和 greedy 解码观察是否学会格式。
+用户: MiniLLM 和 vLLM 有什么关系？
+助手: MiniLLM 是模型本体教学代码，vLLM 是推理引擎。模型负责计算 logits，引擎负责高并发调度、KV cache、分页显存和采样服务。
+用户: MiniLLM 可以直接放进 vLLM 或 SGLang 吗？
+助手: 不能直接放。它还不是 Hugging Face PreTrainedModel，也没有被推理引擎注册。需要导出标准配置、权重和 tokenizer，并实现引擎要求的模型后端。
+用户: 什么是 Hugging Face 格式？
+助手: Hugging Face 格式通常包含 config.json、model.safetensors、tokenizer 文件和 generation_config.json。它让训练、加载、量化和推理工具用统一方式识别模型。
+用户: 什么是 safetensors？
+助手: safetensors 是一种安全、快速的张量权重格式。它不执行 Python pickle 代码，支持按张量元数据加载，更适合分布式推理和模型发布。
+总结: MiniLLM 的学习主线是 tokenizer、embedding、attention、MLP、logits、loss、optimizer 和 generate。
+
+第 2 轮教学样例。
+MiniLLM 教学语料。
+用户: 什么是 decoder-only Transformer？
+助手: decoder-only Transformer 是只使用解码器堆叠的自回归语言模型。它根据前面的 token 预测下一个 token，典型代表是 GPT、Llama、Qwen 和 Mistral。
+用户: 为什么训练次数少时输出像随机字符？
+助手: 因为模型参数刚开始是随机初始化，训练步数少时还没有学会语料中的字符顺序、问答格式和长期依赖，所以采样结果会像随机拼接。
+用户: 什么是 token？
+助手: token 是模型处理文本的基本单位。字符级模型把每个字符当成 token，大模型通常使用 BPE 或 SentencePiece 把文本切成子词 token。
+用户: 什么是 embedding？
+助手: embedding 是把离散 token id 映射成连续向量的查表过程。模型后续的 attention 和 MLP 都在这些向量上计算。
+用户: 什么是 causal mask？
+助手: causal mask 会挡住未来位置，让当前位置只能看见自己和之前的 token。这样训练时模型不能偷看答案。
+用户: attention 的 Q K V 是什么？
+助手: Q 表示当前位置想查询什么信息，K 表示历史位置提供的索引，V 表示真正被读取的内容。QK 矩阵给出相关性，softmax 后乘 V 得到上下文表示。
+用户: logits 是什么？
+助手: logits 是模型对词表中每个 token 的原始分数，还不是概率。经过 temperature、top-k、top-p 和 softmax 后，才会得到采样概率。
+用户: 为什么要训练 loss？
+助手: loss 衡量模型预测下一个 token 的错误程度。loss.backward 会计算梯度，optimizer.step 会更新参数，让正确 token 的概率逐渐变高。
+用户: GPU 是必须的吗？
+助手: 不是。小模型可以在 CPU 上训练和推理，只是速度较慢。大模型训练通常需要 GPU，因为矩阵乘法和显存需求很高。
+用户: 训练好的模型能在 CPU 上推理吗？
+助手: 可以。训练只是在更新权重；训练完成后保存 checkpoint，CPU 加载同一份权重就能推理，只是速度通常比 GPU 慢。
+用户: 如何让 MiniLLM 输出更有意义？
+助手: 需要更清晰的语料、更多训练步数、合适的模型容量、稳定的解码方式。教学模型可以先用结构化问答语料和 greedy 解码观察是否学会格式。
+用户: MiniLLM 和 vLLM 有什么关系？
+助手: MiniLLM 是模型本体教学代码，vLLM 是推理引擎。模型负责计算 logits，引擎负责高并发调度、KV cache、分页显存和采样服务。
+用户: MiniLLM 可以直接放进 vLLM 或 SGLang 吗？
+助手: 不能直接放。它还不是 Hugging Face PreTrainedModel，也没有被推理引擎注册。需要导出标准配置、权重和 tokenizer，并实现引擎要求的模型后端。
+用户: 什么是 Hugging Face 格式？
+助手: Hugging Face 格式通常包含 config.json、model.safetensors、tokenizer 文件和 generation_config.json。它让训练、加载、量化和推理工具用统一方式识别模型。
+用户: 什么是 safetensors？
+助手: safetensors 是一种安全、快速的张量权重格式。它不执行 Python pickle 代码，支持按张量元数据加载，更适合分布式推理和模型发布。
+总结: MiniLLM 的学习主线是 tokenizer、embedding、attention、MLP、logits、loss、optimizer 和 generate。
+
+第 3 轮教学样例。
+MiniLLM 教学语料。
+用户: 什么是 decoder-only Transformer？
+助手: decoder-only Transformer 是只使用解码器堆叠的自回归语言模型。它根据前面的 token 预测下一个 token，典型代表是 GPT、Llama、Qwen 和 Mistral。
+用户: 为什么训练次数少时输出像随机字符？
+助手: 因为模型参数刚开始是随机初始化，训练步数少时还没有学会语料中的字符顺序、问答格式和长期依赖，所以采样结果会像随机拼接。
+用户: 什么是 token？
+助手: token 是模型处理文本的基本单位。字符级模型把每个字符当成 token，大模型通常使用 BPE 或 SentencePiece 把文本切成子词 token。
+用户: 什么是 embedding？
+助手: embedding 是把离散 token id 映射成连续向量的查表过程。模型后续的 attention 和 MLP 都在这些向量上计算。
+用户: 什么是 causal mask？
+助手: causal mask 会挡住未来位置，让当前位置只能看见自己和之前的 token。这样训练时模型不能偷看答案。
+用户: attention 的 Q K V 是什么？
+助手: Q 表示当前位置想查询什么信息，K 表示历史位置提供的索引，V 表示真正被读取的内容。QK 矩阵给出相关性，softmax 后乘 V 得到上下文表示。
+用户: logits 是什么？
+助手: logits 是模型对词表中每个 token 的原始分数，还不是概率。经过 temperature、top-k、top-p 和 softmax 后，才会得到采样概率。
+用户: 为什么要训练 loss？
+助手: loss 衡量模型预测下一个 token 的错误程度。loss.backward 会计算梯度，optimizer.step 会更新参数，让正确 token 的概率逐渐变高。
+用户: GPU 是必须的吗？
+助手: 不是。小模型可以在 CPU 上训练和推理，只是速度较慢。大模型训练通常需要 GPU，因为矩阵乘法和显存需求很高。
+用户: 训练好的模型能在 CPU 上推理吗？
+助手: 可以。训练只是在更新权重；训练完成后保存 checkpoint，CPU 加载同一份权重就能推理，只是速度通常比 GPU 慢。
+用户: 如何让 MiniLLM 输出更有意义？
+助手: 需要更清晰的语料、更多训练步数、合适的模型容量、稳定的解码方式。教学模型可以先用结构化问答语料和 greedy 解码观察是否学会格式。
+用户: MiniLLM 和 vLLM 有什么关系？
+助手: MiniLLM 是模型本体教学代码，vLLM 是推理引擎。模型负责计算 logits，引擎负责高并发调度、KV cache、分页显存和采样服务。
+用户: MiniLLM 可以直接放进 vLLM 或 SGLang 吗？
+助手: 不能直接放。它还不是 Hugging Face PreTrainedModel，也没有被推理引擎注册。需要导出标准配置、权重和 tokenizer，并实现引擎要求的模型后端。
+用户: 什么是 Hugging Face 格式？
+助手: Hugging Face 格式通常包含 config.json、model.safetensors、tokenizer 文件和 generation_config.json。它让训练、加载、量化和推理工具用统一方式识别模型。
+用户: 什么是 safetensors？
+助手: safetensors 是一种安全、快速的张量权重格式。它不执行 Python pickle 代码，支持按张量元数据加载，更适合分布式推理和模型发布。
+总结: MiniLLM 的学习主线是 tokenizer、embedding、attention、MLP、logits、loss、optimizer 和 generate。
+
+第 4 轮教学样例。
+MiniLLM 教学语料。
+用户: 什么是 decoder-only Transformer？
+助手: decoder-only Transformer 是只使用解码器堆叠的自回归语言模型。它根据前面的 token 预测下一个 token，典型代表是 GPT、Llama、Qwen 和 Mistral。
+用户: 为什么训练次数少时输出像随机字符？
+助手: 因为模型参数刚开始是随机初始化，训练步数少时还没有学会语料中的字符顺序、问答格式和长期依赖，所以采样结果会像随机拼接。
+用户: 什么是 token？
+助手: token 是模型处理文本的基本单位。字符级模型把每个字符当成 token，大模型通常使用 BPE 或 SentencePiece 把文本切成子词 token。
+用户: 什么是 embedding？
+助手: embedding 是把离散 token id 映射成连续向量的查表过程。模型后续的 attention 和 MLP 都在这些向量上计算。
+用户: 什么是 causal mask？
+助手: causal mask 会挡住未来位置，让当前位置只能看见自己和之前的 token。这样训练时模型不能偷看答案。
+用户: attention 的 Q K V 是什么？
+助手: Q 表示当前位置想查询什么信息，K 表示历史位置提供的索引，V 表示真正被读取的内容。QK 矩阵给出相关性，softmax 后乘 V 得到上下文表示。
+用户: logits 是什么？
+助手: logits 是模型对词表中每个 token 的原始分数，还不是概率。经过 temperature、top-k、top-p 和 softmax 后，才会得到采样概率。
+用户: 为什么要训练 loss？
+助手: loss 衡量模型预测下一个 token 的错误程度。loss.backward 会计算梯度，optimizer.step 会更新参数，让正确 token 的概率逐渐变高。
+用户: GPU 是必须的吗？
+助手: 不是。小模型可以在 CPU 上训练和推理，只是速度较慢。大模型训练通常需要 GPU，因为矩阵乘法和显存需求很高。
+用户: 训练好的模型能在 CPU 上推理吗？
+助手: 可以。训练只是在更新权重；训练完成后保存 checkpoint，CPU 加载同一份权重就能推理，只是速度通常比 GPU 慢。
+用户: 如何让 MiniLLM 输出更有意义？
+助手: 需要更清晰的语料、更多训练步数、合适的模型容量、稳定的解码方式。教学模型可以先用结构化问答语料和 greedy 解码观察是否学会格式。
+用户: MiniLLM 和 vLLM 有什么关系？
+助手: MiniLLM 是模型本体教学代码，vLLM 是推理引擎。模型负责计算 logits，引擎负责高并发调度、KV cache、分页显存和采样服务。
+用户: MiniLLM 可以直接放进 vLLM 或 SGLang 吗？
+助手: 不能直接放。它还不是 Hugging Face PreTrainedModel，也没有被推理引擎注册。需要导出标准配置、权重和 tokenizer，并实现引擎要求的模型后端。
+用户: 什么是 Hugging Face 格式？
+助手: Hugging Face 格式通常包含 config.json、model.safetensors、tokenizer 文件和 generation_config.json。它让训练、加载、量化和推理工具用统一方式识别模型。
+用户: 什么是 safetensors？
+助手: safetensors 是一种安全、快速的张量权重格式。它不执行 Python pickle 代码，支持按张量元数据加载，更适合分布式推理和模型发布。
+总结: MiniLLM 的学习主线是 tokenizer、embedding、attention、MLP、logits、loss、optimizer 和 generate。
+
+第 5 轮教学样例。
+MiniLLM 教学语料。
+用户: 什么是 decoder-only Transformer？
+助手: decoder-only Transformer 是只使用解码器堆叠的自回归语言模型。它根据前面的 token 预测下一个 token，典型代表是 GPT、Llama、Qwen 和 Mistral。
+用户: 为什么训练次数少时输出像随机字符？
+助手: 因为模型参数刚开始是随机初始化，训练步数少时还没有学会语料中的字符顺序、问答格式和长期依赖，所以采样结果会像随机拼接。
+用户: 什么是 token？
+助手: token 是模型处理文本的基本单位。字符级模型把每个字符当成 token，大模型通常使用 BPE 或 SentencePiece 把文本切成子词 token。
+用户: 什么是 embedding？
+助手: embedding 是把离散 token id 映射成连续向量的查表过程。模型后续的 attention 和 MLP 都在这些向量上计算。
+用户: 什么是 causal mask？
+助手: causal mask 会挡住未来位置，让当前位置只能看见自己和之前的 token。这样训练时模型不能偷看答案。
+用户: attention 的 Q K V 是什么？
+助手: Q 表示当前位置想查询什么信息，K 表示历史位置提供的索引，V 表示真正被读取的内容。QK 矩阵给出相关性，softmax 后乘 V 得到上下文表示。
+用户: logits 是什么？
+助手: logits 是模型对词表中每个 token 的原始分数，还不是概率。经过 temperature、top-k、top-p 和 softmax 后，才会得到采样概率。
+用户: 为什么要训练 loss？
+助手: loss 衡量模型预测下一个 token 的错误程度。loss.backward 会计算梯度，optimizer.step 会更新参数，让正确 token 的概率逐渐变高。
+用户: GPU 是必须的吗？
+助手: 不是。小模型可以在 CPU 上训练和推理，只是速度较慢。大模型训练通常需要 GPU，因为矩阵乘法和显存需求很高。
+用户: 训练好的模型能在 CPU 上推理吗？
+助手: 可以。训练只是在更新权重；训练完成后保存 checkpoint，CPU 加载同一份权重就能推理，只是速度通常比 GPU 慢。
+用户: 如何让 MiniLLM 输出更有意义？
+助手: 需要更清晰的语料、更多训练步数、合适的模型容量、稳定的解码方式。教学模型可以先用结构化问答语料和 greedy 解码观察是否学会格式。
+用户: MiniLLM 和 vLLM 有什么关系？
+助手: MiniLLM 是模型本体教学代码，vLLM 是推理引擎。模型负责计算 logits，引擎负责高并发调度、KV cache、分页显存和采样服务。
+用户: MiniLLM 可以直接放进 vLLM 或 SGLang 吗？
+助手: 不能直接放。它还不是 Hugging Face PreTrainedModel，也没有被推理引擎注册。需要导出标准配置、权重和 tokenizer，并实现引擎要求的模型后端。
+用户: 什么是 Hugging Face 格式？
+助手: Hugging Face 格式通常包含 config.json、model.safetensors、tokenizer 文件和 generation_config.json。它让训练、加载、量化和推理工具用统一方式识别模型。
+用户: 什么是 safetensors？
+助手: safetensors 是一种安全、快速的张量权重格式。它不执行 Python pickle 代码，支持按张量元数据加载，更适合分布式推理和模型发布。
+总结: MiniLLM 的学习主线是 tokenizer、embedding、attention、MLP、logits、loss、optimizer 和 generate。
+
+第 6 轮教学样例。
+MiniLLM 教学语料。
+用户: 什么是 decoder-only Transformer？
+助手: decoder-only Transformer 是只使用解码器堆叠的自回归语言模型。它根据前面的 token 预测下一个 token，典型代表是 GPT、Llama、Qwen 和 Mistral。
+用户: 为什么训练次数少时输出像随机字符？
+助手: 因为模型参数刚开始是随机初始化，训练步数少时还没有学会语料中的字符顺序、问答格式和长期依赖，所以采样结果会像随机拼接。
+用户: 什么是 token？
+助手: token 是模型处理文本的基本单位。字符级模型把每个字符当成 token，大模型通常使用 BPE 或 SentencePiece 把文本切成子词 token。
+用户: 什么是 embedding？
+助手: embedding 是把离散 token id 映射成连续向量的查表过程。模型后续的 attention 和 MLP 都在这些向量上计算。
+用户: 什么是 causal mask？
+助手: causal mask 会挡住未来位置，让当前位置只能看见自己和之前的 token。这样训练时模型不能偷看答案。
+用户: attention 的 Q K V 是什么？
+助手: Q 表示当前位置想查询什么信息，K 表示历史位置提供的索引，V 表示真正被读取的内容。QK 矩阵给出相关性，softmax 后乘 V 得到上下文表示。
+用户: logits 是什么？
+助手: logits 是模型对词表中每个 token 的原始分数，还不是概率。经过 temperature、top-k、top-p 和 softmax 后，才会得到采样概率。
+用户: 为什么要训练 loss？
+助手: loss 衡量模型预测下一个 token 的错误程度。loss.backward 会计算梯度，optimizer.step 会更新参数，让正确 token 的概率逐渐变高。
+用户: GPU 是必须的吗？
+助手: 不是。小模型可以在 CPU 上训练和推理，只是速度较慢。大模型训练通常需要 GPU，因为矩阵乘法和显存需求很高。
+用户: 训练好的模型能在 CPU 上推理吗？
+助手: 可以。训练只是在更新权重；训练完成后保存 checkpoint，CPU 加载同一份权重就能推理，只是速度通常比 GPU 慢。
+用户: 如何让 MiniLLM 输出更有意义？
+助手: 需要更清晰的语料、更多训练步数、合适的模型容量、稳定的解码方式。教学模型可以先用结构化问答语料和 greedy 解码观察是否学会格式。
+用户: MiniLLM 和 vLLM 有什么关系？
+助手: MiniLLM 是模型本体教学代码，vLLM 是推理引擎。模型负责计算 logits，引擎负责高并发调度、KV cache、分页显存和采样服务。
+用户: MiniLLM 可以直接放进 vLLM 或 SGLang 吗？
+助手: 不能直接放。它还不是 Hugging Face PreTrainedModel，也没有被推理引擎注册。需要导出标准配置、权重和 tokenizer，并实现引擎要求的模型后端。
+用户: 什么是 Hugging Face 格式？
+助手: Hugging Face 格式通常包含 config.json、model.safetensors、tokenizer 文件和 generation_config.json。它让训练、加载、量化和推理工具用统一方式识别模型。
+用户: 什么是 safetensors？
+助手: safetensors 是一种安全、快速的张量权重格式。它不执行 Python pickle 代码，支持按张量元数据加载，更适合分布式推理和模型发布。
+总结: MiniLLM 的学习主线是 tokenizer、embedding、attention、MLP、logits、loss、optimizer 和 generate。
+
+第 7 轮教学样例。
+MiniLLM 教学语料。
+用户: 什么是 decoder-only Transformer？
+助手: decoder-only Transformer 是只使用解码器堆叠的自回归语言模型。它根据前面的 token 预测下一个 token，典型代表是 GPT、Llama、Qwen 和 Mistral。
+用户: 为什么训练次数少时输出像随机字符？
+助手: 因为模型参数刚开始是随机初始化，训练步数少时还没有学会语料中的字符顺序、问答格式和长期依赖，所以采样结果会像随机拼接。
+用户: 什么是 token？
+助手: token 是模型处理文本的基本单位。字符级模型把每个字符当成 token，大模型通常使用 BPE 或 SentencePiece 把文本切成子词 token。
+用户: 什么是 embedding？
+助手: embedding 是把离散 token id 映射成连续向量的查表过程。模型后续的 attention 和 MLP 都在这些向量上计算。
+用户: 什么是 causal mask？
+助手: causal mask 会挡住未来位置，让当前位置只能看见自己和之前的 token。这样训练时模型不能偷看答案。
+用户: attention 的 Q K V 是什么？
+助手: Q 表示当前位置想查询什么信息，K 表示历史位置提供的索引，V 表示真正被读取的内容。QK 矩阵给出相关性，softmax 后乘 V 得到上下文表示。
+用户: logits 是什么？
+助手: logits 是模型对词表中每个 token 的原始分数，还不是概率。经过 temperature、top-k、top-p 和 softmax 后，才会得到采样概率。
+用户: 为什么要训练 loss？
+助手: loss 衡量模型预测下一个 token 的错误程度。loss.backward 会计算梯度，optimizer.step 会更新参数，让正确 token 的概率逐渐变高。
+用户: GPU 是必须的吗？
+助手: 不是。小模型可以在 CPU 上训练和推理，只是速度较慢。大模型训练通常需要 GPU，因为矩阵乘法和显存需求很高。
+用户: 训练好的模型能在 CPU 上推理吗？
+助手: 可以。训练只是在更新权重；训练完成后保存 checkpoint，CPU 加载同一份权重就能推理，只是速度通常比 GPU 慢。
+用户: 如何让 MiniLLM 输出更有意义？
+助手: 需要更清晰的语料、更多训练步数、合适的模型容量、稳定的解码方式。教学模型可以先用结构化问答语料和 greedy 解码观察是否学会格式。
+用户: MiniLLM 和 vLLM 有什么关系？
+助手: MiniLLM 是模型本体教学代码，vLLM 是推理引擎。模型负责计算 logits，引擎负责高并发调度、KV cache、分页显存和采样服务。
+用户: MiniLLM 可以直接放进 vLLM 或 SGLang 吗？
+助手: 不能直接放。它还不是 Hugging Face PreTrainedModel，也没有被推理引擎注册。需要导出标准配置、权重和 tokenizer，并实现引擎要求的模型后端。
+用户: 什么是 Hugging Face 格式？
+助手: Hugging Face 格式通常包含 config.json、model.safetensors、tokenizer 文件和 generation_config.json。它让训练、加载、量化和推理工具用统一方式识别模型。
+用户: 什么是 safetensors？
+助手: safetensors 是一种安全、快速的张量权重格式。它不执行 Python pickle 代码，支持按张量元数据加载，更适合分布式推理和模型发布。
+总结: MiniLLM 的学习主线是 tokenizer、embedding、attention、MLP、logits、loss、optimizer 和 generate。
+
+第 8 轮教学样例。
+MiniLLM 教学语料。
+用户: 什么是 decoder-only Transformer？
+助手: decoder-only Transformer 是只使用解码器堆叠的自回归语言模型。它根据前面的 token 预测下一个 token，典型代表是 GPT、Llama、Qwen 和 Mistral。
+用户: 为什么训练次数少时输出像随机字符？
+助手: 因为模型参数刚开始是随机初始化，训练步数少时还没有学会语料中的字符顺序、问答格式和长期依赖，所以采样结果会像随机拼接。
+用户: 什么是 token？
+助手: token 是模型处理文本的基本单位。字符级模型把每个字符当成 token，大模型通常使用 BPE 或 SentencePiece 把文本切成子词 token。
+用户: 什么是 embedding？
+助手: embedding 是把离散 token id 映射成连续向量的查表过程。模型后续的 attention 和 MLP 都在这些向量上计算。
+用户: 什么是 causal mask？
+助手: causal mask 会挡住未来位置，让当前位置只能看见自己和之前的 token。这样训练时模型不能偷看答案。
+用户: attention 的 Q K V 是什么？
+助手: Q 表示当前位置想查询什么信息，K 表示历史位置提供的索引，V 表示真正被读取的内容。QK 矩阵给出相关性，softmax 后乘 V 得到上下文表示。
+用户: logits 是什么？
+助手: logits 是模型对词表中每个 token 的原始分数，还不是概率。经过 temperature、top-k、top-p 和 softmax 后，才会得到采样概率。
+用户: 为什么要训练 loss？
+助手: loss 衡量模型预测下一个 token 的错误程度。loss.backward 会计算梯度，optimizer.step 会更新参数，让正确 token 的概率逐渐变高。
+用户: GPU 是必须的吗？
+助手: 不是。小模型可以在 CPU 上训练和推理，只是速度较慢。大模型训练通常需要 GPU，因为矩阵乘法和显存需求很高。
+用户: 训练好的模型能在 CPU 上推理吗？
+助手: 可以。训练只是在更新权重；训练完成后保存 checkpoint，CPU 加载同一份权重就能推理，只是速度通常比 GPU 慢。
+用户: 如何让 MiniLLM 输出更有意义？
+助手: 需要更清晰的语料、更多训练步数、合适的模型容量、稳定的解码方式。教学模型可以先用结构化问答语料和 greedy 解码观察是否学会格式。
+用户: MiniLLM 和 vLLM 有什么关系？
+助手: MiniLLM 是模型本体教学代码，vLLM 是推理引擎。模型负责计算 logits，引擎负责高并发调度、KV cache、分页显存和采样服务。
+用户: MiniLLM 可以直接放进 vLLM 或 SGLang 吗？
+助手: 不能直接放。它还不是 Hugging Face PreTrainedModel，也没有被推理引擎注册。需要导出标准配置、权重和 tokenizer，并实现引擎要求的模型后端。
+用户: 什么是 Hugging Face 格式？
+助手: Hugging Face 格式通常包含 config.json、model.safetensors、tokenizer 文件和 generation_config.json。它让训练、加载、量化和推理工具用统一方式识别模型。
+用户: 什么是 safetensors？
+助手: safetensors 是一种安全、快速的张量权重格式。它不执行 Python pickle 代码，支持按张量元数据加载，更适合分布式推理和模型发布。
+总结: MiniLLM 的学习主线是 tokenizer、embedding、attention、MLP、logits、loss、optimizer 和 generate。
+
+第 9 轮教学样例。
+MiniLLM 教学语料。
+用户: 什么是 decoder-only Transformer？
+助手: decoder-only Transformer 是只使用解码器堆叠的自回归语言模型。它根据前面的 token 预测下一个 token，典型代表是 GPT、Llama、Qwen 和 Mistral。
+用户: 为什么训练次数少时输出像随机字符？
+助手: 因为模型参数刚开始是随机初始化，训练步数少时还没有学会语料中的字符顺序、问答格式和长期依赖，所以采样结果会像随机拼接。
+用户: 什么是 token？
+助手: token 是模型处理文本的基本单位。字符级模型把每个字符当成 token，大模型通常使用 BPE 或 SentencePiece 把文本切成子词 token。
+用户: 什么是 embedding？
+助手: embedding 是把离散 token id 映射成连续向量的查表过程。模型后续的 attention 和 MLP 都在这些向量上计算。
+用户: 什么是 causal mask？
+助手: causal mask 会挡住未来位置，让当前位置只能看见自己和之前的 token。这样训练时模型不能偷看答案。
+用户: attention 的 Q K V 是什么？
+助手: Q 表示当前位置想查询什么信息，K 表示历史位置提供的索引，V 表示真正被读取的内容。QK 矩阵给出相关性，softmax 后乘 V 得到上下文表示。
+用户: logits 是什么？
+助手: logits 是模型对词表中每个 token 的原始分数，还不是概率。经过 temperature、top-k、top-p 和 softmax 后，才会得到采样概率。
+用户: 为什么要训练 loss？
+助手: loss 衡量模型预测下一个 token 的错误程度。loss.backward 会计算梯度，optimizer.step 会更新参数，让正确 token 的概率逐渐变高。
+用户: GPU 是必须的吗？
+助手: 不是。小模型可以在 CPU 上训练和推理，只是速度较慢。大模型训练通常需要 GPU，因为矩阵乘法和显存需求很高。
+用户: 训练好的模型能在 CPU 上推理吗？
+助手: 可以。训练只是在更新权重；训练完成后保存 checkpoint，CPU 加载同一份权重就能推理，只是速度通常比 GPU 慢。
+用户: 如何让 MiniLLM 输出更有意义？
+助手: 需要更清晰的语料、更多训练步数、合适的模型容量、稳定的解码方式。教学模型可以先用结构化问答语料和 greedy 解码观察是否学会格式。
+用户: MiniLLM 和 vLLM 有什么关系？
+助手: MiniLLM 是模型本体教学代码，vLLM 是推理引擎。模型负责计算 logits，引擎负责高并发调度、KV cache、分页显存和采样服务。
+用户: MiniLLM 可以直接放进 vLLM 或 SGLang 吗？
+助手: 不能直接放。它还不是 Hugging Face PreTrainedModel，也没有被推理引擎注册。需要导出标准配置、权重和 tokenizer，并实现引擎要求的模型后端。
+用户: 什么是 Hugging Face 格式？
+助手: Hugging Face 格式通常包含 config.json、model.safetensors、tokenizer 文件和 generation_config.json。它让训练、加载、量化和推理工具用统一方式识别模型。
+用户: 什么是 safetensors？
+助手: safetensors 是一种安全、快速的张量权重格式。它不执行 Python pickle 代码，支持按张量元数据加载，更适合分布式推理和模型发布。
+总结: MiniLLM 的学习主线是 tokenizer、embedding、attention、MLP、logits、loss、optimizer 和 generate。
+
+第 10 轮教学样例。
+MiniLLM 教学语料。
+用户: 什么是 decoder-only Transformer？
+助手: decoder-only Transformer 是只使用解码器堆叠的自回归语言模型。它根据前面的 token 预测下一个 token，典型代表是 GPT、Llama、Qwen 和 Mistral。
+用户: 为什么训练次数少时输出像随机字符？
+助手: 因为模型参数刚开始是随机初始化，训练步数少时还没有学会语料中的字符顺序、问答格式和长期依赖，所以采样结果会像随机拼接。
+用户: 什么是 token？
+助手: token 是模型处理文本的基本单位。字符级模型把每个字符当成 token，大模型通常使用 BPE 或 SentencePiece 把文本切成子词 token。
+用户: 什么是 embedding？
+助手: embedding 是把离散 token id 映射成连续向量的查表过程。模型后续的 attention 和 MLP 都在这些向量上计算。
+用户: 什么是 causal mask？
+助手: causal mask 会挡住未来位置，让当前位置只能看见自己和之前的 token。这样训练时模型不能偷看答案。
+用户: attention 的 Q K V 是什么？
+助手: Q 表示当前位置想查询什么信息，K 表示历史位置提供的索引，V 表示真正被读取的内容。QK 矩阵给出相关性，softmax 后乘 V 得到上下文表示。
+用户: logits 是什么？
+助手: logits 是模型对词表中每个 token 的原始分数，还不是概率。经过 temperature、top-k、top-p 和 softmax 后，才会得到采样概率。
+用户: 为什么要训练 loss？
+助手: loss 衡量模型预测下一个 token 的错误程度。loss.backward 会计算梯度，optimizer.step 会更新参数，让正确 token 的概率逐渐变高。
+用户: GPU 是必须的吗？
+助手: 不是。小模型可以在 CPU 上训练和推理，只是速度较慢。大模型训练通常需要 GPU，因为矩阵乘法和显存需求很高。
+用户: 训练好的模型能在 CPU 上推理吗？
+助手: 可以。训练只是在更新权重；训练完成后保存 checkpoint，CPU 加载同一份权重就能推理，只是速度通常比 GPU 慢。
+用户: 如何让 MiniLLM 输出更有意义？
+助手: 需要更清晰的语料、更多训练步数、合适的模型容量、稳定的解码方式。教学模型可以先用结构化问答语料和 greedy 解码观察是否学会格式。
+用户: MiniLLM 和 vLLM 有什么关系？
+助手: MiniLLM 是模型本体教学代码，vLLM 是推理引擎。模型负责计算 logits，引擎负责高并发调度、KV cache、分页显存和采样服务。
+用户: MiniLLM 可以直接放进 vLLM 或 SGLang 吗？
+助手: 不能直接放。它还不是 Hugging Face PreTrainedModel，也没有被推理引擎注册。需要导出标准配置、权重和 tokenizer，并实现引擎要求的模型后端。
+用户: 什么是 Hugging Face 格式？
+助手: Hugging Face 格式通常包含 config.json、model.safetensors、tokenizer 文件和 generation_config.json。它让训练、加载、量化和推理工具用统一方式识别模型。
+用户: 什么是 safetensors？
+助手: safetensors 是一种安全、快速的张量权重格式。它不执行 Python pickle 代码，支持按张量元数据加载，更适合分布式推理和模型发布。
+总结: MiniLLM 的学习主线是 tokenizer、embedding、attention、MLP、logits、loss、optimizer 和 generate。
+
+第 11 轮教学样例。
+MiniLLM 教学语料。
+用户: 什么是 decoder-only Transformer？
+助手: decoder-only Transformer 是只使用解码器堆叠的自回归语言模型。它根据前面的 token 预测下一个 token，典型代表是 GPT、Llama、Qwen 和 Mistral。
+用户: 为什么训练次数少时输出像随机字符？
+助手: 因为模型参数刚开始是随机初始化，训练步数少时还没有学会语料中的字符顺序、问答格式和长期依赖，所以采样结果会像随机拼接。
+用户: 什么是 token？
+助手: token 是模型处理文本的基本单位。字符级模型把每个字符当成 token，大模型通常使用 BPE 或 SentencePiece 把文本切成子词 token。
+用户: 什么是 embedding？
+助手: embedding 是把离散 token id 映射成连续向量的查表过程。模型后续的 attention 和 MLP 都在这些向量上计算。
+用户: 什么是 causal mask？
+助手: causal mask 会挡住未来位置，让当前位置只能看见自己和之前的 token。这样训练时模型不能偷看答案。
+用户: attention 的 Q K V 是什么？
+助手: Q 表示当前位置想查询什么信息，K 表示历史位置提供的索引，V 表示真正被读取的内容。QK 矩阵给出相关性，softmax 后乘 V 得到上下文表示。
+用户: logits 是什么？
+助手: logits 是模型对词表中每个 token 的原始分数，还不是概率。经过 temperature、top-k、top-p 和 softmax 后，才会得到采样概率。
+用户: 为什么要训练 loss？
+助手: loss 衡量模型预测下一个 token 的错误程度。loss.backward 会计算梯度，optimizer.step 会更新参数，让正确 token 的概率逐渐变高。
+用户: GPU 是必须的吗？
+助手: 不是。小模型可以在 CPU 上训练和推理，只是速度较慢。大模型训练通常需要 GPU，因为矩阵乘法和显存需求很高。
+用户: 训练好的模型能在 CPU 上推理吗？
+助手: 可以。训练只是在更新权重；训练完成后保存 checkpoint，CPU 加载同一份权重就能推理，只是速度通常比 GPU 慢。
+用户: 如何让 MiniLLM 输出更有意义？
+助手: 需要更清晰的语料、更多训练步数、合适的模型容量、稳定的解码方式。教学模型可以先用结构化问答语料和 greedy 解码观察是否学会格式。
+用户: MiniLLM 和 vLLM 有什么关系？
+助手: MiniLLM 是模型本体教学代码，vLLM 是推理引擎。模型负责计算 logits，引擎负责高并发调度、KV cache、分页显存和采样服务。
+用户: MiniLLM 可以直接放进 vLLM 或 SGLang 吗？
+助手: 不能直接放。它还不是 Hugging Face PreTrainedModel，也没有被推理引擎注册。需要导出标准配置、权重和 tokenizer，并实现引擎要求的模型后端。
+用户: 什么是 Hugging Face 格式？
+助手: Hugging Face 格式通常包含 config.json、model.safetensors、tokenizer 文件和 generation_config.json。它让训练、加载、量化和推理工具用统一方式识别模型。
+用户: 什么是 safetensors？
+助手: safetensors 是一种安全、快速的张量权重格式。它不执行 Python pickle 代码，支持按张量元数据加载，更适合分布式推理和模型发布。
+总结: MiniLLM 的学习主线是 tokenizer、embedding、attention、MLP、logits、loss、optimizer 和 generate。
+
+第 12 轮教学样例。
+MiniLLM 教学语料。
+用户: 什么是 decoder-only Transformer？
+助手: decoder-only Transformer 是只使用解码器堆叠的自回归语言模型。它根据前面的 token 预测下一个 token，典型代表是 GPT、Llama、Qwen 和 Mistral。
+用户: 为什么训练次数少时输出像随机字符？
+助手: 因为模型参数刚开始是随机初始化，训练步数少时还没有学会语料中的字符顺序、问答格式和长期依赖，所以采样结果会像随机拼接。
+用户: 什么是 token？
+助手: token 是模型处理文本的基本单位。字符级模型把每个字符当成 token，大模型通常使用 BPE 或 SentencePiece 把文本切成子词 token。
+用户: 什么是 embedding？
+助手: embedding 是把离散 token id 映射成连续向量的查表过程。模型后续的 attention 和 MLP 都在这些向量上计算。
+用户: 什么是 causal mask？
+助手: causal mask 会挡住未来位置，让当前位置只能看见自己和之前的 token。这样训练时模型不能偷看答案。
+用户: attention 的 Q K V 是什么？
+助手: Q 表示当前位置想查询什么信息，K 表示历史位置提供的索引，V 表示真正被读取的内容。QK 矩阵给出相关性，softmax 后乘 V 得到上下文表示。
+用户: logits 是什么？
+助手: logits 是模型对词表中每个 token 的原始分数，还不是概率。经过 temperature、top-k、top-p 和 softmax 后，才会得到采样概率。
+用户: 为什么要训练 loss？
+助手: loss 衡量模型预测下一个 token 的错误程度。loss.backward 会计算梯度，optimizer.step 会更新参数，让正确 token 的概率逐渐变高。
+用户: GPU 是必须的吗？
+助手: 不是。小模型可以在 CPU 上训练和推理，只是速度较慢。大模型训练通常需要 GPU，因为矩阵乘法和显存需求很高。
+用户: 训练好的模型能在 CPU 上推理吗？
+助手: 可以。训练只是在更新权重；训练完成后保存 checkpoint，CPU 加载同一份权重就能推理，只是速度通常比 GPU 慢。
+用户: 如何让 MiniLLM 输出更有意义？
+助手: 需要更清晰的语料、更多训练步数、合适的模型容量、稳定的解码方式。教学模型可以先用结构化问答语料和 greedy 解码观察是否学会格式。
+用户: MiniLLM 和 vLLM 有什么关系？
+助手: MiniLLM 是模型本体教学代码，vLLM 是推理引擎。模型负责计算 logits，引擎负责高并发调度、KV cache、分页显存和采样服务。
+用户: MiniLLM 可以直接放进 vLLM 或 SGLang 吗？
+助手: 不能直接放。它还不是 Hugging Face PreTrainedModel，也没有被推理引擎注册。需要导出标准配置、权重和 tokenizer，并实现引擎要求的模型后端。
+用户: 什么是 Hugging Face 格式？
+助手: Hugging Face 格式通常包含 config.json、model.safetensors、tokenizer 文件和 generation_config.json。它让训练、加载、量化和推理工具用统一方式识别模型。
+用户: 什么是 safetensors？
+助手: safetensors 是一种安全、快速的张量权重格式。它不执行 Python pickle 代码，支持按张量元数据加载，更适合分布式推理和模型发布。
+总结: MiniLLM 的学习主线是 tokenizer、embedding、attention、MLP、logits、loss、optimizer 和 generate。
+

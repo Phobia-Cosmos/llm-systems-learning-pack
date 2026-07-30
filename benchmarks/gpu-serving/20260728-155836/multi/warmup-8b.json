@@ -1,0 +1,39 @@
+{
+  "config": {
+    "base_url": "http://127.0.0.1:8000",
+    "model": "Qwen3-8B",
+    "num_requests": 1,
+    "concurrency": 1,
+    "prompt_words": 128,
+    "max_tokens": 16,
+    "timeout": 600,
+    "output": "/public/home/u43077/lzh/benchmarks/20260728-155836/multi/warmup-8b.json"
+  },
+  "wall_s": 1.0641740653663874,
+  "successful_requests": 1,
+  "failed_requests": 0,
+  "requests_per_second": 0.9396958942573997,
+  "input_tokens_per_second": 311.97903689345674,
+  "output_tokens_per_second": 15.035134308118396,
+  "latency_s": {
+    "p50": 1.0637844838202,
+    "p95": 1.0637844838202,
+    "p99": 1.0637844838202
+  },
+  "ttft_s": {
+    "p50": 0.7885003015398979,
+    "p95": 0.7885003015398979,
+    "p99": 0.7885003015398979
+  },
+  "errors": [],
+  "results": [
+    {
+      "ok": true,
+      "latency_s": 1.0637844838202,
+      "ttft_s": 0.7885003015398979,
+      "prompt_tokens": 332,
+      "completion_tokens": 16,
+      "error": null
+    }
+  ]
+}

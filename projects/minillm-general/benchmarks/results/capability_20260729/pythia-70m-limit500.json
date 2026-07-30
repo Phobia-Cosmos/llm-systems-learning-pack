@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "harness": {
+    "choice_method": "conditional_log_likelihood",
+    "few_shot": 0,
+    "seed": 20260729,
+    "limit_per_task": 500,
+    "score_content": true
+  },
+  "model": {
+    "backend": "hf",
+    "path": "/public/home/u43077/lzh/models/benchmarks/pythia-70m-deduped",
+    "name": "/public/home/u43077/lzh/models/benchmarks/pythia-70m-deduped",
+    "parameters": 70426624,
+    "max_length": 2048
+  },
+  "tasks": {
+    "arc_easy": {
+      "examples": 500,
+      "subjects": 1,
+      "random_accuracy": 0.24996666666666667,
+      "candidate_sequences": 4002,
+      "scored_tokens": 10829,
+      "elapsed_seconds": 3.760873507708311,
+      "metrics": {
+        "label": {
+          "examples": 500,
+          "correct": 139,
+          "correct_normalized": 139,
+          "accuracy": 0.278,
+          "accuracy_normalized": 0.278,
+          "standard_error": 0.020035768016225385,
+          "standard_error_normalized": 0.020035768016225385
+        },
+        "content": {
+          "examples": 500,
+          "correct": 154,
+          "correct_normalized": 135,
+          "accuracy": 0.308,
+          "accuracy_normalized": 0.27,
+          "standard_error": 0.020646355610615643,
+          "standard_error_normalized": 0.019854470529329156
+        }
+      },
+      "available_examples": 570
+    },
+    "arc_challenge": {
+      "examples": 299,
+      "subjects": 1,
+      "random_accuracy": 0.2506688963210703,
+      "candidate_sequences": 2388,
+      "scored_tokens": 8084,
+      "elapsed_seconds": 0.8743859771639109,
+      "metrics": {
+        "label": {
+          "examples": 299,
+          "correct": 64,
+          "correct_normalized": 64,
+          "accuracy": 0.2140468227424749,
+          "accuracy_normalized": 0.2140468227424749,
+          "standard_error": 0.02372013386463651,
+          "standard_error_normalized": 0.02372013386463651
+        },
+        "content": {
+          "examples": 299,
+          "correct": 63,
+          "correct_normalized": 66,
+          "accuracy": 0.21070234113712374,
+          "accuracy_normalized": 0.22073578595317725,
+          "standard_error": 0.023584110104466417,
+          "standard_error_normalized": 0.023985189044234363
+        }
+      },
+      "available_examples": 299
+    },
+    "hellaswag": {
+      "examples": 500,
+      "subjects": 98,
+      "random_accuracy": 0.25,
+      "candidate_sequences": 2000,
+      "scored_tokens": 63307,
+      "elapsed_seconds": 0.7736424878239632,
+      "metrics": {
+        "ending": {
+          "examples": 500,
+          "correct": 124,
+          "correct_normalized": 117,
+          "accuracy": 0.248,
+          "accuracy_normalized": 0.234,
+          "standard_error": 0.019313000802568203,
+          "standard_error_normalized": 0.018933779337469845
+        }
+      },
+      "available_examples": 10042
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "sequence_length": 8192,
+  "target_train_tokens_by_source": {
+    "minimind-zh": 190000000,
+    "fineweb2-zh": 140000000,
+    "fineweb-edu-en": 190000000,
+    "fineweb2-ar": 48000000,
+    "fineweb2-hi": 48000000,
+    "fineweb2-ja": 48000000,
+    "fineweb2-ko": 48000000,
+    "fineweb2-ru": 48000000,
+    "fineweb2-es": 48000000,
+    "github-code": 140000000,
+    "finemath-3plus": 48000000
+  }
+}

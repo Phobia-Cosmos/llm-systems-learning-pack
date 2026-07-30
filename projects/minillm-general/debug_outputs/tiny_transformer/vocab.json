@@ -1,0 +1,31 @@
+{
+  "tokenizer_type": "char",
+  "vocab_size": 11,
+  "stoi": {
+    "<unk>": 0,
+    "\n": 1,
+    "。": 2,
+    "吃": 3,
+    "喝": 4,
+    "小": 5,
+    "水": 6,
+    "狗": 7,
+    "猫": 8,
+    "肉": 9,
+    "鱼": 10
+  },
+  "itos": [
+    "<unk>",
+    "\n",
+    "。",
+    "吃",
+    "喝",
+    "小",
+    "水",
+    "狗",
+    "猫",
+    "肉",
+    "鱼"
+  ],
+  "note": "Each ordinary entry is one Unicode character; <unk> is id 0."
+}

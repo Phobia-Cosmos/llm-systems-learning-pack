@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "harness": {
+    "choice_method": "conditional_log_likelihood",
+    "few_shot": 0,
+    "seed": 20260729,
+    "limit_per_task": 500,
+    "score_content": true
+  },
+  "model": {
+    "backend": "hf",
+    "path": "/public/home/u43077/lzh/models/benchmarks/gpt2-chinese-102m",
+    "name": "/public/home/u43077/lzh/models/benchmarks/gpt2-chinese-102m",
+    "parameters": 102068736,
+    "max_length": 1024
+  },
+  "tasks": {
+    "ceval": {
+      "examples": 500,
+      "subjects": 52,
+      "random_accuracy": 0.25,
+      "candidate_sequences": 4000,
+      "scored_tokens": 23029,
+      "elapsed_seconds": 4.95796187594533,
+      "metrics": {
+        "label": {
+          "examples": 500,
+          "correct": 98,
+          "correct_normalized": 98,
+          "accuracy": 0.196,
+          "accuracy_normalized": 0.196,
+          "standard_error": 0.01775297158224504,
+          "standard_error_normalized": 0.01775297158224504
+        },
+        "content": {
+          "examples": 500,
+          "correct": 101,
+          "correct_normalized": 142,
+          "accuracy": 0.202,
+          "accuracy_normalized": 0.284,
+          "standard_error": 0.01795527777562909,
+          "standard_error_normalized": 0.020166506886419373
+        }
+      },
+      "available_examples": 1346
+    },
+    "cmmlu": {
+      "examples": 500,
+      "subjects": 67,
+      "random_accuracy": 0.25,
+      "candidate_sequences": 4000,
+      "scored_tokens": 18130,
+      "elapsed_seconds": 2.1867577601224184,
+      "metrics": {
+        "label": {
+          "examples": 500,
+          "correct": 144,
+          "correct_normalized": 144,
+          "accuracy": 0.288,
+          "accuracy_normalized": 0.288,
+          "standard_error": 0.020251222185339826,
+          "standard_error_normalized": 0.020251222185339826
+        },
+        "content": {
+          "examples": 500,
+          "correct": 130,
+          "correct_normalized": 145,
+          "accuracy": 0.26,
+          "accuracy_normalized": 0.29,
+          "standard_error": 0.019616319736382767,
+          "standard_error_normalized": 0.020292855885754472
+        }
+      },
+      "available_examples": 11582
+    }
+  }
+}

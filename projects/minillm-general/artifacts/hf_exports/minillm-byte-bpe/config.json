@@ -1,0 +1,19 @@
+{
+  "model_type": "minigpt",
+  "architectures": [
+    "MiniGPTForCausalLM"
+  ],
+  "vocab_size": 512,
+  "block_size": 128,
+  "max_position_embeddings": 128,
+  "n_layer": 2,
+  "num_hidden_layers": 2,
+  "n_head": 4,
+  "num_attention_heads": 4,
+  "n_embd": 128,
+  "hidden_size": 128,
+  "dropout": 0.1,
+  "bias": true,
+  "tie_word_embeddings": true,
+  "torch_dtype": "float32"
+}

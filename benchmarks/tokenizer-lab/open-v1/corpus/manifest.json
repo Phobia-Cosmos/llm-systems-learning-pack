@@ -1,0 +1,214 @@
+{
+  "schema_version": 1,
+  "config_path": "/public/home/u43077/lzh/ai/projects/minillm-general/configs/tokenizer_lab_sources.server.json",
+  "config_sha256": "f56bbf738be09d66cd15dd989b675bf0233540563d08bbc66668cd91f8f48586",
+  "normalization": "NFC",
+  "inputs": [
+    {
+      "source": "minimind-zh",
+      "path": "/public/home/u43077/lzh/datasets/minimind/pretrain_t2t.jsonl",
+      "bytes": 8275074893
+    },
+    {
+      "source": "fineweb2-zh",
+      "path": "/public/home/u43077/lzh/datasets/pretraining/fineweb2-zh-first/data/cmn_Hani/train/000_00000.parquet",
+      "bytes": 4841624662
+    },
+    {
+      "source": "fineweb-edu-en",
+      "path": "/public/home/u43077/lzh/datasets/pretraining/fineweb-edu-en-first/sample/10BT/000_00000.parquet",
+      "bytes": 2152819114
+    },
+    {
+      "source": "fineweb2-ar",
+      "path": "/public/home/u43077/lzh/datasets/tokenizer-lab/sources/fineweb2-multilingual/data/arb_Arab/train/000_00000.parquet",
+      "bytes": 4843246685
+    },
+    {
+      "source": "fineweb2-hi",
+      "path": "/public/home/u43077/lzh/datasets/tokenizer-lab/sources/fineweb2-multilingual/data/hin_Deva/train/000_00000.parquet",
+      "bytes": 4841503429
+    },
+    {
+      "source": "fineweb2-ja",
+      "path": "/public/home/u43077/lzh/datasets/tokenizer-lab/sources/fineweb2-multilingual/data/jpn_Jpan/train/000_00000.parquet",
+      "bytes": 4844435070
+    },
+    {
+      "source": "fineweb2-ko",
+      "path": "/public/home/u43077/lzh/datasets/tokenizer-lab/sources/fineweb2-multilingual/data/kor_Hang/train/000_00000.parquet",
+      "bytes": 4844133014
+    },
+    {
+      "source": "fineweb2-ru",
+      "path": "/public/home/u43077/lzh/datasets/tokenizer-lab/sources/fineweb2-multilingual/data/rus_Cyrl/train/000_00000.parquet",
+      "bytes": 4841277045
+    },
+    {
+      "source": "fineweb2-es",
+      "path": "/public/home/u43077/lzh/datasets/tokenizer-lab/sources/fineweb2-multilingual/data/spa_Latn/train/000_00000.parquet",
+      "bytes": 4846280144
+    },
+    {
+      "source": "github-code",
+      "path": "/public/home/u43077/lzh/datasets/tokenizer-lab/sources/github-code-starter/data/train-00000-of-01126.parquet",
+      "bytes": 285840384
+    },
+    {
+      "source": "github-code",
+      "path": "/public/home/u43077/lzh/datasets/tokenizer-lab/sources/github-code-starter/data/train-00001-of-01126.parquet",
+      "bytes": 288848766
+    },
+    {
+      "source": "github-code",
+      "path": "/public/home/u43077/lzh/datasets/tokenizer-lab/sources/github-code-starter/data/train-00002-of-01126.parquet",
+      "bytes": 290762148
+    },
+    {
+      "source": "github-code",
+      "path": "/public/home/u43077/lzh/datasets/tokenizer-lab/sources/github-code-starter/data/train-00003-of-01126.parquet",
+      "bytes": 286618668
+    },
+    {
+      "source": "finemath-3plus",
+      "path": "/public/home/u43077/lzh/datasets/tokenizer-lab/sources/finemath-3plus/finemath-3plus/train-00000-of-00128.parquet",
+      "bytes": 507607173
+    }
+  ],
+  "outputs": {
+    "train": {
+      "path": "train.jsonl",
+      "bytes": 287542511,
+      "sha256": "425acc44582adc54ed647fdc64dc4111271cda0fa242ceb29480fca481f9441b"
+    },
+    "validation": {
+      "path": "validation.jsonl",
+      "bytes": 5986316,
+      "sha256": "06a72c3f34665f826583b00b0fb90976d66edee9203be5e5fc7cd330bc60520f"
+    }
+  },
+  "sources": {
+    "minimind-zh": {
+      "scanned_documents": 1064258,
+      "invalid_documents": 0,
+      "short_documents": 121,
+      "duplicate_documents": 0,
+      "sampling_rejections": 997291,
+      "train_documents": 65482,
+      "train_characters": 15000084,
+      "validation_documents": 1364,
+      "validation_characters": 318314
+    },
+    "fineweb2-zh": {
+      "scanned_documents": 304837,
+      "invalid_documents": 0,
+      "short_documents": 0,
+      "duplicate_documents": 0,
+      "sampling_rejections": 285745,
+      "train_documents": 18718,
+      "train_characters": 25001063,
+      "validation_documents": 374,
+      "validation_characters": 452791
+    },
+    "fineweb-edu-en": {
+      "scanned_documents": 92068,
+      "invalid_documents": 0,
+      "short_documents": 0,
+      "duplicate_documents": 0,
+      "sampling_rejections": 86365,
+      "train_documents": 5590,
+      "train_characters": 25001115,
+      "validation_documents": 113,
+      "validation_characters": 590375
+    },
+    "fineweb2-ar": {
+      "scanned_documents": 38490,
+      "invalid_documents": 0,
+      "short_documents": 0,
+      "duplicate_documents": 0,
+      "sampling_rejections": 36046,
+      "train_documents": 2393,
+      "train_characters": 8001580,
+      "validation_documents": 51,
+      "validation_characters": 198882
+    },
+    "fineweb2-hi": {
+      "scanned_documents": 51205,
+      "invalid_documents": 0,
+      "short_documents": 0,
+      "duplicate_documents": 0,
+      "sampling_rejections": 47984,
+      "train_documents": 3150,
+      "train_characters": 8008502,
+      "validation_documents": 71,
+      "validation_characters": 188734
+    },
+    "fineweb2-ja": {
+      "scanned_documents": 90588,
+      "invalid_documents": 0,
+      "short_documents": 0,
+      "duplicate_documents": 0,
+      "sampling_rejections": 84945,
+      "train_documents": 5537,
+      "train_characters": 8000055,
+      "validation_documents": 106,
+      "validation_characters": 154270
+    },
+    "fineweb2-ko": {
+      "scanned_documents": 83461,
+      "invalid_documents": 0,
+      "short_documents": 0,
+      "duplicate_documents": 0,
+      "sampling_rejections": 78297,
+      "train_documents": 5054,
+      "train_characters": 8000817,
+      "validation_documents": 110,
+      "validation_characters": 188889
+    },
+    "fineweb2-ru": {
+      "scanned_documents": 29921,
+      "invalid_documents": 0,
+      "short_documents": 0,
+      "duplicate_documents": 0,
+      "sampling_rejections": 28090,
+      "train_documents": 1798,
+      "train_characters": 8002598,
+      "validation_documents": 33,
+      "validation_characters": 128592
+    },
+    "fineweb2-es": {
+      "scanned_documents": 36186,
+      "invalid_documents": 0,
+      "short_documents": 0,
+      "duplicate_documents": 0,
+      "sampling_rejections": 33975,
+      "train_documents": 2172,
+      "train_characters": 8026829,
+      "validation_documents": 39,
+      "validation_characters": 190927
+    },
+    "github-code": {
+      "scanned_documents": 27691,
+      "invalid_documents": 0,
+      "short_documents": 423,
+      "duplicate_documents": 0,
+      "sampling_rejections": 20409,
+      "train_documents": 6715,
+      "train_characters": 35000002,
+      "validation_documents": 144,
+      "validation_characters": 720662
+    },
+    "finemath-3plus": {
+      "scanned_documents": 10130,
+      "invalid_documents": 0,
+      "short_documents": 0,
+      "duplicate_documents": 0,
+      "sampling_rejections": 7622,
+      "train_documents": 2455,
+      "train_characters": 12000239,
+      "validation_documents": 53,
+      "validation_characters": 265997
+    }
+  },
+  "unique_documents": 121522
+}

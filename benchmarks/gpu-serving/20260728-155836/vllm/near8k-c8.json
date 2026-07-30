@@ -1,0 +1,95 @@
+{
+  "config": {
+    "base_url": "http://127.0.0.1:8000",
+    "model": "Qwen3-8B",
+    "num_requests": 8,
+    "concurrency": 8,
+    "prompt_words": 3072,
+    "max_tokens": 64,
+    "timeout": 900.0,
+    "output": "/public/home/u43077/lzh/benchmarks/20260728-155836/vllm/near8k-c8.json"
+  },
+  "wall_s": 2.2136103622615337,
+  "successful_requests": 8,
+  "failed_requests": 0,
+  "requests_per_second": 3.614005489126282,
+  "input_tokens_per_second": 28921.53067741921,
+  "output_tokens_per_second": 231.29635130408204,
+  "latency_s": {
+    "p50": 2.1714669773355126,
+    "p95": 2.2069302052259445,
+    "p99": 2.2069302052259445
+  },
+  "ttft_s": {
+    "p50": 0.5075616920366883,
+    "p95": 0.8714888393878937,
+    "p99": 0.8714888393878937
+  },
+  "errors": [],
+  "results": [
+    {
+      "ok": true,
+      "latency_s": 2.129726730287075,
+      "ttft_s": 0.12355894967913628,
+      "prompt_tokens": 7989,
+      "completion_tokens": 64,
+      "error": null
+    },
+    {
+      "ok": true,
+      "latency_s": 2.1548904851078987,
+      "ttft_s": 0.33424776047468185,
+      "prompt_tokens": 7957,
+      "completion_tokens": 64,
+      "error": null
+    },
+    {
+      "ok": true,
+      "latency_s": 2.156750800088048,
+      "ttft_s": 0.3358431328088045,
+      "prompt_tokens": 8057,
+      "completion_tokens": 64,
+      "error": null
+    },
+    {
+      "ok": true,
+      "latency_s": 2.169392729178071,
+      "ttft_s": 0.5054864957928658,
+      "prompt_tokens": 8049,
+      "completion_tokens": 64,
+      "error": null
+    },
+    {
+      "ok": true,
+      "latency_s": 2.1735412254929543,
+      "ttft_s": 0.5096368882805109,
+      "prompt_tokens": 7953,
+      "completion_tokens": 64,
+      "error": null
+    },
+    {
+      "ok": true,
+      "latency_s": 2.20414961874485,
+      "ttft_s": 0.8689355626702309,
+      "prompt_tokens": 7949,
+      "completion_tokens": 64,
+      "error": null
+    },
+    {
+      "ok": true,
+      "latency_s": 2.202697841450572,
+      "ttft_s": 0.8674395717680454,
+      "prompt_tokens": 8034,
+      "completion_tokens": 64,
+      "error": null
+    },
+    {
+      "ok": true,
+      "latency_s": 2.2069302052259445,
+      "ttft_s": 0.8714888393878937,
+      "prompt_tokens": 8033,
+      "completion_tokens": 64,
+      "error": null
+    }
+  ]
+}

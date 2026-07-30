@@ -1,0 +1,95 @@
+{
+  "config": {
+    "base_url": "http://127.0.0.1:8000",
+    "model": "Qwen3-8B",
+    "num_requests": 8,
+    "concurrency": 4,
+    "prompt_words": 2800,
+    "max_tokens": 64,
+    "timeout": 900.0,
+    "output": "/public/home/u43077/lzh/benchmarks/20260728-155836/multi/long-8b.json"
+  },
+  "wall_s": 9.668476343154907,
+  "successful_requests": 8,
+  "failed_requests": 0,
+  "requests_per_second": 0.827431305209103,
+  "input_tokens_per_second": 6045.937118249764,
+  "output_tokens_per_second": 52.95560353338259,
+  "latency_s": {
+    "p50": 4.744279249571264,
+    "p95": 7.794484505429864,
+    "p99": 7.794484505429864
+  },
+  "ttft_s": {
+    "p50": 1.1219261325895786,
+    "p95": 4.624237971380353,
+    "p99": 4.624237971380353
+  },
+  "errors": [],
+  "results": [
+    {
+      "ok": true,
+      "latency_s": 6.233530780300498,
+      "ttft_s": 1.2695214208215475,
+      "prompt_tokens": 7264,
+      "completion_tokens": 64,
+      "error": null
+    },
+    {
+      "ok": true,
+      "latency_s": 6.720308128744364,
+      "ttft_s": 2.496946332976222,
+      "prompt_tokens": 7298,
+      "completion_tokens": 64,
+      "error": null
+    },
+    {
+      "ok": true,
+      "latency_s": 7.141351152211428,
+      "ttft_s": 3.465102018788457,
+      "prompt_tokens": 7277,
+      "completion_tokens": 64,
+      "error": null
+    },
+    {
+      "ok": true,
+      "latency_s": 7.794484505429864,
+      "ttft_s": 4.624237971380353,
+      "prompt_tokens": 7373,
+      "completion_tokens": 64,
+      "error": null
+    },
+    {
+      "ok": true,
+      "latency_s": 3.2550277188420296,
+      "ttft_s": 0.6047131828963757,
+      "prompt_tokens": 7335,
+      "completion_tokens": 64,
+      "error": null
+    },
+    {
+      "ok": true,
+      "latency_s": 2.833542948588729,
+      "ttft_s": 0.7555785309523344,
+      "prompt_tokens": 7345,
+      "completion_tokens": 64,
+      "error": null
+    },
+    {
+      "ok": true,
+      "latency_s": 2.47796668484807,
+      "ttft_s": 0.9743308443576097,
+      "prompt_tokens": 7231,
+      "completion_tokens": 64,
+      "error": null
+    },
+    {
+      "ok": true,
+      "latency_s": 1.873281991109252,
+      "ttft_s": 0.7833000142127275,
+      "prompt_tokens": 7332,
+      "completion_tokens": 64,
+      "error": null
+    }
+  ]
+}

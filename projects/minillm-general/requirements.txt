@@ -1,0 +1,3 @@
+# Select the CPU or CUDA wheel index at install time; do not hard-code +cpu.
+# A CUDA-enabled PyTorch build can still run MiniLLM with --device cpu.
+torch==2.12.1
