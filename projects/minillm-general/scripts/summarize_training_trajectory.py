@@ -36,6 +36,21 @@ def normalized_score(task: str, payload: dict) -> float:
     return float(metric["accuracy_normalized"])
 
 
+def checkpoint_tokens(benchmark: dict) -> int | None:
+    checkpoint = benchmark.get("checkpoint")
+    if isinstance(checkpoint, dict) and checkpoint.get("tokens_processed") is not None:
+        return int(checkpoint["tokens_processed"])
+    model = benchmark.get("model")
+    path = model.get("path") if isinstance(model, dict) else None
+    if not isinstance(path, str) or not Path(path).is_file():
+        return None
+    import torch
+
+    payload = torch.load(path, map_location="cpu", weights_only=False, mmap=True)
+    value = payload.get("tokens_processed") if isinstance(payload, dict) else None
+    return int(value) if value is not None else None
+
+
 def main() -> None:
     args = parse_args()
     training_log = Path(args.training_log).expanduser().resolve()
@@ -51,15 +66,6 @@ def main() -> None:
         for record in records
         if "tokens_processed" in record
     }
-    tokens_per_step = next(
-        (
-            int(record["tokens_per_optimizer_step"])
-            for record in reversed(records)
-            if "tokens_per_optimizer_step" in record
-        ),
-        None,
-    )
-
     milestones = []
     for benchmark_path in sorted(benchmark_dir.glob("step-*.json")):
         step = int(benchmark_path.stem.removeprefix("step-"))
@@ -68,10 +74,7 @@ def main() -> None:
         milestones.append(
             {
                 "step": step,
-                "tokens_processed": tokens_by_step.get(
-                    step,
-                    step * tokens_per_step if tokens_per_step is not None else None,
-                ),
+                "tokens_processed": tokens_by_step.get(step, checkpoint_tokens(benchmark)),
                 "validation_loss": validation.get("validation_loss"),
                 "validation_nats_per_byte": validation.get("validation_nats_per_byte"),
                 "capability_normalized_accuracy": {

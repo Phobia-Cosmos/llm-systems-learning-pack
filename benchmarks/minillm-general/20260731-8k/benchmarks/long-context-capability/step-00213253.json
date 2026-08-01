@@ -1,0 +1,155 @@
+{
+  "schema_version": 1,
+  "harness": {
+    "choice_method": "conditional_log_likelihood",
+    "few_shot": 0,
+    "seed": 20260729,
+    "limit_per_task": 2000,
+    "score_content": true
+  },
+  "model": {
+    "backend": "minillm",
+    "path": "/public/home/u43077/lzh/outputs/minillm-general/new-model-v1/160m-openbpe-32k-8k/milestones/step-00213253.pt",
+    "name": "/public/home/u43077/lzh/outputs/minillm-general/new-model-v1/160m-openbpe-32k-8k/milestones/step-00213253.pt",
+    "parameters": 163615232,
+    "max_length": 8192
+  },
+  "tasks": {
+    "ceval": {
+      "examples": 1346,
+      "subjects": 52,
+      "random_accuracy": 0.25,
+      "candidate_sequences": 10768,
+      "scored_tokens": 53820,
+      "elapsed_seconds": 14.562762007117271,
+      "metrics": {
+        "label": {
+          "examples": 1346,
+          "correct": 334,
+          "correct_normalized": 334,
+          "accuracy": 0.24814264487369986,
+          "accuracy_normalized": 0.24814264487369986,
+          "standard_error": 0.01177323735774117,
+          "standard_error_normalized": 0.01177323735774117
+        },
+        "content": {
+          "examples": 1346,
+          "correct": 349,
+          "correct_normalized": 430,
+          "accuracy": 0.25928677563150077,
+          "accuracy_normalized": 0.31946508172362553,
+          "standard_error": 0.011945180119767985,
+          "standard_error_normalized": 0.012709087647362335
+        }
+      },
+      "available_examples": 1346
+    },
+    "cmmlu": {
+      "examples": 2000,
+      "subjects": 67,
+      "random_accuracy": 0.25,
+      "candidate_sequences": 16000,
+      "scored_tokens": 65866,
+      "elapsed_seconds": 16.21787774004042,
+      "metrics": {
+        "label": {
+          "examples": 2000,
+          "correct": 495,
+          "correct_normalized": 495,
+          "accuracy": 0.2475,
+          "accuracy_normalized": 0.2475,
+          "standard_error": 0.009649967616525975,
+          "standard_error_normalized": 0.009649967616525975
+        },
+        "content": {
+          "examples": 2000,
+          "correct": 527,
+          "correct_normalized": 568,
+          "accuracy": 0.2635,
+          "accuracy_normalized": 0.284,
+          "standard_error": 0.009850577394244461,
+          "standard_error_normalized": 0.010083253443209686
+        }
+      },
+      "available_examples": 11582
+    },
+    "arc_easy": {
+      "examples": 570,
+      "subjects": 1,
+      "random_accuracy": 0.24997076023391815,
+      "candidate_sequences": 4562,
+      "scored_tokens": 15607,
+      "elapsed_seconds": 4.444159246981144,
+      "metrics": {
+        "label": {
+          "examples": 570,
+          "correct": 145,
+          "correct_normalized": 145,
+          "accuracy": 0.2543859649122807,
+          "accuracy_normalized": 0.2543859649122807,
+          "standard_error": 0.018241736690556468,
+          "standard_error_normalized": 0.018241736690556468
+        },
+        "content": {
+          "examples": 570,
+          "correct": 192,
+          "correct_normalized": 154,
+          "accuracy": 0.3368421052631579,
+          "accuracy_normalized": 0.27017543859649124,
+          "standard_error": 0.01979630930448957,
+          "standard_error_normalized": 0.01859922045978615
+        }
+      },
+      "available_examples": 570
+    },
+    "arc_challenge": {
+      "examples": 299,
+      "subjects": 1,
+      "random_accuracy": 0.2506688963210703,
+      "candidate_sequences": 2388,
+      "scored_tokens": 9938,
+      "elapsed_seconds": 2.3623471576720476,
+      "metrics": {
+        "label": {
+          "examples": 299,
+          "correct": 71,
+          "correct_normalized": 71,
+          "accuracy": 0.23745819397993312,
+          "accuracy_normalized": 0.23745819397993312,
+          "standard_error": 0.024608764793353343,
+          "standard_error_normalized": 0.024608764793353343
+        },
+        "content": {
+          "examples": 299,
+          "correct": 55,
+          "correct_normalized": 67,
+          "accuracy": 0.18394648829431437,
+          "accuracy_normalized": 0.22408026755852842,
+          "standard_error": 0.02240626537873774,
+          "standard_error_normalized": 0.02411429732093315
+        }
+      },
+      "available_examples": 299
+    },
+    "hellaswag": {
+      "examples": 2000,
+      "subjects": 168,
+      "random_accuracy": 0.25,
+      "candidate_sequences": 8000,
+      "scored_tokens": 300070,
+      "elapsed_seconds": 8.398211179301143,
+      "metrics": {
+        "ending": {
+          "examples": 2000,
+          "correct": 531,
+          "correct_normalized": 573,
+          "accuracy": 0.2655,
+          "accuracy_normalized": 0.2865,
+          "standard_error": 0.009874455681200862,
+          "standard_error_normalized": 0.010109840503192916
+        }
+      },
+      "available_examples": 10042
+    }
+  }
+}

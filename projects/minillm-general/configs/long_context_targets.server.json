@@ -1,16 +1,18 @@
 {
+  "schema_version": 2,
   "sequence_length": 8192,
-  "target_train_tokens_by_source": {
-    "minimind-zh": 190000000,
-    "fineweb2-zh": 140000000,
-    "fineweb-edu-en": 190000000,
-    "fineweb2-ar": 48000000,
-    "fineweb2-hi": 48000000,
-    "fineweb2-ja": 48000000,
-    "fineweb2-ko": 48000000,
-    "fineweb2-ru": 48000000,
-    "fineweb2-es": 48000000,
-    "github-code": 140000000,
-    "finemath-3plus": 48000000
+  "holdout_test_fraction": 0.5,
+  "target_tokens_by_source_and_split": {
+    "minimind-zh": {"train": 190000000, "validation": 959596, "test": 959596},
+    "fineweb2-zh": {"train": 140000000, "validation": 707071, "test": 707071},
+    "fineweb-edu-en": {"train": 190000000, "validation": 959596, "test": 959596},
+    "fineweb2-ar": {"train": 48000000, "validation": 242425, "test": 242425},
+    "fineweb2-hi": {"train": 48000000, "validation": 242425, "test": 242425},
+    "fineweb2-ja": {"train": 48000000, "validation": 242425, "test": 242425},
+    "fineweb2-ko": {"train": 48000000, "validation": 242425, "test": 242425},
+    "fineweb2-ru": {"train": 48000000, "validation": 242425, "test": 242425},
+    "fineweb2-es": {"train": 48000000, "validation": 242425, "test": 242425},
+    "github-code": {"train": 140000000, "validation": 707071, "test": 707071},
+    "finemath-3plus": {"train": 48000000, "validation": 242425, "test": 242425}
   }
 }

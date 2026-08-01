@@ -14,11 +14,10 @@ if [[ -e "$OUTPUT" ]]; then
 fi
 
 "$PY" "$ROOT/scripts/prepare_long_context_dataset.py" \
-  --input "$CORPUS/train.jsonl" \
-  --input "$CORPUS/validation.jsonl" \
+  --train-input "$CORPUS/train.jsonl" \
+  --holdout-input "$CORPUS/validation.jsonl" \
   --output-dir "$OUTPUT" \
   --tokenizer "$TOKENIZER" \
   --targets "$TARGETS" \
-  --validation-fraction 0.005 \
-  --test-fraction 0.005 \
-  --batch-documents 128
+  --batch-documents 128 \
+  --drop-cross-role-duplicates

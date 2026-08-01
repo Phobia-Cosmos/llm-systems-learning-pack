@@ -1,0 +1,592 @@
+{
+  "schema_version": 1,
+  "created_at_utc": "2026-07-31T10:47:59.322412+00:00",
+  "checkpoint": {
+    "path": "/public/home/u43077/lzh/outputs/minillm-general/new-model-v1/160m-openbpe-32k-8k/milestones/step-00215160.pt",
+    "sha256": "a7c5d1dd79525392b811b4c77b389296ae57c4ffea7c09561b2039e6ed899745",
+    "step": 215160,
+    "tokens_processed": 10500046848,
+    "parameters": 163615232,
+    "block_size": 8192,
+    "vocab_size": 32768,
+    "dataset_manifest_sha256": "4454a741a4972742676ebc787c057ccaecaa93030bab42d82c4bb8591afd5d05"
+  },
+  "tokenizer": {
+    "path": "/public/home/u43077/lzh/datasets/minillm-general/general-openbpe-32k-8k-v1/tokenizer.json",
+    "sha256": "21a9e8b44a54d25bd1ebc2367810c0cf298af8afa6c2ff1f0997e124f9b52dc3",
+    "vocab_size": 32768
+  },
+  "long_dataset": {
+    "directory": "/public/home/u43077/lzh/datasets/minillm-general/general-openbpe-32k-8k-v1",
+    "manifest_sha256": "4454a741a4972742676ebc787c057ccaecaa93030bab42d82c4bb8591afd5d05",
+    "tokenizer_sha256": "21a9e8b44a54d25bd1ebc2367810c0cf298af8afa6c2ff1f0997e124f9b52dc3",
+    "split": "test",
+    "split_path": "/public/home/u43077/lzh/datasets/minillm-general/general-openbpe-32k-8k-v1/test.bin",
+    "split_sha256": "dd57612251313acb63f36363604dc79908f90d06ae6d50bf1ad49eed9e9a2e18",
+    "split_tokens": 5079660,
+    "record_length": 8193,
+    "sequence_length": 8192,
+    "matches_checkpoint_current_dataset": true
+  },
+  "fixed_record_test": {
+    "split": "test",
+    "available_records": 620,
+    "evaluated_records": 16,
+    "sequence_length": 8192,
+    "evaluated_tokens": 131072,
+    "overall_loss": 2.3706913538436862,
+    "perplexity": 10.704790524490376,
+    "position_loss_segments": [
+      {
+        "logit_position_start": 0,
+        "logit_position_end_exclusive": 1024,
+        "target_position_start": 1,
+        "target_position_end_inclusive": 1024,
+        "tokens": 16384,
+        "loss": 2.524694216395456
+      },
+      {
+        "logit_position_start": 1024,
+        "logit_position_end_exclusive": 2048,
+        "target_position_start": 1025,
+        "target_position_end_inclusive": 2048,
+        "tokens": 16384,
+        "loss": 2.3309079215526514
+      },
+      {
+        "logit_position_start": 2048,
+        "logit_position_end_exclusive": 3072,
+        "target_position_start": 2049,
+        "target_position_end_inclusive": 3072,
+        "tokens": 16384,
+        "loss": 2.321764360064056
+      },
+      {
+        "logit_position_start": 3072,
+        "logit_position_end_exclusive": 4096,
+        "target_position_start": 3073,
+        "target_position_end_inclusive": 4096,
+        "tokens": 16384,
+        "loss": 2.351414843602414
+      },
+      {
+        "logit_position_start": 4096,
+        "logit_position_end_exclusive": 5120,
+        "target_position_start": 4097,
+        "target_position_end_inclusive": 5120,
+        "tokens": 16384,
+        "loss": 2.308640894172887
+      },
+      {
+        "logit_position_start": 5120,
+        "logit_position_end_exclusive": 6144,
+        "target_position_start": 5121,
+        "target_position_end_inclusive": 6144,
+        "tokens": 16384,
+        "loss": 2.3040051077391084
+      },
+      {
+        "logit_position_start": 6144,
+        "logit_position_end_exclusive": 7168,
+        "target_position_start": 6145,
+        "target_position_end_inclusive": 7168,
+        "tokens": 16384,
+        "loss": 2.306819771158907
+      },
+      {
+        "logit_position_start": 7168,
+        "logit_position_end_exclusive": 8192,
+        "target_position_start": 7169,
+        "target_position_end_inclusive": 8192,
+        "tokens": 16384,
+        "loss": 2.5172837160640094
+      }
+    ],
+    "position_coverage": {
+      "start": 0,
+      "end_exclusive": 8192,
+      "complete": true
+    }
+  },
+  "regression_dataset": {
+    "directory": "/public/home/u43077/lzh/datasets/minillm-general/general-openbpe-32k-v1",
+    "manifest_sha256": "15b3c03f022434f167cfa0613b323f84e81931f350de2cfe40f541f7b6bb0ddf",
+    "tokenizer_sha256": "21a9e8b44a54d25bd1ebc2367810c0cf298af8afa6c2ff1f0997e124f9b52dc3",
+    "split": "test",
+    "split_path": "/public/home/u43077/lzh/datasets/minillm-general/general-openbpe-32k-v1/test.bin",
+    "split_sha256": "ae04f01c6fb936baeae53d7b00b78352fa6ac4e60f582f2015d403400eab1b59",
+    "split_tokens": 23997779,
+    "record_length": null,
+    "sequence_length": null
+  },
+  "regression_loss": {
+    "split": "test",
+    "sequence_length": 4096,
+    "evaluated_records": 16,
+    "evaluated_tokens": 65536,
+    "overall_loss": 2.5822939796663147,
+    "perplexity": 13.227446876749282
+  },
+  "passkey_retrieval": {
+    "passkey": "314159",
+    "cases": [
+      {
+        "total_tokens": 2048,
+        "requested_depth": 0.1,
+        "needle_start_token": 202,
+        "needle_end_token_exclusive": 218,
+        "prompt_tokens": 2044,
+        "target_tokens": 4,
+        "actual_depth": 0.10024813895781638,
+        "target_text": " 314159",
+        "target_ids": [
+          236,
+          34,
+          1917,
+          30041
+        ],
+        "target_nll": 0.7688971757888794,
+        "target_perplexity": 2.1573857241640013,
+        "teacher_forced_token_accuracy": 0.75,
+        "teacher_forced_exact": false,
+        "greedy_ids": [
+          1096,
+          24265,
+          5395,
+          2728
+        ],
+        "greedy_text": " The secret passkey",
+        "greedy_exact": false
+      },
+      {
+        "total_tokens": 2048,
+        "requested_depth": 0.5,
+        "needle_start_token": 1008,
+        "needle_end_token_exclusive": 1024,
+        "prompt_tokens": 2044,
+        "target_tokens": 4,
+        "actual_depth": 0.5002481389578164,
+        "target_text": " 314159",
+        "target_ids": [
+          236,
+          34,
+          1917,
+          30041
+        ],
+        "target_nll": 0.6420242786407471,
+        "target_perplexity": 1.9003237732733496,
+        "teacher_forced_token_accuracy": 0.75,
+        "teacher_forced_exact": false,
+        "greedy_ids": [
+          1096,
+          24265,
+          5395,
+          2728
+        ],
+        "greedy_text": " The secret passkey",
+        "greedy_exact": false
+      },
+      {
+        "total_tokens": 2048,
+        "requested_depth": 0.9,
+        "needle_start_token": 1814,
+        "needle_end_token_exclusive": 1830,
+        "prompt_tokens": 2044,
+        "target_tokens": 4,
+        "actual_depth": 0.9002481389578164,
+        "target_text": " 314159",
+        "target_ids": [
+          236,
+          34,
+          1917,
+          30041
+        ],
+        "target_nll": 0.660221517086029,
+        "target_perplexity": 1.9352209714354802,
+        "teacher_forced_token_accuracy": 0.75,
+        "teacher_forced_exact": false,
+        "greedy_ids": [
+          1096,
+          24265,
+          5395,
+          2728
+        ],
+        "greedy_text": " The secret passkey",
+        "greedy_exact": false
+      },
+      {
+        "total_tokens": 4096,
+        "requested_depth": 0.1,
+        "needle_start_token": 406,
+        "needle_end_token_exclusive": 422,
+        "prompt_tokens": 4092,
+        "target_tokens": 4,
+        "actual_depth": 0.09992616293379276,
+        "target_text": " 314159",
+        "target_ids": [
+          236,
+          34,
+          1917,
+          30041
+        ],
+        "target_nll": 0.6612762808799744,
+        "target_perplexity": 1.9372632493204784,
+        "teacher_forced_token_accuracy": 0.75,
+        "teacher_forced_exact": false,
+        "greedy_ids": [
+          1096,
+          24265,
+          5395,
+          2728
+        ],
+        "greedy_text": " The secret passkey",
+        "greedy_exact": false
+      },
+      {
+        "total_tokens": 4096,
+        "requested_depth": 0.5,
+        "needle_start_token": 2032,
+        "needle_end_token_exclusive": 2048,
+        "prompt_tokens": 4092,
+        "target_tokens": 4,
+        "actual_depth": 0.500123061777012,
+        "target_text": " 314159",
+        "target_ids": [
+          236,
+          34,
+          1917,
+          30041
+        ],
+        "target_nll": 0.7510371804237366,
+        "target_perplexity": 2.119196866654947,
+        "teacher_forced_token_accuracy": 0.75,
+        "teacher_forced_exact": false,
+        "greedy_ids": [
+          1096,
+          24265,
+          5395,
+          2728
+        ],
+        "greedy_text": " The secret passkey",
+        "greedy_exact": false
+      },
+      {
+        "total_tokens": 4096,
+        "requested_depth": 0.9,
+        "needle_start_token": 3657,
+        "needle_end_token_exclusive": 3673,
+        "prompt_tokens": 4092,
+        "target_tokens": 4,
+        "actual_depth": 0.9000738370662072,
+        "target_text": " 314159",
+        "target_ids": [
+          236,
+          34,
+          1917,
+          30041
+        ],
+        "target_nll": 0.6518795490264893,
+        "target_perplexity": 1.919144567554991,
+        "teacher_forced_token_accuracy": 0.75,
+        "teacher_forced_exact": false,
+        "greedy_ids": [
+          1096,
+          24265,
+          5395,
+          2728
+        ],
+        "greedy_text": " The secret passkey",
+        "greedy_exact": false
+      },
+      {
+        "total_tokens": 8192,
+        "requested_depth": 0.1,
+        "needle_start_token": 816,
+        "needle_end_token_exclusive": 832,
+        "prompt_tokens": 8188,
+        "target_tokens": 4,
+        "actual_depth": 0.10001225640397107,
+        "target_text": " 314159",
+        "target_ids": [
+          236,
+          34,
+          1917,
+          30041
+        ],
+        "target_nll": 4.540867805480957,
+        "target_perplexity": 93.77214079817159,
+        "teacher_forced_token_accuracy": 0.0,
+        "teacher_forced_exact": false,
+        "greedy_ids": [
+          1096,
+          24265,
+          5395,
+          2728
+        ],
+        "greedy_text": " The secret passkey",
+        "greedy_exact": false
+      },
+      {
+        "total_tokens": 8192,
+        "requested_depth": 0.5,
+        "needle_start_token": 4080,
+        "needle_end_token_exclusive": 4096,
+        "prompt_tokens": 8188,
+        "target_tokens": 4,
+        "actual_depth": 0.5000612820198553,
+        "target_text": " 314159",
+        "target_ids": [
+          236,
+          34,
+          1917,
+          30041
+        ],
+        "target_nll": 0.5465431213378906,
+        "target_perplexity": 1.7272717167663496,
+        "teacher_forced_token_accuracy": 0.75,
+        "teacher_forced_exact": false,
+        "greedy_ids": [
+          1096,
+          24265,
+          5395,
+          2728
+        ],
+        "greedy_text": " The secret passkey",
+        "greedy_exact": false
+      },
+      {
+        "total_tokens": 8192,
+        "requested_depth": 0.9,
+        "needle_start_token": 7343,
+        "needle_end_token_exclusive": 7359,
+        "prompt_tokens": 8188,
+        "target_tokens": 4,
+        "actual_depth": 0.899987743596029,
+        "target_text": " 314159",
+        "target_ids": [
+          236,
+          34,
+          1917,
+          30041
+        ],
+        "target_nll": 0.7919782996177673,
+        "target_perplexity": 2.207759719091022,
+        "teacher_forced_token_accuracy": 0.75,
+        "teacher_forced_exact": false,
+        "greedy_ids": [
+          1096,
+          24265,
+          5395,
+          2728
+        ],
+        "greedy_text": " The secret passkey",
+        "greedy_exact": false
+      }
+    ],
+    "aggregate": {
+      "cases": 9,
+      "mean_target_nll": 1.112747245364719,
+      "mean_teacher_forced_token_accuracy": 0.6666666666666666,
+      "greedy_exact_cases": 0,
+      "greedy_exact_fraction": 0.0
+    }
+  },
+  "cache_parity": {
+    "atol": 0.05,
+    "rtol": 0.05,
+    "minimum_argmax_match": 0.999,
+    "cases": [
+      {
+        "sequence_length": 512,
+        "full_forward": {
+          "shape": [
+            1,
+            512,
+            32768
+          ]
+        },
+        "dynamic_vs_full": {
+          "max_absolute_error": 0.46875,
+          "mean_absolute_error": 0.04620618883062977,
+          "numerical_values": 16777216,
+          "numerical_violations": 796347,
+          "numerically_close": false,
+          "argmax_matches": 495,
+          "argmax_positions": 512,
+          "argmax_match_fraction": 0.966796875,
+          "argmax_exact": false,
+          "minimum_argmax_match": 0.999,
+          "passed": false,
+          "cache_mode": "dynamic",
+          "chunk_size": 64,
+          "final_cache_length": 512
+        },
+        "static_vs_full": {
+          "max_absolute_error": 0.46875,
+          "mean_absolute_error": 0.04620618883062977,
+          "numerical_values": 16777216,
+          "numerical_violations": 796347,
+          "numerically_close": false,
+          "argmax_matches": 495,
+          "argmax_positions": 512,
+          "argmax_match_fraction": 0.966796875,
+          "argmax_exact": false,
+          "minimum_argmax_match": 0.999,
+          "passed": false,
+          "cache_mode": "static",
+          "chunk_size": 64,
+          "final_cache_length": 512
+        },
+        "static_vs_dynamic": {
+          "max_absolute_error": 0.0,
+          "mean_absolute_error": 0.0,
+          "numerical_values": 16777216,
+          "numerical_violations": 0,
+          "numerically_close": true,
+          "argmax_matches": 512,
+          "argmax_positions": 512,
+          "argmax_match_fraction": 1.0,
+          "argmax_exact": true,
+          "minimum_argmax_match": 0.999,
+          "passed": true,
+          "cache_mode": "static_vs_dynamic",
+          "chunk_size": 64,
+          "final_cache_length": 512
+        },
+        "full_forward_consistency_passed": false,
+        "passed": true
+      },
+      {
+        "sequence_length": 4096,
+        "full_forward": {
+          "shape": [
+            1,
+            4096,
+            32768
+          ]
+        },
+        "dynamic_vs_full": {
+          "max_absolute_error": 0.53125,
+          "mean_absolute_error": 0.04563443984705548,
+          "numerical_values": 134217728,
+          "numerical_violations": 6930731,
+          "numerically_close": false,
+          "argmax_matches": 3932,
+          "argmax_positions": 4096,
+          "argmax_match_fraction": 0.9599609375,
+          "argmax_exact": false,
+          "minimum_argmax_match": 0.999,
+          "passed": false,
+          "cache_mode": "dynamic",
+          "chunk_size": 64,
+          "final_cache_length": 4096
+        },
+        "static_vs_full": {
+          "max_absolute_error": 0.53125,
+          "mean_absolute_error": 0.04563443984705548,
+          "numerical_values": 134217728,
+          "numerical_violations": 6930731,
+          "numerically_close": false,
+          "argmax_matches": 3932,
+          "argmax_positions": 4096,
+          "argmax_match_fraction": 0.9599609375,
+          "argmax_exact": false,
+          "minimum_argmax_match": 0.999,
+          "passed": false,
+          "cache_mode": "static",
+          "chunk_size": 64,
+          "final_cache_length": 4096
+        },
+        "static_vs_dynamic": {
+          "max_absolute_error": 0.0,
+          "mean_absolute_error": 0.0,
+          "numerical_values": 134217728,
+          "numerical_violations": 0,
+          "numerically_close": true,
+          "argmax_matches": 4096,
+          "argmax_positions": 4096,
+          "argmax_match_fraction": 1.0,
+          "argmax_exact": true,
+          "minimum_argmax_match": 0.999,
+          "passed": true,
+          "cache_mode": "static_vs_dynamic",
+          "chunk_size": 64,
+          "final_cache_length": 4096
+        },
+        "full_forward_consistency_passed": false,
+        "passed": true
+      },
+      {
+        "sequence_length": 8192,
+        "full_forward": {
+          "shape": [
+            1,
+            8192,
+            32768
+          ]
+        },
+        "dynamic_vs_full": {
+          "max_absolute_error": 0.6875,
+          "mean_absolute_error": 0.04693932933523416,
+          "numerical_values": 268435456,
+          "numerical_violations": 15814907,
+          "numerically_close": false,
+          "argmax_matches": 7909,
+          "argmax_positions": 8192,
+          "argmax_match_fraction": 0.9654541015625,
+          "argmax_exact": false,
+          "minimum_argmax_match": 0.999,
+          "passed": false,
+          "cache_mode": "dynamic",
+          "chunk_size": 64,
+          "final_cache_length": 8192
+        },
+        "static_vs_full": {
+          "max_absolute_error": 0.6875,
+          "mean_absolute_error": 0.04693932933523416,
+          "numerical_values": 268435456,
+          "numerical_violations": 15814907,
+          "numerically_close": false,
+          "argmax_matches": 7909,
+          "argmax_positions": 8192,
+          "argmax_match_fraction": 0.9654541015625,
+          "argmax_exact": false,
+          "minimum_argmax_match": 0.999,
+          "passed": false,
+          "cache_mode": "static",
+          "chunk_size": 64,
+          "final_cache_length": 8192
+        },
+        "static_vs_dynamic": {
+          "max_absolute_error": 0.0,
+          "mean_absolute_error": 0.0,
+          "numerical_values": 268435456,
+          "numerical_violations": 0,
+          "numerically_close": true,
+          "argmax_matches": 8192,
+          "argmax_positions": 8192,
+          "argmax_match_fraction": 1.0,
+          "argmax_exact": true,
+          "minimum_argmax_match": 0.999,
+          "passed": true,
+          "cache_mode": "static_vs_dynamic",
+          "chunk_size": 64,
+          "final_cache_length": 8192
+        },
+        "full_forward_consistency_passed": false,
+        "passed": true
+      }
+    ],
+    "all_passed": true,
+    "all_full_forward_consistency_passed": false
+  },
+  "runtime": {
+    "device": "cuda",
+    "dtype": "bfloat16",
+    "torch_version": "2.6.0+cu124",
+    "seed": 20260730,
+    "cuda_device_name": "NVIDIA A100-SXM4-40GB",
+    "peak_allocated_bytes": 1544316928,
+    "peak_reserved_bytes": 1845493760
+  }
+}

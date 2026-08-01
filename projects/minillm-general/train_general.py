@@ -68,12 +68,27 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Global step where this schedule reaches min LR; defaults to --max-steps.",
     )
+    parser.add_argument(
+        "--schedule-reference-tokens-per-step",
+        type=int,
+        default=None,
+        help=(
+            "Advance the LR schedule using cumulative tokens divided by this value. "
+            "This preserves LR progress when data-parallel world size changes."
+        ),
+    )
     parser.add_argument("--weight-decay", type=float, default=0.1)
     parser.add_argument("--beta1", type=float, default=0.9)
     parser.add_argument("--beta2", type=float, default=0.95)
     parser.add_argument("--grad-clip", type=float, default=1.0)
     parser.add_argument("--eval-interval", type=int, default=250)
     parser.add_argument("--eval-batches", type=int, default=20)
+    parser.add_argument(
+        "--eval-micro-batch-size",
+        type=int,
+        default=None,
+        help="Per-rank validation batch size; defaults to the training micro-batch size.",
+    )
     parser.add_argument("--save-interval", type=int, default=500)
     parser.add_argument("--log-interval", type=int, default=10)
     parser.add_argument("--seed", type=int, default=1337)
@@ -190,9 +205,20 @@ def distributed_context() -> tuple[int, int, int, torch.device]:
     return rank, local_rank, world_size, torch.device("cuda", local_rank)
 
 
-def learning_rate(step: int, args: argparse.Namespace) -> float:
+def learning_rate(
+    step: int,
+    args: argparse.Namespace,
+    tokens_processed: int | None = None,
+) -> float:
     schedule_end = args.max_steps if args.schedule_end_step is None else args.schedule_end_step
-    relative_step = max(0, step - args.schedule_start_step)
+    reference_tokens = getattr(args, "schedule_reference_tokens_per_step", None)
+    if reference_tokens is not None:
+        if tokens_processed is None:
+            raise ValueError("tokens_processed is required for a token-driven LR schedule")
+        schedule_position = tokens_processed / reference_tokens
+    else:
+        schedule_position = step
+    relative_step = max(0.0, schedule_position - args.schedule_start_step)
     if relative_step < args.warmup_steps:
         progress = (relative_step + 1) / max(1, args.warmup_steps)
         ratio = args.warmup_start_lr_ratio + (1.0 - args.warmup_start_lr_ratio) * progress
@@ -271,13 +297,16 @@ def checkpoint_payload(
     config: GPTConfig,
     args: argparse.Namespace,
     step: int,
-    batch_generator: torch.Generator,
+    rank_states: list[dict],
     tokens_processed: int,
     dataset_manifest_sha256: str,
     tokenizer_sha256: str,
 ) -> dict:
+    if not rank_states:
+        raise ValueError("checkpoint requires at least one rank state")
+    primary_state = rank_states[0]
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "step": step,
         "tokens_processed": tokens_processed,
         "dataset_manifest_sha256": dataset_manifest_sha256,
@@ -286,10 +315,96 @@ def checkpoint_payload(
         "optimizer": optimizer.state_dict(),
         "config": asdict(config),
         "args": vars(args),
+        "world_size": len(rank_states),
+        "rank_states": rank_states,
+        # Keep rank-zero aliases so older readers can still load new checkpoints.
+        "torch_rng_state": primary_state["torch_rng_state"],
+        "cuda_rng_state": [primary_state["cuda_rng_state"]],
+        "batch_generator_state": primary_state["batch_generator_state"],
+    }
+
+
+def local_rank_state(
+    rank: int,
+    batch_generator: torch.Generator,
+    device: torch.device,
+) -> dict:
+    return {
+        "rank": rank,
         "torch_rng_state": torch.get_rng_state(),
-        "cuda_rng_state": torch.cuda.get_rng_state_all(),
+        "cuda_rng_state": torch.cuda.get_rng_state(device),
         "batch_generator_state": batch_generator.get_state(),
     }
+
+
+def gather_rank_states(
+    rank: int,
+    world_size: int,
+    batch_generator: torch.Generator,
+    device: torch.device,
+) -> list[dict] | None:
+    state = local_rank_state(rank, batch_generator, device)
+    if world_size == 1:
+        return [state]
+    gathered: list[dict | None] | None = [None] * world_size if rank == 0 else None
+    dist.gather_object(state, gathered, dst=0)
+    if rank != 0:
+        return None
+    if gathered is None or any(item is None for item in gathered):
+        raise RuntimeError("did not gather every distributed rank state")
+    return [item for item in gathered if item is not None]
+
+
+def checkpoint_rank_state(checkpoint: dict, rank: int, world_size: int) -> dict | None:
+    states = checkpoint.get("rank_states")
+    if isinstance(states, list) and len(states) == world_size:
+        state = states[rank]
+        if isinstance(state, dict) and int(state.get("rank", rank)) == rank:
+            return state
+    if rank != 0:
+        return None
+    cuda_states = checkpoint.get("cuda_rng_state")
+    if isinstance(cuda_states, (list, tuple)) and cuda_states:
+        cuda_state = cuda_states[0]
+    else:
+        cuda_state = cuda_states
+    required = (
+        checkpoint.get("torch_rng_state"),
+        cuda_state,
+        checkpoint.get("batch_generator_state"),
+    )
+    if any(value is None for value in required):
+        return None
+    return {
+        "rank": 0,
+        "torch_rng_state": required[0],
+        "cuda_rng_state": required[1],
+        "batch_generator_state": required[2],
+    }
+
+
+def restore_rank_state(
+    checkpoint: dict,
+    rank: int,
+    world_size: int,
+    batch_generator: torch.Generator,
+    device: torch.device,
+    seed: int,
+    start_step: int,
+) -> None:
+    state = checkpoint_rank_state(checkpoint, rank, world_size)
+    if state is not None:
+        torch.set_rng_state(state["torch_rng_state"])
+        torch.cuda.set_rng_state(state["cuda_rng_state"], device)
+        batch_generator.set_state(state["batch_generator_state"])
+        return
+
+    # Changing world size creates ranks that did not exist in the checkpoint.
+    # Give them deterministic, distinct streams while rank zero keeps continuity.
+    fallback_seed = seed + rank + start_step * world_size
+    torch.set_rng_state(torch.Generator().manual_seed(fallback_seed).get_state())
+    torch.cuda.manual_seed(fallback_seed)
+    batch_generator.manual_seed(fallback_seed)
 
 
 @torch.no_grad()
@@ -306,7 +421,7 @@ def evaluate(
     total = torch.zeros((), device=device)
     for _ in range(args.eval_batches):
         inputs, targets = dataset.batch(
-            args.micro_batch_size, generator, device, args.batch_layout
+            args.eval_micro_batch_size, generator, device, args.batch_layout
         )
         with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
             _, loss = model(inputs, targets)
@@ -327,6 +442,8 @@ def main() -> None:
         args.sequence_length = args.block_size
     if args.schedule_end_step is None:
         args.schedule_end_step = args.max_steps
+    if args.eval_micro_batch_size is None:
+        args.eval_micro_batch_size = args.micro_batch_size
     if not 0 <= args.warmup_start_lr_ratio <= 1:
         raise ValueError("--warmup-start-lr-ratio must be in [0, 1]")
     if not 0 < args.min_lr_ratio <= 1:
@@ -335,12 +452,19 @@ def main() -> None:
         raise ValueError("--schedule-start-step must be non-negative")
     if args.schedule_end_step <= args.schedule_start_step:
         raise ValueError("--schedule-end-step must be greater than --schedule-start-step")
-    if args.max_steps > args.schedule_end_step:
+    if args.schedule_reference_tokens_per_step is None and args.max_steps > args.schedule_end_step:
         raise ValueError("--max-steps must not exceed --schedule-end-step")
+    if (
+        args.schedule_reference_tokens_per_step is not None
+        and args.schedule_reference_tokens_per_step <= 0
+    ):
+        raise ValueError("--schedule-reference-tokens-per-step must be positive")
     if args.warmup_steps < 0:
         raise ValueError("--warmup-steps must be non-negative")
     if args.keep_checkpoints < 0:
         raise ValueError("--keep-checkpoints must be non-negative")
+    if args.eval_micro_batch_size <= 0:
+        raise ValueError("--eval-micro-batch-size must be positive")
     if args.initial_tokens_processed is not None and args.initial_tokens_processed < 0:
         raise ValueError("--initial-tokens-processed must be non-negative")
     if args.block_size <= 0:
@@ -472,12 +596,15 @@ def main() -> None:
                     )
                 )
             )
-        torch.set_rng_state(checkpoint["torch_rng_state"])
-        torch.cuda.set_rng_state_all(checkpoint["cuda_rng_state"])
-        if primary:
-            batch_generator.set_state(checkpoint["batch_generator_state"])
-        else:
-            batch_generator.manual_seed(args.seed + rank + start_step * world_size)
+        restore_rank_state(
+            checkpoint,
+            rank,
+            world_size,
+            batch_generator,
+            device,
+            args.seed,
+            start_step,
+        )
         if primary:
             print(f"resumed {resume_path} at optimizer step {start_step}")
 
@@ -518,6 +645,7 @@ def main() -> None:
                     "tokens_per_optimizer_step": tokens_per_step,
                     "micro_batch_size": args.micro_batch_size,
                     "gradient_accumulation_steps": args.gradient_accumulation_steps,
+                    "eval_micro_batch_size": args.eval_micro_batch_size,
                     "train_tokens": len(train_data.array),
                     "validation_tokens": len(validation_data.array),
                     "sequence_length": args.sequence_length,
@@ -529,16 +657,22 @@ def main() -> None:
                     "gradient_checkpointing": args.gradient_checkpointing,
                     "batch_layout": args.batch_layout,
                     "tokens_processed_at_start": tokens_processed_at_start,
+                    "schedule_reference_tokens_per_step": args.schedule_reference_tokens_per_step,
                 }
             )
         )
 
     train_model.train()
     running_loss = 0.0
+    running_micro_batches = 0
+    running_tokens = 0
     interval_started = time.perf_counter()
     optimizer.zero_grad(set_to_none=True)
     for step in range(start_step, args.max_steps):
-        lr = learning_rate(step, args)
+        tokens_processed_before_step = tokens_processed_at_start + (
+            step - start_step
+        ) * tokens_per_step
+        lr = learning_rate(step, args, tokens_processed_before_step)
         for group in optimizer.param_groups:
             group["lr"] = lr
 
@@ -562,6 +696,7 @@ def main() -> None:
                 scaled_loss = loss / args.gradient_accumulation_steps
             scaled_loss.backward()
             running_loss += loss.detach().item()
+            running_micro_batches += 1
 
         grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
         optimizer.step()
@@ -570,12 +705,13 @@ def main() -> None:
         tokens_processed = tokens_processed_at_start + (
             completed_step - start_step
         ) * tokens_per_step
+        running_tokens += tokens_per_step
 
         if completed_step % args.log_interval == 0:
             torch.cuda.synchronize(device)
             elapsed = time.perf_counter() - interval_started
             mean_loss = torch.tensor(
-                running_loss / (args.log_interval * args.gradient_accumulation_steps),
+                running_loss / running_micro_batches,
                 device=device,
             )
             if world_size > 1:
@@ -590,13 +726,15 @@ def main() -> None:
                             "train_loss": mean_loss.item(),
                             "lr": lr,
                             "grad_norm": float(grad_norm),
-                            "tokens_per_second": args.log_interval * tokens_per_step / elapsed,
+                            "tokens_per_second": running_tokens / elapsed,
                             "gpu_memory_gib": torch.cuda.max_memory_allocated(device) / (1024**3),
                         }
                     ),
                     flush=True,
                 )
             running_loss = 0.0
+            running_micro_batches = 0
+            running_tokens = 0
             interval_started = time.perf_counter()
             torch.cuda.reset_peak_memory_stats(device)
 
@@ -622,14 +760,22 @@ def main() -> None:
         if should_save:
             if world_size > 1:
                 dist.barrier()
+            rank_states = gather_rank_states(
+                rank,
+                world_size,
+                batch_generator,
+                device,
+            )
             if primary:
+                if rank_states is None:
+                    raise RuntimeError("primary rank did not receive checkpoint rank states")
                 payload = checkpoint_payload(
                     model,
                     optimizer,
                     config,
                     args,
                     completed_step,
-                    batch_generator,
+                    rank_states,
                     tokens_processed,
                     dataset_manifest_sha256,
                     tokenizer_sha256,

@@ -1,0 +1,65 @@
+{
+  "schema_version": 2,
+  "world_size": 4,
+  "results": [
+    {
+      "schema_version": 2,
+      "status": "success",
+      "exit_code": 0,
+      "micro_batch_size": 1,
+      "gradient_accumulation_steps": 4,
+      "world_size": 4,
+      "tokens_per_rank_optimizer_step": 32768,
+      "tokens_per_optimizer_step": 131072,
+      "measured_steps": 30,
+      "steady_steps": 25,
+      "median_tokens_per_second": 193926.2765442575,
+      "peak_gpu_memory_gib": 9.76805067062378,
+      "last_train_loss": 2.5447399616241455,
+      "output_dir": "/public/home/u43077/lzh/outputs/minillm-general/new-model-v1/160m-8k-capacity-g4-m1-a4",
+      "log": "/public/home/u43077/lzh/outputs/minillm-general/new-model-v1/8k-capacity-g4-m1-a4.log"
+    },
+    {
+      "schema_version": 2,
+      "status": "success",
+      "exit_code": 0,
+      "micro_batch_size": 2,
+      "gradient_accumulation_steps": 2,
+      "world_size": 4,
+      "tokens_per_rank_optimizer_step": 32768,
+      "tokens_per_optimizer_step": 131072,
+      "measured_steps": 30,
+      "steady_steps": 25,
+      "median_tokens_per_second": 230307.87048978359,
+      "peak_gpu_memory_gib": 16.02656650543213,
+      "last_train_loss": 2.544800281524658,
+      "output_dir": "/public/home/u43077/lzh/outputs/minillm-general/new-model-v1/160m-8k-capacity-g4-m2-a2",
+      "log": "/public/home/u43077/lzh/outputs/minillm-general/new-model-v1/8k-capacity-g4-m2-a2.log"
+    },
+    {
+      "schema_version": 2,
+      "status": "success",
+      "exit_code": 0,
+      "micro_batch_size": 4,
+      "gradient_accumulation_steps": 1,
+      "world_size": 4,
+      "tokens_per_rank_optimizer_step": 32768,
+      "tokens_per_optimizer_step": 131072,
+      "measured_steps": 30,
+      "steady_steps": 25,
+      "median_tokens_per_second": 236539.09191759533,
+      "peak_gpu_memory_gib": 28.126696586608887,
+      "last_train_loss": 2.5447440147399902,
+      "output_dir": "/public/home/u43077/lzh/outputs/minillm-general/new-model-v1/160m-8k-capacity-g4-m4-a1",
+      "log": "/public/home/u43077/lzh/outputs/minillm-general/new-model-v1/8k-capacity-g4-m4-a1.log"
+    }
+  ],
+  "recommended": {
+    "micro_batch_size": 4,
+    "gradient_accumulation_steps": 1,
+    "world_size": 4,
+    "tokens_per_optimizer_step": 131072,
+    "median_tokens_per_second": 236539.09191759533,
+    "peak_gpu_memory_gib": 28.126696586608887
+  }
+}

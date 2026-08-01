@@ -48,7 +48,7 @@ case "$MODE" in
     ;;
   ddp4)
     OUT="$OUT_BASE/90m-pretrain-mini"
-    RUNNER=("$PY" -m torch.distributed.run --standalone --nproc_per_node=4 "$ROOT/train_general.py")
+    RUNNER=("$PY" -m torch.distributed.run --master_addr=127.0.0.1 --master_port="${MASTER_PORT:-29500}" --local_addr=127.0.0.1 --nproc_per_node=4 "$ROOT/train_general.py")
     # Steps 1..1500 used one GPU (32,768 tokens/step). Four GPUs process
     # 131,072 tokens/step, so step 6125 preserves the original ~655M-token budget.
     set -- --dataset-dir "$DATASET" --out-dir "$OUT" --max-steps 6125 --resume auto --compile
@@ -62,7 +62,7 @@ case "$MODE" in
       RESUME_CHECKPOINT="${RESUME_CHECKPOINT:-$BASE_CHECKPOINT}"
     fi
     if [[ "$MODE" == "continue-full-ddp4" ]]; then
-      RUNNER=("$PY" -m torch.distributed.run --standalone --nproc_per_node=4 "$ROOT/train_general.py")
+      RUNNER=("$PY" -m torch.distributed.run --master_addr=127.0.0.1 --master_port="${MASTER_PORT:-29500}" --local_addr=127.0.0.1 --nproc_per_node=4 "$ROOT/train_general.py")
       ACCUMULATION=1
     else
       ACCUMULATION=4

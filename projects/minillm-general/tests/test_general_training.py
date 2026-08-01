@@ -10,7 +10,83 @@ import numpy as np
 import torch
 
 from minillm import GPTConfig, MiniGPT
-from train_general import PackedTokens, learning_rate, nats_per_byte, resume_config_matches
+from train_general import (
+    PackedTokens,
+    checkpoint_rank_state,
+    learning_rate,
+    nats_per_byte,
+    resume_config_matches,
+)
+
+
+class DistributedCheckpointTests(unittest.TestCase):
+    @staticmethod
+    def state(rank):
+        return {
+            "rank": rank,
+            "torch_rng_state": torch.tensor([rank], dtype=torch.uint8),
+            "cuda_rng_state": torch.tensor([rank + 1], dtype=torch.uint8),
+            "batch_generator_state": torch.tensor([rank + 2], dtype=torch.uint8),
+        }
+
+    def test_matching_world_size_restores_each_rank_state(self):
+        checkpoint = {"rank_states": [self.state(rank) for rank in range(4)]}
+        for rank in range(4):
+            self.assertIs(checkpoint_rank_state(checkpoint, rank, 4), checkpoint["rank_states"][rank])
+
+    def test_world_size_change_preserves_rank_zero_and_reseeds_new_ranks(self):
+        primary = self.state(0)
+        checkpoint = {
+            "rank_states": [primary],
+            "torch_rng_state": primary["torch_rng_state"],
+            "cuda_rng_state": [primary["cuda_rng_state"]],
+            "batch_generator_state": primary["batch_generator_state"],
+        }
+        self.assertEqual(checkpoint_rank_state(checkpoint, 0, 4)["rank"], 0)
+        self.assertIsNone(checkpoint_rank_state(checkpoint, 1, 4))
+
+    def test_legacy_checkpoint_state_is_supported(self):
+        primary = self.state(0)
+        checkpoint = {
+            "torch_rng_state": primary["torch_rng_state"],
+            "cuda_rng_state": [primary["cuda_rng_state"]],
+            "batch_generator_state": primary["batch_generator_state"],
+        }
+        restored = checkpoint_rank_state(checkpoint, 0, 1)
+        self.assertIsNotNone(restored)
+        torch.testing.assert_close(restored["cuda_rng_state"], primary["cuda_rng_state"])
+
+
+class TokenDrivenScheduleTests(unittest.TestCase):
+    @staticmethod
+    def args():
+        return SimpleNamespace(
+            learning_rate=3e-4,
+            min_lr_ratio=0.1,
+            warmup_steps=500,
+            warmup_start_lr_ratio=0.0,
+            schedule_start_step=0,
+            schedule_end_step=305_176,
+            max_steps=305_176,
+            schedule_reference_tokens_per_step=32_768,
+        )
+
+    def test_world_size_change_keeps_lr_at_the_same_token(self):
+        args = self.args()
+        tokens = 5_900_468_224
+        self.assertEqual(
+            learning_rate(180_068, args, tokens),
+            learning_rate(99_999, args, tokens),
+        )
+
+    def test_four_times_larger_update_advances_four_reference_steps(self):
+        args = self.args()
+        start_tokens = 1_000 * 32_768
+        after_four_reference_steps = start_tokens + 4 * 32_768
+        self.assertEqual(
+            learning_rate(1_001, args, after_four_reference_steps),
+            learning_rate(1_004, args, 1_004 * 32_768),
+        )
 
 
 class GeneralAttentionTests(unittest.TestCase):
@@ -172,13 +248,28 @@ class PackedDatasetTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             tokenizer_dir = root / "tokenizer-source"
-            source = root / "source.jsonl"
-            source.write_text(
+            train_source = root / "train.jsonl"
+            holdout_source = root / "validation.jsonl"
+            train_source.write_text(
                 "".join(
                     json.dumps(
                         {
                             "source": "fixture",
-                            "text": (f"document-{index} 中文 English code " * 80),
+                            "text": (f"TRAIN_ONLY document-{index} 中文 English code " * 80),
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                    for index in range(400)
+                ),
+                encoding="utf-8",
+            )
+            holdout_source.write_text(
+                "".join(
+                    json.dumps(
+                        {
+                            "source": "fixture",
+                            "text": (f"HOLDOUT_ONLY document-{index} 中文 English code " * 80),
                         },
                         ensure_ascii=False,
                     )
@@ -191,7 +282,7 @@ class PackedDatasetTests(unittest.TestCase):
                 [
                     sys.executable,
                     "scripts/prepare_packed_dataset.py",
-                    "--input", str(source),
+                    "--input", str(train_source),
                     "--output-dir", str(tokenizer_dir),
                     "--vocab-size", "512",
                     "--tokenizer-max-documents", "100",
@@ -207,7 +298,14 @@ class PackedDatasetTests(unittest.TestCase):
             targets = root / "targets.json"
             targets.write_text(
                 json.dumps(
-                    {"sequence_length": 31, "target_train_tokens_by_source": {"fixture": 256}}
+                    {
+                        "schema_version": 2,
+                        "sequence_length": 31,
+                        "holdout_test_fraction": 0.5,
+                        "target_tokens_by_source_and_split": {
+                            "fixture": {"train": 256, "validation": 256, "test": 256}
+                        },
+                    }
                 ),
                 encoding="utf-8",
             )
@@ -218,12 +316,11 @@ class PackedDatasetTests(unittest.TestCase):
                     [
                         sys.executable,
                         "scripts/prepare_long_context_dataset.py",
-                        "--input", str(source),
+                        "--train-input", str(train_source),
+                        "--holdout-input", str(holdout_source),
                         "--output-dir", str(output),
                         "--tokenizer", str(tokenizer_dir / "tokenizer.json"),
                         "--targets", str(targets),
-                        "--validation-fraction", "0.1",
-                        "--test-fraction", "0.1",
                     ],
                     check=True,
                     cwd=Path(__file__).parents[1],
@@ -232,12 +329,99 @@ class PackedDatasetTests(unittest.TestCase):
                 )
                 manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
                 manifests.append(manifest)
+                self.assertEqual(manifest["schema_version"], 2)
                 self.assertEqual(manifest["record_length"], 32)
+                self.assertEqual(
+                    manifest["split_policy"]["name"],
+                    "preserve_train_partition_permanent_holdout_v1",
+                )
+                self.assertEqual(
+                    {entry["role"] for entry in manifest["inputs"]},
+                    {"train", "holdout"},
+                )
                 for split in ("train", "validation", "test"):
                     self.assertGreater(manifest["splits"][split]["records"], 0)
                     self.assertEqual(manifest["splits"][split]["tokens"] % 32, 0)
                     self.assertGreater(manifest["splits"][split]["utf8_bytes"], 0)
+
+                from tokenizers import Tokenizer
+
+                tokenizer = Tokenizer.from_file(str(output / "tokenizer.json"))
+
+                def decode_split(split):
+                    records = np.memmap(
+                        output / f"{split}.bin", mode="r", dtype=np.uint16
+                    ).reshape(-1, 32)
+                    return "\n".join(
+                        tokenizer.decode(record.tolist(), skip_special_tokens=True)
+                        for record in records
+                    )
+
+                self.assertIn("TRAIN_ONLY", decode_split("train"))
+                self.assertNotIn("HOLDOUT_ONLY", decode_split("train"))
+                for split in ("validation", "test"):
+                    decoded = decode_split(split)
+                    self.assertIn("HOLDOUT_ONLY", decoded)
+                    self.assertNotIn("TRAIN_ONLY", decoded)
             self.assertEqual(manifests[0], manifests[1])
+
+            duplicate_holdout = root / "duplicate-validation.jsonl"
+            duplicate_holdout.write_text(
+                train_source.read_text(encoding="utf-8").splitlines(keepends=True)[0]
+                + holdout_source.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            duplicate_result = subprocess.run(
+                [
+                    sys.executable,
+                    "scripts/prepare_long_context_dataset.py",
+                    "--train-input", str(train_source),
+                    "--holdout-input", str(duplicate_holdout),
+                    "--output-dir", str(root / "duplicate-output"),
+                    "--tokenizer", str(tokenizer_dir / "tokenizer.json"),
+                    "--targets", str(targets),
+                ],
+                check=False,
+                cwd=Path(__file__).parents[1],
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(duplicate_result.returncode, 0)
+            self.assertIn("permanent holdout violation", duplicate_result.stderr)
+            self.assertFalse((root / "duplicate-output").exists())
+
+            incomplete_targets = root / "incomplete-targets.json"
+            incomplete_targets.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 2,
+                        "sequence_length": 31,
+                        "holdout_test_fraction": 0.5,
+                        "target_tokens_by_source_and_split": {
+                            "fixture": {"train": 256, "validation": 256}
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            incomplete_result = subprocess.run(
+                [
+                    sys.executable,
+                    "scripts/prepare_long_context_dataset.py",
+                    "--train-input", str(train_source),
+                    "--holdout-input", str(holdout_source),
+                    "--output-dir", str(root / "incomplete-output"),
+                    "--tokenizer", str(tokenizer_dir / "tokenizer.json"),
+                    "--targets", str(incomplete_targets),
+                ],
+                check=False,
+                cwd=Path(__file__).parents[1],
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(incomplete_result.returncode, 0)
+            self.assertIn("must define exactly", incomplete_result.stderr)
+            self.assertFalse((root / "incomplete-output").exists())
 
     def test_prepare_packed_dataset(self):
         with tempfile.TemporaryDirectory() as temporary:

@@ -1,0 +1,540 @@
+{
+  "schema_version": 1,
+  "created_at_utc": "2026-07-31T09:59:48.759983+00:00",
+  "checkpoint": {
+    "path": "/public/home/u43077/lzh/outputs/minillm-general/new-model-v1/160m-openbpe-32k-4k/step-00211345.pt",
+    "sha256": "6d80ca67556e9cfbe19ed6e9d7252fe61d6d70ef617b425685514c89a6c55fff",
+    "step": 211345,
+    "tokens_processed": 10000007168,
+    "parameters": 163615232,
+    "block_size": 8192,
+    "vocab_size": 32768,
+    "dataset_manifest_sha256": "15b3c03f022434f167cfa0613b323f84e81931f350de2cfe40f541f7b6bb0ddf"
+  },
+  "tokenizer": {
+    "path": "/public/home/u43077/lzh/datasets/minillm-general/general-openbpe-32k-8k-v1/tokenizer.json",
+    "sha256": "21a9e8b44a54d25bd1ebc2367810c0cf298af8afa6c2ff1f0997e124f9b52dc3",
+    "vocab_size": 32768
+  },
+  "long_dataset": {
+    "directory": "/public/home/u43077/lzh/datasets/minillm-general/general-openbpe-32k-8k-v1",
+    "manifest_sha256": "4454a741a4972742676ebc787c057ccaecaa93030bab42d82c4bb8591afd5d05",
+    "tokenizer_sha256": "21a9e8b44a54d25bd1ebc2367810c0cf298af8afa6c2ff1f0997e124f9b52dc3",
+    "split": "test",
+    "split_path": "/public/home/u43077/lzh/datasets/minillm-general/general-openbpe-32k-8k-v1/test.bin",
+    "split_sha256": "dd57612251313acb63f36363604dc79908f90d06ae6d50bf1ad49eed9e9a2e18",
+    "split_tokens": 5079660,
+    "record_length": 8193,
+    "sequence_length": 8192,
+    "matches_checkpoint_current_dataset": false
+  },
+  "fixed_record_test": {
+    "split": "test",
+    "available_records": 620,
+    "evaluated_records": 16,
+    "sequence_length": 8192,
+    "evaluated_tokens": 131072,
+    "overall_loss": 2.704273083873403,
+    "perplexity": 14.943450106587521,
+    "position_loss_segments": [
+      {
+        "logit_position_start": 0,
+        "logit_position_end_exclusive": 1024,
+        "target_position_start": 1,
+        "target_position_end_inclusive": 1024,
+        "tokens": 16384,
+        "loss": 2.518228810336553
+      },
+      {
+        "logit_position_start": 1024,
+        "logit_position_end_exclusive": 2048,
+        "target_position_start": 1025,
+        "target_position_end_inclusive": 2048,
+        "tokens": 16384,
+        "loss": 2.3412407932727213
+      },
+      {
+        "logit_position_start": 2048,
+        "logit_position_end_exclusive": 3072,
+        "target_position_start": 2049,
+        "target_position_end_inclusive": 3072,
+        "tokens": 16384,
+        "loss": 2.3307791774657707
+      },
+      {
+        "logit_position_start": 3072,
+        "logit_position_end_exclusive": 4096,
+        "target_position_start": 3073,
+        "target_position_end_inclusive": 4096,
+        "tokens": 16384,
+        "loss": 2.364230545070729
+      },
+      {
+        "logit_position_start": 4096,
+        "logit_position_end_exclusive": 5120,
+        "target_position_start": 4097,
+        "target_position_end_inclusive": 5120,
+        "tokens": 16384,
+        "loss": 2.4392218756437147
+      },
+      {
+        "logit_position_start": 5120,
+        "logit_position_end_exclusive": 6144,
+        "target_position_start": 5121,
+        "target_position_end_inclusive": 6144,
+        "tokens": 16384,
+        "loss": 3.080698488452886
+      },
+      {
+        "logit_position_start": 6144,
+        "logit_position_end_exclusive": 7168,
+        "target_position_start": 6145,
+        "target_position_end_inclusive": 7168,
+        "tokens": 16384,
+        "loss": 3.1550964607490615
+      },
+      {
+        "logit_position_start": 7168,
+        "logit_position_end_exclusive": 8192,
+        "target_position_start": 7169,
+        "target_position_end_inclusive": 8192,
+        "tokens": 16384,
+        "loss": 3.4046885199957915
+      }
+    ],
+    "position_coverage": {
+      "start": 0,
+      "end_exclusive": 8192,
+      "complete": true
+    }
+  },
+  "regression_dataset": {
+    "directory": "/public/home/u43077/lzh/datasets/minillm-general/general-openbpe-32k-v1",
+    "manifest_sha256": "15b3c03f022434f167cfa0613b323f84e81931f350de2cfe40f541f7b6bb0ddf",
+    "tokenizer_sha256": "21a9e8b44a54d25bd1ebc2367810c0cf298af8afa6c2ff1f0997e124f9b52dc3",
+    "split": "test",
+    "split_path": "/public/home/u43077/lzh/datasets/minillm-general/general-openbpe-32k-v1/test.bin",
+    "split_sha256": "ae04f01c6fb936baeae53d7b00b78352fa6ac4e60f582f2015d403400eab1b59",
+    "split_tokens": 23997779,
+    "record_length": null,
+    "sequence_length": null
+  },
+  "regression_loss": {
+    "split": "test",
+    "sequence_length": 4096,
+    "evaluated_records": 16,
+    "evaluated_tokens": 65536,
+    "overall_loss": 2.5793790086782753,
+    "perplexity": 13.18894539547062
+  },
+  "passkey_retrieval": {
+    "passkey": "314159",
+    "cases": [
+      {
+        "total_tokens": 2048,
+        "requested_depth": 0.1,
+        "needle_start_token": 202,
+        "needle_end_token_exclusive": 218,
+        "prompt_tokens": 2044,
+        "target_tokens": 4,
+        "actual_depth": 0.10024813895781638,
+        "target_text": " 314159",
+        "target_ids": [
+          236,
+          34,
+          1917,
+          30041
+        ],
+        "target_nll": 0.7364529371261597,
+        "target_perplexity": 2.088514269038017,
+        "teacher_forced_token_accuracy": 0.75,
+        "teacher_forced_exact": false,
+        "greedy_ids": [
+          1096,
+          24265,
+          5395,
+          2728
+        ],
+        "greedy_text": " The secret passkey",
+        "greedy_exact": false
+      },
+      {
+        "total_tokens": 2048,
+        "requested_depth": 0.5,
+        "needle_start_token": 1008,
+        "needle_end_token_exclusive": 1024,
+        "prompt_tokens": 2044,
+        "target_tokens": 4,
+        "actual_depth": 0.5002481389578164,
+        "target_text": " 314159",
+        "target_ids": [
+          236,
+          34,
+          1917,
+          30041
+        ],
+        "target_nll": 0.7236352562904358,
+        "target_perplexity": 2.0619151931185025,
+        "teacher_forced_token_accuracy": 0.75,
+        "teacher_forced_exact": false,
+        "greedy_ids": [
+          1096,
+          24265,
+          5395,
+          2728
+        ],
+        "greedy_text": " The secret passkey",
+        "greedy_exact": false
+      },
+      {
+        "total_tokens": 2048,
+        "requested_depth": 0.9,
+        "needle_start_token": 1814,
+        "needle_end_token_exclusive": 1830,
+        "prompt_tokens": 2044,
+        "target_tokens": 4,
+        "actual_depth": 0.9002481389578164,
+        "target_text": " 314159",
+        "target_ids": [
+          236,
+          34,
+          1917,
+          30041
+        ],
+        "target_nll": 0.7159839272499084,
+        "target_perplexity": 2.0461990030654236,
+        "teacher_forced_token_accuracy": 0.75,
+        "teacher_forced_exact": false,
+        "greedy_ids": [
+          1096,
+          24265,
+          5395,
+          2728
+        ],
+        "greedy_text": " The secret passkey",
+        "greedy_exact": false
+      },
+      {
+        "total_tokens": 4096,
+        "requested_depth": 0.1,
+        "needle_start_token": 406,
+        "needle_end_token_exclusive": 422,
+        "prompt_tokens": 4092,
+        "target_tokens": 4,
+        "actual_depth": 0.09992616293379276,
+        "target_text": " 314159",
+        "target_ids": [
+          236,
+          34,
+          1917,
+          30041
+        ],
+        "target_nll": 0.7223978042602539,
+        "target_perplexity": 2.0593652500182396,
+        "teacher_forced_token_accuracy": 0.75,
+        "teacher_forced_exact": false,
+        "greedy_ids": [
+          1096,
+          24265,
+          5395,
+          2728
+        ],
+        "greedy_text": " The secret passkey",
+        "greedy_exact": false
+      },
+      {
+        "total_tokens": 4096,
+        "requested_depth": 0.5,
+        "needle_start_token": 2032,
+        "needle_end_token_exclusive": 2048,
+        "prompt_tokens": 4092,
+        "target_tokens": 4,
+        "actual_depth": 0.500123061777012,
+        "target_text": " 314159",
+        "target_ids": [
+          236,
+          34,
+          1917,
+          30041
+        ],
+        "target_nll": 0.7077798843383789,
+        "target_perplexity": 2.029480571773846,
+        "teacher_forced_token_accuracy": 0.75,
+        "teacher_forced_exact": false,
+        "greedy_ids": [
+          1096,
+          24265,
+          5395,
+          2728
+        ],
+        "greedy_text": " The secret passkey",
+        "greedy_exact": false
+      },
+      {
+        "total_tokens": 4096,
+        "requested_depth": 0.9,
+        "needle_start_token": 3657,
+        "needle_end_token_exclusive": 3673,
+        "prompt_tokens": 4092,
+        "target_tokens": 4,
+        "actual_depth": 0.9000738370662072,
+        "target_text": " 314159",
+        "target_ids": [
+          236,
+          34,
+          1917,
+          30041
+        ],
+        "target_nll": 0.8461933732032776,
+        "target_perplexity": 2.330757619254275,
+        "teacher_forced_token_accuracy": 0.75,
+        "teacher_forced_exact": false,
+        "greedy_ids": [
+          1096,
+          24265,
+          5395,
+          2728
+        ],
+        "greedy_text": " The secret passkey",
+        "greedy_exact": false
+      },
+      {
+        "total_tokens": 8192,
+        "requested_depth": 0.1,
+        "needle_start_token": 816,
+        "needle_end_token_exclusive": 832,
+        "prompt_tokens": 8188,
+        "target_tokens": 4,
+        "actual_depth": 0.10001225640397107,
+        "target_text": " 314159",
+        "target_ids": [
+          236,
+          34,
+          1917,
+          30041
+        ],
+        "target_nll": 4.25386905670166,
+        "target_perplexity": 70.37717956451772,
+        "teacher_forced_token_accuracy": 0.0,
+        "teacher_forced_exact": false,
+        "greedy_ids": [
+          2494,
+          566,
+          18125,
+          8294
+        ],
+        "greedy_text": " This is ordinary",
+        "greedy_exact": false
+      },
+      {
+        "total_tokens": 8192,
+        "requested_depth": 0.5,
+        "needle_start_token": 4080,
+        "needle_end_token_exclusive": 4096,
+        "prompt_tokens": 8188,
+        "target_tokens": 4,
+        "actual_depth": 0.5000612820198553,
+        "target_text": " 314159",
+        "target_ids": [
+          236,
+          34,
+          1917,
+          30041
+        ],
+        "target_nll": 2.7805984020233154,
+        "target_perplexity": 16.128669489342116,
+        "teacher_forced_token_accuracy": 0.5,
+        "teacher_forced_exact": false,
+        "greedy_ids": [
+          236,
+          32,
+          29,
+          236
+        ],
+        "greedy_text": " 1. ",
+        "greedy_exact": false
+      },
+      {
+        "total_tokens": 8192,
+        "requested_depth": 0.9,
+        "needle_start_token": 7343,
+        "needle_end_token_exclusive": 7359,
+        "prompt_tokens": 8188,
+        "target_tokens": 4,
+        "actual_depth": 0.899987743596029,
+        "target_text": " 314159",
+        "target_ids": [
+          236,
+          34,
+          1917,
+          30041
+        ],
+        "target_nll": 2.0548954010009766,
+        "target_perplexity": 7.806021327914508,
+        "teacher_forced_token_accuracy": 0.75,
+        "teacher_forced_exact": false,
+        "greedy_ids": [
+          236,
+          4692,
+          566,
+          18125
+        ],
+        "greedy_text": " This is ord",
+        "greedy_exact": false
+      }
+    ],
+    "aggregate": {
+      "cases": 9,
+      "mean_target_nll": 1.504645115799374,
+      "mean_teacher_forced_token_accuracy": 0.6388888888888888,
+      "greedy_exact_cases": 0,
+      "greedy_exact_fraction": 0.0
+    }
+  },
+  "cache_parity": {
+    "atol": 0.05,
+    "rtol": 0.05,
+    "minimum_argmax_match": 0.999,
+    "cases": [
+      {
+        "sequence_length": 512,
+        "full_forward": {
+          "shape": [
+            1,
+            512,
+            32768
+          ]
+        },
+        "dynamic_vs_full": {
+          "max_absolute_error": 0.4296875,
+          "mean_absolute_error": 0.04458092090385524,
+          "numerical_values": 16777216,
+          "numerical_violations": 654452,
+          "numerically_close": false,
+          "argmax_matches": 501,
+          "argmax_positions": 512,
+          "argmax_match_fraction": 0.978515625,
+          "argmax_exact": false,
+          "minimum_argmax_match": 0.999,
+          "passed": false,
+          "cache_mode": "dynamic",
+          "chunk_size": 64,
+          "final_cache_length": 512
+        },
+        "static_vs_full": {
+          "max_absolute_error": 0.4296875,
+          "mean_absolute_error": 0.04458092090385524,
+          "numerical_values": 16777216,
+          "numerical_violations": 654452,
+          "numerically_close": false,
+          "argmax_matches": 501,
+          "argmax_positions": 512,
+          "argmax_match_fraction": 0.978515625,
+          "argmax_exact": false,
+          "minimum_argmax_match": 0.999,
+          "passed": false,
+          "cache_mode": "static",
+          "chunk_size": 64,
+          "final_cache_length": 512
+        },
+        "passed": false
+      },
+      {
+        "sequence_length": 4096,
+        "full_forward": {
+          "shape": [
+            1,
+            4096,
+            32768
+          ]
+        },
+        "dynamic_vs_full": {
+          "max_absolute_error": 0.5,
+          "mean_absolute_error": 0.04347720521849427,
+          "numerical_values": 134217728,
+          "numerical_violations": 5485825,
+          "numerically_close": false,
+          "argmax_matches": 3974,
+          "argmax_positions": 4096,
+          "argmax_match_fraction": 0.97021484375,
+          "argmax_exact": false,
+          "minimum_argmax_match": 0.999,
+          "passed": false,
+          "cache_mode": "dynamic",
+          "chunk_size": 64,
+          "final_cache_length": 4096
+        },
+        "static_vs_full": {
+          "max_absolute_error": 0.5,
+          "mean_absolute_error": 0.04347720521849427,
+          "numerical_values": 134217728,
+          "numerical_violations": 5485825,
+          "numerically_close": false,
+          "argmax_matches": 3974,
+          "argmax_positions": 4096,
+          "argmax_match_fraction": 0.97021484375,
+          "argmax_exact": false,
+          "minimum_argmax_match": 0.999,
+          "passed": false,
+          "cache_mode": "static",
+          "chunk_size": 64,
+          "final_cache_length": 4096
+        },
+        "passed": false
+      },
+      {
+        "sequence_length": 8192,
+        "full_forward": {
+          "shape": [
+            1,
+            8192,
+            32768
+          ]
+        },
+        "dynamic_vs_full": {
+          "max_absolute_error": 2.2373046875,
+          "mean_absolute_error": 0.043156177969492934,
+          "numerical_values": 268435456,
+          "numerical_violations": 10276397,
+          "numerically_close": false,
+          "argmax_matches": 7957,
+          "argmax_positions": 8192,
+          "argmax_match_fraction": 0.9713134765625,
+          "argmax_exact": false,
+          "minimum_argmax_match": 0.999,
+          "passed": false,
+          "cache_mode": "dynamic",
+          "chunk_size": 64,
+          "final_cache_length": 8192
+        },
+        "static_vs_full": {
+          "max_absolute_error": 2.2373046875,
+          "mean_absolute_error": 0.043156177969492934,
+          "numerical_values": 268435456,
+          "numerical_violations": 10276397,
+          "numerically_close": false,
+          "argmax_matches": 7957,
+          "argmax_positions": 8192,
+          "argmax_match_fraction": 0.9713134765625,
+          "argmax_exact": false,
+          "minimum_argmax_match": 0.999,
+          "passed": false,
+          "cache_mode": "static",
+          "chunk_size": 64,
+          "final_cache_length": 8192
+        },
+        "passed": false
+      }
+    ],
+    "all_passed": false
+  },
+  "runtime": {
+    "device": "cuda",
+    "dtype": "bfloat16",
+    "torch_version": "2.6.0+cu124",
+    "seed": 20260730,
+    "cuda_device_name": "NVIDIA A100-SXM4-40GB",
+    "peak_allocated_bytes": 1452303872,
+    "peak_reserved_bytes": 1845493760
+  }
+}

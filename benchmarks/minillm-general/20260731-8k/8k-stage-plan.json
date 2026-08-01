@@ -1,0 +1,119 @@
+{
+  "schema_version": 2,
+  "base_checkpoint": {
+    "path": "/public/home/u43077/lzh/outputs/minillm-general/new-model-v1/160m-openbpe-32k-4k/step-00211345.pt",
+    "step": 211345,
+    "tokens_processed": 10000007168,
+    "sha256": "6d80ca67556e9cfbe19ed6e9d7252fe61d6d70ef617b425685514c89a6c55fff"
+  },
+  "dataset": {
+    "path": "/public/home/u43077/lzh/datasets/minillm-general/general-openbpe-32k-8k-v1",
+    "manifest_sha256": "4454a741a4972742676ebc787c057ccaecaa93030bab42d82c4bb8591afd5d05",
+    "tokenizer_sha256": "21a9e8b44a54d25bd1ebc2367810c0cf298af8afa6c2ff1f0997e124f9b52dc3",
+    "splits": {
+      "train": {
+        "records": 121571,
+        "tokens": 996031203,
+        "bytes": 1992062406,
+        "sha256": "12b4f5e34f53c5db43a06a94a7f17b9e88b67ba7ec2d8f3cc4e99e9638ed3085"
+      },
+      "validation": {
+        "records": 620,
+        "tokens": 5079660,
+        "bytes": 10159320,
+        "sha256": "5307ed7590129683a57f2063ee48dfbd4d325d5719a16a433129d934ba3dcb15"
+      },
+      "test": {
+        "records": 620,
+        "tokens": 5079660,
+        "bytes": 10159320,
+        "sha256": "dd57612251313acb63f36363604dc79908f90d06ae6d50bf1ad49eed9e9a2e18"
+      }
+    },
+    "split_policy": {
+      "name": "preserve_train_partition_permanent_holdout_v1",
+      "train_input_destination": "train only",
+      "holdout_input_destinations": [
+        "validation",
+        "test"
+      ],
+      "holdout_partition": "first 64 bits of normalized-document sha256 mapped to [0, 1); test when value < 0.5, otherwise validation",
+      "cross_role_duplicate_policy": "error",
+      "verified_nonempty_splits": [
+        "train",
+        "validation",
+        "test"
+      ]
+    }
+  },
+  "capacity": {
+    "path": "/public/home/u43077/lzh/outputs/minillm-general/new-model-v1/8k-capacity-results-g4/summary.json",
+    "sha256": "7fb377048bd5dbec30c12e55509d99cf6345e734f24a938a849d466d7d6627e3",
+    "selected": {
+      "schema_version": 2,
+      "status": "success",
+      "exit_code": 0,
+      "micro_batch_size": 4,
+      "gradient_accumulation_steps": 1,
+      "world_size": 4,
+      "tokens_per_rank_optimizer_step": 32768,
+      "tokens_per_optimizer_step": 131072,
+      "measured_steps": 30,
+      "steady_steps": 25,
+      "median_tokens_per_second": 236539.09191759533,
+      "peak_gpu_memory_gib": 28.126696586608887,
+      "last_train_loss": 2.5447440147399902,
+      "output_dir": "/public/home/u43077/lzh/outputs/minillm-general/new-model-v1/160m-8k-capacity-g4-m4-a1",
+      "log": "/public/home/u43077/lzh/outputs/minillm-general/new-model-v1/8k-capacity-g4-m4-a1.log"
+    },
+    "recommended": {
+      "micro_batch_size": 4,
+      "gradient_accumulation_steps": 1,
+      "world_size": 4,
+      "tokens_per_optimizer_step": 131072,
+      "median_tokens_per_second": 236539.09191759533,
+      "peak_gpu_memory_gib": 28.126696586608887
+    }
+  },
+  "base_step": 211345,
+  "base_tokens_processed": 10000007168,
+  "world_size": 4,
+  "tokens_per_rank_optimizer_step": 32768,
+  "tokens_per_optimizer_step": 131072,
+  "stage_tokens_requested": 1000000000,
+  "stage_steps": 7630,
+  "stage_start_step": 211345,
+  "stage_end_step": 218975,
+  "milestones": [
+    {
+      "requested_additional_tokens": 0,
+      "target_step": 211345,
+      "actual_additional_tokens": 0,
+      "cumulative_tokens_processed": 10000007168
+    },
+    {
+      "requested_additional_tokens": 100000000,
+      "target_step": 212108,
+      "actual_additional_tokens": 100007936,
+      "cumulative_tokens_processed": 10100015104
+    },
+    {
+      "requested_additional_tokens": 250000000,
+      "target_step": 213253,
+      "actual_additional_tokens": 250085376,
+      "cumulative_tokens_processed": 10250092544
+    },
+    {
+      "requested_additional_tokens": 500000000,
+      "target_step": 215160,
+      "actual_additional_tokens": 500039680,
+      "cumulative_tokens_processed": 10500046848
+    },
+    {
+      "requested_additional_tokens": 1000000000,
+      "target_step": 218975,
+      "actual_additional_tokens": 1000079360,
+      "cumulative_tokens_processed": 11000086528
+    }
+  ]
+}
