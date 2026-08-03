@@ -8,7 +8,20 @@ DURATION="${SOAK_SECONDS:-3600}"
 RESULT="$RESULT_ROOT/vllm-dp4-soak"
 mkdir -p "$RESULT"
 
+server_pids=()
+monitor_pid=""
+
 stop_all() {
+  if [[ -n "$monitor_pid" ]]; then
+    kill "$monitor_pid" 2>/dev/null || true
+    wait "$monitor_pid" 2>/dev/null || true
+  fi
+  for pid in "${server_pids[@]}"; do
+    kill -TERM -- "-$pid" 2>/dev/null || true
+  done
+  for pid in "${server_pids[@]}"; do
+    wait "$pid" 2>/dev/null || true
+  done
   for port in 18500 18501 18502 18503; do
     mapfile -t pids < <(pgrep -f "vllm serve .*--port $port" || true)
     ((${#pids[@]} == 0)) || kill -TERM "${pids[@]}" 2>/dev/null || true
@@ -20,14 +33,20 @@ urls=()
 for index in 0 1 2 3; do
   port=$((18500 + index))
   setsid env CUDA_VISIBLE_DEVICES="$index" MAX_MODEL_LEN=8192 GPU_MEMORY_UTILIZATION=0.85 \
+    EXTRA_ARGS="${VLLM_EXTRA_ARGS:---disable-log-requests --uvicorn-log-level warning}" \
     "$ROOT/scripts/serve-vllm.sh" Qwen3-8B "$port" >"$RESULT/server-$index.log" 2>&1 < /dev/null &
+  server_pids+=("$!")
+  urls+=("http://127.0.0.1:$port")
+done
+
+for index in 0 1 2 3; do
+  port=$((18500 + index))
   ready=0
   for _ in $(seq 1 120); do
     if curl -fsS "http://127.0.0.1:$port/health" >/dev/null 2>&1; then ready=1; break; fi
     sleep 5
   done
   (( ready == 1 ))
-  urls+=("http://127.0.0.1:$port")
 done
 
 nvidia-smi dmon -s pucvmet -d 2 -o DT >"$RESULT/nvidia-smi-dmon.log" 2>&1 &
@@ -37,4 +56,5 @@ monitor_pid=$!
   --output "$RESULT/results.json" >"$RESULT/progress.log" 2>&1
 kill "$monitor_pid" 2>/dev/null || true
 wait "$monitor_pid" 2>/dev/null || true
+monitor_pid=""
 date '+completed_at=%Y-%m-%d %H:%M:%S %z' >"$RESULT/complete.txt"

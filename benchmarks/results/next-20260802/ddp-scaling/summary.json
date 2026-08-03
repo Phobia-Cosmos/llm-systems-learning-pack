@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "kind": "strong_scaling",
+  "results": [
+    {
+      "schema_version": 1,
+      "status": "success",
+      "exit_code": 0,
+      "world_size": 1,
+      "micro_batch_size": 8,
+      "gradient_accumulation_steps": 4,
+      "global_tokens_per_update": 131072,
+      "measured_steps": 30,
+      "steady_steps": 25,
+      "median_tokens_per_second": 79782.91053102545,
+      "peak_gpu_memory_gib": 28.68318223953247,
+      "log": "/public/home/u43077/lzh/benchmarks/next-20260802/ddp-scaling/world-1.log",
+      "speedup_vs_one_gpu": 1.0,
+      "scaling_efficiency": 1.0
+    },
+    {
+      "schema_version": 1,
+      "status": "success",
+      "exit_code": 0,
+      "world_size": 2,
+      "micro_batch_size": 8,
+      "gradient_accumulation_steps": 2,
+      "global_tokens_per_update": 131072,
+      "measured_steps": 30,
+      "steady_steps": 25,
+      "median_tokens_per_second": 138155.8826638131,
+      "peak_gpu_memory_gib": 28.54707384109497,
+      "log": "/public/home/u43077/lzh/benchmarks/next-20260802/ddp-scaling/world-2.log",
+      "speedup_vs_one_gpu": 1.7316475639239552,
+      "scaling_efficiency": 0.8658237819619776
+    },
+    {
+      "schema_version": 1,
+      "status": "success",
+      "exit_code": 0,
+      "world_size": 4,
+      "micro_batch_size": 8,
+      "gradient_accumulation_steps": 1,
+      "global_tokens_per_update": 131072,
+      "measured_steps": 30,
+      "steady_steps": 25,
+      "median_tokens_per_second": 235289.82890310377,
+      "peak_gpu_memory_gib": 27.92289972305298,
+      "log": "/public/home/u43077/lzh/benchmarks/next-20260802/ddp-scaling/world-4.log",
+      "speedup_vs_one_gpu": 2.949125662839861,
+      "scaling_efficiency": 0.7372814157099653
+    }
+  ]
+}

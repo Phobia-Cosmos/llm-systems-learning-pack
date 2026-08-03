@@ -6,6 +6,7 @@ RESULT_ROOT="${RESULT_ROOT:-$ROOT/benchmarks/next-20260802}"
 SCRIPTS="${SCRIPT_ROOT:-$RESULT_ROOT/scripts}"
 BUDGET_SECONDS="${BUDGET_SECONDS:-43200}"
 RESERVE_SECONDS="${RESERVE_SECONDS:-1800}"
+SOAK_STARTUP_GRACE_SECONDS="${SOAK_STARTUP_GRACE_SECONDS:-1200}"
 START_EPOCH=$(date +%s)
 mkdir -p "$RESULT_ROOT/stages"
 date '+started_at=%Y-%m-%d %H:%M:%S %z' >"$RESULT_ROOT/pipeline-started.txt"
@@ -57,14 +58,16 @@ run_stage vllm-tp-dp 14400 env \
 
 elapsed=$(( $(date +%s) - START_EPOCH ))
 remaining=$(( BUDGET_SECONDS - RESERVE_SECONDS - elapsed ))
-if (( remaining >= 1800 )); then
-  run_stage dp4-soak "$((remaining + 600))" env \
-    RESULT_ROOT="$RESULT_ROOT" SCRIPT_ROOT="$SCRIPTS" SOAK_SECONDS="$remaining" \
+soak_duration=$(( remaining - SOAK_STARTUP_GRACE_SECONDS ))
+if (( soak_duration >= 1800 )); then
+  run_stage dp4-soak "$remaining" env \
+    RESULT_ROOT="$RESULT_ROOT" SCRIPT_ROOT="$SCRIPTS" SOAK_SECONDS="$soak_duration" \
     bash "$SCRIPTS/run_vllm_dp_soak.sh"
 else
   {
     echo 'status=skipped'
     echo "remaining_seconds=$remaining"
+    echo "startup_grace_seconds=$SOAK_STARTUP_GRACE_SECONDS"
   } >"$RESULT_ROOT/stages/dp4-soak.status"
 fi
 

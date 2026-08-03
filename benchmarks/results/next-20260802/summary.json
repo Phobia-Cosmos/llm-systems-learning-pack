@@ -1,0 +1,186 @@
+{
+  "schema_version": 1,
+  "result_root": "/public/home/u43077/lzh/benchmarks/next-20260802",
+  "stages": {
+    "ddp-scaling": {
+      "started_at": "2026-08-02 11:26:59 +0800",
+      "status": "success",
+      "finished_at": "2026-08-02 11:41:28 +0800"
+    },
+    "dp4-soak": {
+      "started_at": "2026-08-02 15:45:10 +0800",
+      "status": "failed",
+      "exit_code": "124",
+      "finished_at": "2026-08-02 23:06:54 +0800"
+    },
+    "serving-ab": {
+      "started_at": "2026-08-02 11:44:40 +0800",
+      "status": "success",
+      "finished_at": "2026-08-02 14:19:47 +0800"
+    },
+    "sglang-slim-profile": {
+      "started_at": "2026-08-02 11:41:28 +0800",
+      "status": "success",
+      "finished_at": "2026-08-02 11:44:40 +0800"
+    },
+    "vllm-tp-dp": {
+      "started_at": "2026-08-02 14:19:47 +0800",
+      "status": "success",
+      "finished_at": "2026-08-02 15:45:10 +0800"
+    }
+  },
+  "ddp_scaling": {
+    "schema_version": 1,
+    "kind": "strong_scaling",
+    "results": [
+      {
+        "schema_version": 1,
+        "status": "success",
+        "exit_code": 0,
+        "world_size": 1,
+        "micro_batch_size": 8,
+        "gradient_accumulation_steps": 4,
+        "global_tokens_per_update": 131072,
+        "measured_steps": 30,
+        "steady_steps": 25,
+        "median_tokens_per_second": 79782.91053102545,
+        "peak_gpu_memory_gib": 28.68318223953247,
+        "log": "/public/home/u43077/lzh/benchmarks/next-20260802/ddp-scaling/world-1.log",
+        "speedup_vs_one_gpu": 1.0,
+        "scaling_efficiency": 1.0
+      },
+      {
+        "schema_version": 1,
+        "status": "success",
+        "exit_code": 0,
+        "world_size": 2,
+        "micro_batch_size": 8,
+        "gradient_accumulation_steps": 2,
+        "global_tokens_per_update": 131072,
+        "measured_steps": 30,
+        "steady_steps": 25,
+        "median_tokens_per_second": 138155.8826638131,
+        "peak_gpu_memory_gib": 28.54707384109497,
+        "log": "/public/home/u43077/lzh/benchmarks/next-20260802/ddp-scaling/world-2.log",
+        "speedup_vs_one_gpu": 1.7316475639239552,
+        "scaling_efficiency": 0.8658237819619776
+      },
+      {
+        "schema_version": 1,
+        "status": "success",
+        "exit_code": 0,
+        "world_size": 4,
+        "micro_batch_size": 8,
+        "gradient_accumulation_steps": 1,
+        "global_tokens_per_update": 131072,
+        "measured_steps": 30,
+        "steady_steps": 25,
+        "median_tokens_per_second": 235289.82890310377,
+        "peak_gpu_memory_gib": 27.92289972305298,
+        "log": "/public/home/u43077/lzh/benchmarks/next-20260802/ddp-scaling/world-4.log",
+        "speedup_vs_one_gpu": 2.949125662839861,
+        "scaling_efficiency": 0.7372814157099653
+      }
+    ]
+  },
+  "serving_ab": {
+    "sglang-chunk-2048": {
+      "points": 80,
+      "errors": 0,
+      "median_output_throughput_tps": 556.3525819709434,
+      "peak_output_throughput_tps": 3003.051522735498
+    },
+    "sglang-default": {
+      "points": 80,
+      "errors": 0,
+      "median_output_throughput_tps": 556.6458201207838,
+      "peak_output_throughput_tps": 3039.031930626911
+    },
+    "sglang-eager": {
+      "points": 80,
+      "errors": 0,
+      "median_output_throughput_tps": 544.0154755688109,
+      "peak_output_throughput_tps": 3063.387023162706
+    },
+    "sglang-no-radix": {
+      "points": 80,
+      "errors": 0,
+      "median_output_throughput_tps": 299.61680405949517,
+      "peak_output_throughput_tps": 2609.314353711514
+    },
+    "vllm-default": {
+      "points": 80,
+      "errors": 0,
+      "median_output_throughput_tps": 700.6633986087921,
+      "peak_output_throughput_tps": 3253.1895228383246
+    },
+    "vllm-eager": {
+      "points": 80,
+      "errors": 0,
+      "median_output_throughput_tps": 608.8436135871797,
+      "peak_output_throughput_tps": 2629.233562581483
+    },
+    "vllm-prefix-cache": {
+      "points": 80,
+      "errors": 0,
+      "median_output_throughput_tps": 703.8167390898691,
+      "peak_output_throughput_tps": 3223.541897520645
+    }
+  },
+  "vllm_tp_dp": {
+    "qwen14b-tp1": {
+      "points": 32,
+      "errors": 0,
+      "median_output_throughput_tps": 99.67315220333022,
+      "peak_output_throughput_tps": 1025.6340975808753
+    },
+    "qwen14b-tp2": {
+      "points": 32,
+      "errors": 0,
+      "median_output_throughput_tps": 300.51534007020007,
+      "peak_output_throughput_tps": 2914.298225446783
+    },
+    "qwen14b-tp4": {
+      "points": 32,
+      "errors": 0,
+      "median_output_throughput_tps": 615.7185384141294,
+      "peak_output_throughput_tps": 3678.971468747867
+    },
+    "qwen8b-dp1": {
+      "points": 24,
+      "errors": 0,
+      "median_output_throughput_tps": 467.7474724973009,
+      "peak_output_throughput_tps": 4393.886866740013
+    },
+    "qwen8b-dp2": {
+      "points": 24,
+      "errors": 0,
+      "median_output_throughput_tps": 542.8040374644,
+      "peak_output_throughput_tps": 4982.156254087961
+    },
+    "qwen8b-dp4": {
+      "points": 24,
+      "errors": 0,
+      "median_output_throughput_tps": 498.4946089858772,
+      "peak_output_throughput_tps": 4551.072510469783
+    }
+  },
+  "long_soak_last_progress": {
+    "elapsed_minutes": 426,
+    "requests": 378302,
+    "errors": 0
+  },
+  "recovery_soak": {
+    "duration_requested_s": 1800,
+    "duration_actual_s": 1803.1107204966247,
+    "concurrency": 128,
+    "requests": 27859,
+    "errors": 0,
+    "output_throughput_tps": 1183.5723540106337,
+    "run_status": {
+      "started_at": "2026-08-02T23:09:35+0800",
+      "exit_code": "0",
+      "finished_at": "2026-08-02T23:52:41+0800"
+    }
+  }
+}
