@@ -45,6 +45,7 @@ def run_benchmark(
     out_info = f"out_{tag}"
     out_val = out.item()
     # TODO：这个是什么意思？以i8开头会怎么样？
+    # i8 前缀通常表示 int8 输入或整数结果；这里当前没有调用 i8 kernel，只是为整数输出预留不带小数位的格式化方式。
     if tag.startswith("i8"):
         print(f"{out_info:>17}: {out_val:<15}, time:{mean_time:.8f}ms")
     else:

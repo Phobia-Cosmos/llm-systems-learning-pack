@@ -9,6 +9,7 @@ torch._dynamo.config.capture_dynamic_output_shape_ops = True
 
 
 # TODO：这里的backend除了可以是inductor还可以是哪些？各个参数分别代表什么意思
+# backend 也可接已注册后端名称或用户自定义 compiler callable；fullgraph=True 要求整函数进入一张图，dynamic=True 尝试让尺寸符号化。
 def _compile(function):
     return torch.compile(function, backend="inductor", fullgraph=True, dynamic=True)
 
@@ -104,9 +105,11 @@ def layer_norm_backward(
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     columns = x.shape[-1]
     # TODO：mean.reshape(*x.shape[:-1], 1)是什么意思？rstd是什么？
+    # mean 每个归一化行一个值；reshape 成 [...,1] 可沿最后维广播。rstd 是 reciprocal standard deviation，即 1/sqrt(variance + eps)。
     normalized = (x.float() - mean.reshape(*x.shape[:-1], 1)) * rstd.reshape(*x.shape[:-1], 1)
     weighted_grad = grad_output.float() * weight.float()
     # TODO：sum中传入的keepdim是什么意思？
+    # keepdim=True 保留被归约维度但把长度设为 1，例如 [B,K] 沿 K 求和仍得到 [B,1]，便于后续广播。
     normalized_projection = (normalized * weighted_grad).sum(dim=-1, keepdim=True) / columns
     mean_gradient = weighted_grad.sum(dim=-1, keepdim=True) / columns
 
@@ -145,6 +148,7 @@ def matrix_transpose(x: torch.Tensor) -> torch.Tensor:
 def rope(x: torch.Tensor, theta: float = 10000.0) -> torch.Tensor:
     sequence_length, hidden_size = x.shape
     # TODO：为什么要变成这个行状？
+    # RoPE 按相邻两个 hidden 元素组成二维旋转平面；[seq,hidden] 变为 [seq,hidden/2,2] 后，最后一维就是每个旋转对。
     pairs = x.float().reshape(sequence_length, hidden_size // 2, 2)
 
     pair_indices = torch.arange(hidden_size // 2, device=x.device, dtype=torch.float32)

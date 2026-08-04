@@ -1,0 +1,326 @@
+{
+  "schema_version": 1,
+  "trace": "/public/home/u43077/lzh/benchmarks/next-20260801/torch-profiler/vllm/ef920b1d9cde_16801.1785578557903209522.pt.trace.json.gz",
+  "device_properties": [
+    {
+      "id": 0,
+      "name": "NVIDIA A100-SXM4-40GB",
+      "totalGlobalMem": 42285268992,
+      "computeMajor": 8,
+      "computeMinor": 0,
+      "maxThreadsPerBlock": 1024,
+      "maxThreadsPerMultiprocessor": 2048,
+      "regsPerBlock": 65536,
+      "warpSize": 32,
+      "sharedMemPerBlock": 49152,
+      "numSms": 108,
+      "regsPerMultiprocessor": 65536,
+      "sharedMemPerBlockOptin": 166912,
+      "sharedMemPerMultiprocessor": 167936
+    }
+  ],
+  "cuda_runtime_version": 12040,
+  "cuda_driver_version": 12040,
+  "kernel_sum_us": 14288271.947000086,
+  "gpu_active_union_us": 14263974.344726562,
+  "kernel_groups": [
+    {
+      "group": "gemm",
+      "total_us": 9748192.343999999,
+      "share_of_kernel_sum": 0.6822513163354714
+    },
+    {
+      "group": "attention",
+      "total_us": 3482560.9829997155,
+      "share_of_kernel_sum": 0.24373563128681222
+    },
+    {
+      "group": "other",
+      "total_us": 1044100.6719994677,
+      "share_of_kernel_sum": 0.07307396414852554
+    },
+    {
+      "group": "reduction_or_normalization",
+      "total_us": 13417.948000000006,
+      "share_of_kernel_sum": 0.0009390882291274691
+    }
+  ],
+  "category_totals_us": {
+    "cpu_op": 33351997.81400007,
+    "python_function": 2329915393.2460012,
+    "gpu_memcpy": 11833.536999999982,
+    "cuda_runtime": 4345484.254999979,
+    "overhead": 374766.1839999999,
+    "kernel": 14288271.947000086,
+    "cuda_driver": 2614.0240000000013,
+    "gpu_memset": 1249.9809999999895,
+    "Trace": 47810444.015
+  },
+  "top_kernel": [
+    {
+      "name": "ampere_bf16_s16816gemm_bf16_128x64_ldg8_f2f_stages_64x3_tn",
+      "calls": 27072,
+      "total_us": 4089701.0330000008
+    },
+    {
+      "name": "void flash::flash_fwd_splitkv_kernel<Flash_fwd_kernel_traits<128, 64, 128, 4, false, false, cutlass::bfloat16_t, Flash_kernel_traits<128, 64, 128, 4, cutlass::bfloat16_t> >, false, false, false, false, true, false, false, false>(flash::Flash_fwd_params)",
+      "calls": 53892,
+      "total_us": 3213989.697000046
+    },
+    {
+      "name": "ampere_bf16_s16816gemm_bf16_64x64_sliced1x2_ldg8_f2f_stages_64x6_tn",
+      "calls": 56016,
+      "total_us": 3173366.280000043
+    },
+    {
+      "name": "ampere_bf16_s16816gemm_bf16_64x64_sliced1x2_ldg8_f2f_stages_64x5_tn",
+      "calls": 28587,
+      "total_us": 1851284.1169999752
+    },
+    {
+      "name": "ampere_bf16_s16816gemm_bf16_256x64_ldg8_f2f_stages_64x3_tn",
+      "calls": 2340,
+      "total_us": 295349.09400000033
+    },
+    {
+      "name": "void at::native::elementwise_kernel<128, 4, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#12}::operator()() const::{lambda(c10::BFloat16)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#12}::operator()() const::{lambda(c10::BFloat16)#1} const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#12}::operator()() const::{lambda(c10::BFloat16)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#12}::operator()() const::{lambda(c10::BFloat16)#1} const&)::{lambda(int)#1})",
+      "calls": 53928,
+      "total_us": 223847.72600000675
+    },
+    {
+      "name": "ampere_bf16_s16816gemm_bf16_256x128_ldg8_f2f_stages_64x3_tn",
+      "calls": 288,
+      "total_us": 203518.71699999992
+    },
+    {
+      "name": "void flash::flash_fwd_splitkv_kernel<Flash_fwd_kernel_traits<128, 64, 128, 4, false, false, cutlass::bfloat16_t, Flash_kernel_traits<128, 64, 128, 4, cutlass::bfloat16_t> >, true, false, false, false, true, false, false, false>(flash::Flash_fwd_params)",
+      "calls": 1584,
+      "total_us": 128279.29099999987
+    },
+    {
+      "name": "triton_red_fused__to_copy_add_mean_mul_pow_rsqrt_2",
+      "calls": 28620,
+      "total_us": 116792.3949999974
+    },
+    {
+      "name": "triton_red_fused__to_copy_add_mean_mul_pow_rsqrt_0",
+      "calls": 28620,
+      "total_us": 100849.76000000694
+    },
+    {
+      "name": "void vllm::reshape_and_cache_flash_kernel<__nv_bfloat16, __nv_bfloat16, (vllm::Fp8KVCacheDataType)0>(__nv_bfloat16 const*, __nv_bfloat16 const*, __nv_bfloat16*, __nv_bfloat16*, long const*, long, long, long, long, long, int, int, int, float const*, float const*)",
+      "calls": 28620,
+      "total_us": 98800.0750000176
+    },
+    {
+      "name": "triton_poi_fused_mul_silu_1",
+      "calls": 28620,
+      "total_us": 82648.51499999822
+    },
+    {
+      "name": "void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1} const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1} const&)::{lambda(int)#1})",
+      "calls": 26964,
+      "total_us": 78866.96000000586
+    },
+    {
+      "name": "void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<long>, std::array<char*, 1ul> >(int, at::native::FillFunctor<long>, std::array<char*, 1ul>)",
+      "calls": 58682,
+      "total_us": 78708.92299998223
+    },
+    {
+      "name": "void vllm::merge_attn_states_kernel<__nv_bfloat16, 128u>(__nv_bfloat16*, float*, __nv_bfloat16 const*, float const*, __nv_bfloat16 const*, float const*, unsigned int, unsigned int, unsigned int)",
+      "calls": 27504,
+      "total_us": 75984.54099998804
+    },
+    {
+      "name": "triton_poi_fused_add_mul_sub_5",
+      "calls": 27825,
+      "total_us": 74307.32199999373
+    },
+    {
+      "name": "triton_poi_fused_add_mul_sub_6",
+      "calls": 27825,
+      "total_us": 66998.35299999756
+    },
+    {
+      "name": "ampere_bf16_s16816gemm_bf16_128x256_ldg8_f2f_stages_64x3_tn",
+      "calls": 72,
+      "total_us": 65590.37000000001
+    },
+    {
+      "name": "triton_red_fused__to_copy_mean_pow_3",
+      "calls": 27825,
+      "total_us": 59649.278000019345
+    },
+    {
+      "name": "triton_red_fused__to_copy_mean_pow_4",
+      "calls": 27825,
+      "total_us": 51143.66900000709
+    }
+  ],
+  "top_cpu_op": [
+    {
+      "name": "vllm::unified_attention_with_output",
+      "calls": 28620,
+      "total_us": 11645634.38200006
+    },
+    {
+      "name": "_vllm_fa2_C::varlen_fwd",
+      "calls": 56124,
+      "total_us": 4781751.9719999945
+    },
+    {
+      "name": "aten::copy_",
+      "calls": 92001,
+      "total_us": 3023734.1859999807
+    },
+    {
+      "name": "aten::reshape",
+      "calls": 163158,
+      "total_us": 2172629.1889999933
+    },
+    {
+      "name": "aten::to",
+      "calls": 11037,
+      "total_us": 1958532.4819999994
+    },
+    {
+      "name": "aten::_to_copy",
+      "calls": 8652,
+      "total_us": 1930925.3209999977
+    },
+    {
+      "name": "aten::clone",
+      "calls": 80316,
+      "total_us": 1673234.175000004
+    },
+    {
+      "name": "aten::empty_like",
+      "calls": 192096,
+      "total_us": 1176745.8520000062
+    },
+    {
+      "name": "aten::empty",
+      "calls": 195388,
+      "total_us": 768167.2990000243
+    },
+    {
+      "name": "aten::empty_strided",
+      "calls": 120432,
+      "total_us": 657854.7079999986
+    },
+    {
+      "name": "aten::fill_",
+      "calls": 58682,
+      "total_us": 503352.52000000235
+    },
+    {
+      "name": "aten::slice",
+      "calls": 151893,
+      "total_us": 465938.28400000255
+    },
+    {
+      "name": "_C_cache_ops::reshape_and_cache_flash",
+      "calls": 28620,
+      "total_us": 441253.56299999997
+    },
+    {
+      "name": "_C::merge_attn_states",
+      "calls": 27504,
+      "total_us": 371220.0939999982
+    },
+    {
+      "name": "aten::unbind",
+      "calls": 28620,
+      "total_us": 334477.5039999973
+    },
+    {
+      "name": "aten::expand",
+      "calls": 168372,
+      "total_us": 317217.4450000049
+    },
+    {
+      "name": "aten::as_strided",
+      "calls": 462588,
+      "total_us": 254836.40900001084
+    },
+    {
+      "name": "aten::select",
+      "calls": 57240,
+      "total_us": 176385.8379999987
+    },
+    {
+      "name": "aten::transpose",
+      "calls": 81903,
+      "total_us": 139013.72599999973
+    },
+    {
+      "name": "aten::index",
+      "calls": 1590,
+      "total_us": 113218.77599999978
+    }
+  ],
+  "top_cuda_runtime": [
+    {
+      "name": "cudaMemcpyAsync",
+      "calls": 7929,
+      "total_us": 1701258.7909999932
+    },
+    {
+      "name": "cudaLaunchKernel",
+      "calls": 259118,
+      "total_us": 1543337.1879999915
+    },
+    {
+      "name": "cudaGraphLaunch",
+      "calls": 29341,
+      "total_us": 633572.7520000011
+    },
+    {
+      "name": "cudaFuncSetAttribute",
+      "calls": 56124,
+      "total_us": 326844.1529999948
+    },
+    {
+      "name": "cudaDeviceGetAttribute",
+      "calls": 139284,
+      "total_us": 50898.31599999934
+    },
+    {
+      "name": "cudaStreamIsCapturing",
+      "calls": 58683,
+      "total_us": 39860.33899999948
+    },
+    {
+      "name": "cudaStreamSynchronize",
+      "calls": 3087,
+      "total_us": 36713.30499999995
+    },
+    {
+      "name": "cudaDriverGetVersion",
+      "calls": 29341,
+      "total_us": 5638.769000000082
+    },
+    {
+      "name": "cudaMemsetAsync",
+      "calls": 867,
+      "total_us": 5039.675000000002
+    },
+    {
+      "name": "cudaDeviceSynchronize",
+      "calls": 1,
+      "total_us": 1804.545
+    },
+    {
+      "name": "cudaOccupancyMaxActiveBlocksPerMultiprocessor",
+      "calls": 302,
+      "total_us": 307.1739999999998
+    },
+    {
+      "name": "cudaMalloc",
+      "calls": 1,
+      "total_us": 209.248
+    }
+  ],
+  "top_user_annotation": []
+}
