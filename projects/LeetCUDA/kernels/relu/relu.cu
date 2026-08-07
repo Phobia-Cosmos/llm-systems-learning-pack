@@ -21,6 +21,7 @@
 __global__ void relu_f32_kernel(float *x, float *y, int N) {
   int idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx < N)
+  // TODO：fmaxf是浮点数专用的函数是吗？
     y[idx] = fmaxf(0.0f, x[idx]);
 }
 
@@ -43,6 +44,7 @@ __global__ void relu_f32x4_kernel(float *x, float *y, int N) {
 __global__ void relu_f16_kernel(half *x, half *y, int N) {
   int idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx < N)
+    // TODO：是不存在直接的half类型浮点数吗？
     y[idx] = __hmax(__float2half(0.0f), x[idx]);
 }
 
