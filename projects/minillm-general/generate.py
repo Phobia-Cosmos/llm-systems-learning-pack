@@ -1,17 +1,20 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 import torch
 
 from minillm import GPTConfig, MiniGPT
 from minillm.tokenizer_registry import tokenizer_from_checkpoint
+from minillm.tokenizer_variants import HFByteBPETokenizer
 from train import pick_device
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate text with a trained MiniGPT checkpoint.")
     parser.add_argument("--checkpoint", default="artifacts/checkpoints/minillm.pt")
+    parser.add_argument("--tokenizer", default=None, help="Tokenizer JSON for inference-only exports.")
     parser.add_argument("--prompt", default="LLM")
     parser.add_argument("--max-new-tokens", type=int, default=160)
     parser.add_argument("--temperature", type=float, default=0.8)
@@ -40,7 +43,13 @@ def main() -> None:
     # model/config/tokenizer/args 的字典；weights_only=False 是为了恢复这些非纯权重元数据。公开权重更推荐 safetensors。
     checkpoint = torch.load(args.checkpoint, map_location=device, weights_only=False)
 
-    tokenizer = tokenizer_from_checkpoint(checkpoint)
+    tokenizer_path = args.tokenizer
+    if "tokenizer" in checkpoint:
+        tokenizer = tokenizer_from_checkpoint(checkpoint)
+    else:
+        if tokenizer_path is None:
+            tokenizer_path = str(Path(args.checkpoint).resolve().parent / checkpoint.get("tokenizer_file", "tokenizer.json"))
+        tokenizer = HFByteBPETokenizer.from_file(tokenizer_path)
     # 问题（已回答）：checkpoint、** 和 to(device) 分别是什么？
     # 回答：这里 checkpoint 是 dict；**checkpoint["config"] 把键值展开为 GPTConfig 的命名参数。
     # nn.Module.to(device) 将模型参数和 buffer 移到 CPU/CUDA/MPS，并返回模型自身。

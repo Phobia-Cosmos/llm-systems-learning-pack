@@ -12,16 +12,25 @@ import torch
 
 
 AI_ROOT = Path(__file__).resolve().parents[2]
-MINILLM_ROOT = AI_ROOT / "projects" / "minillm"
+# Use the general-training implementation so inference-only exports with GQA,
+# QK normalization, SDPA, and SwiGLU configs can be served as well as teaching
+# checkpoints. The two projects expose the same public MiniLLM module names.
+MINILLM_ROOT = AI_ROOT / "projects" / "minillm-general"
 sys.path.insert(0, str(MINILLM_ROOT))
 
 from minillm import GPTConfig, MiniGPT  # noqa: E402
 from minillm.tokenizer_registry import MiniTokenizer, tokenizer_from_checkpoint  # noqa: E402
+from minillm.tokenizer_variants import HFByteBPETokenizer  # noqa: E402
 
 
-def load_minillm(checkpoint_path: str, device: str):
+def load_minillm(checkpoint_path: str, device: str, tokenizer_path: str | None = None):
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
-    tokenizer = tokenizer_from_checkpoint(checkpoint)
+    if "tokenizer" in checkpoint:
+        tokenizer = tokenizer_from_checkpoint(checkpoint)
+    else:
+        if tokenizer_path is None:
+            tokenizer_path = str(Path(checkpoint_path).resolve().parent / checkpoint.get("tokenizer_file", "tokenizer.json"))
+        tokenizer = HFByteBPETokenizer.from_file(tokenizer_path)
     model = MiniGPT(GPTConfig(**checkpoint["config"])).to(device)
     model.load_state_dict(checkpoint["model"])
     model.eval()
@@ -136,6 +145,7 @@ class MiniSGLangHandler(BaseHTTPRequestHandler):
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run a tiny OpenAI-like server for MiniLLM.")
     parser.add_argument("--checkpoint", default=str(MINILLM_ROOT / "checkpoints" / "minillm.pt"))
+    parser.add_argument("--tokenizer", default=None, help="Tokenizer JSON for inference-only exports.")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8011)
     parser.add_argument("--device", default="cpu")
@@ -144,7 +154,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    MiniSGLangHandler.model, MiniSGLangHandler.tokenizer = load_minillm(args.checkpoint, args.device)
+    MiniSGLangHandler.model, MiniSGLangHandler.tokenizer = load_minillm(args.checkpoint, args.device, args.tokenizer)
     MiniSGLangHandler.device = args.device
     server = ThreadingHTTPServer((args.host, args.port), MiniSGLangHandler)
     print(f"mini-sglang serving MiniLLM on http://{args.host}:{args.port}")
