@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "release_tag": "trained-models-2026-09",
+  "models": [
+    {
+      "name": "minillm-90m-final",
+      "parameters": 88101120,
+      "context_length": 1024,
+      "step": 20000,
+      "tokens_processed": 655360000,
+      "weight_asset": "minillm-90m-final.pt",
+      "weight_bytes": 352446950,
+      "sha256": "30ad56dd68c95267d220208eacb3790c8be706a1ba2fc55847823f3f4436adf9",
+      "tokenizer_asset": "minillm-90m-tokenizer.json",
+      "config_asset": "minillm-90m-resolved-config.json"
+    },
+    {
+      "name": "minillm-160m-4k-final",
+      "parameters": 163615232,
+      "context_length": 4096,
+      "step": 211345,
+      "tokens_processed": 10000007168,
+      "weight_asset": "minillm-160m-4k-final.pt",
+      "weight_bytes": 654535746,
+      "sha256": "f876001962a2e153026dfc65b814755601d826205dd97bea931f4cf569ee7ad0",
+      "tokenizer_asset": "minillm-160m-4k-tokenizer.json",
+      "config_asset": "minillm-160m-4k-resolved-config.json"
+    },
+    {
+      "name": "minillm-160m-8k-final",
+      "parameters": 163615232,
+      "context_length": 8192,
+      "step": 218975,
+      "tokens_processed": 11000086528,
+      "weight_asset": "minillm-160m-8k-final.pt",
+      "weight_bytes": 654535746,
+      "sha256": "f8c46f1c538f03fc4b3a251bb9d4e701561ab09f2c1ef2f3b8a1298c9f5c861f",
+      "tokenizer_asset": "minillm-160m-8k-tokenizer.json",
+      "config_asset": "minillm-160m-8k-resolved-config.json"
+    }
+  ]
+}
