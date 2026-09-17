@@ -219,6 +219,16 @@ class MiniGPTAttention(nn.Module):
             quant_config=quant_config,
             prefix=f"{prefix}.c_proj",
         )
+        self.q_norm = (
+            RMSNorm(self.head_dim, eps=getattr(config, "norm_eps", 1e-6))
+            if getattr(config, "qk_norm", False)
+            else None
+        )
+        self.k_norm = (
+            RMSNorm(self.head_dim, eps=getattr(config, "norm_eps", 1e-6))
+            if getattr(config, "qk_norm", False)
+            else None
+        )
         self.rotary_emb = (
             get_rope(
                 self.head_dim,
@@ -254,6 +264,10 @@ class MiniGPTAttention(nn.Module):
     ) -> torch.Tensor:
         qkv, _ = self.c_attn(hidden_states)
         q, k, v = qkv.split([self.q_size, self.kv_size, self.kv_size], dim=-1)
+        if self.q_norm is not None and self.k_norm is not None:
+            q_shape, k_shape = q.shape, k.shape
+            q = self.q_norm(q.reshape(*q_shape[:-1], self.num_heads, self.head_dim)).reshape(q_shape)
+            k = self.k_norm(k.reshape(*k_shape[:-1], self.num_kv_heads, self.head_dim)).reshape(k_shape)
         if self.rotary_emb is not None:
             q, k = self.rotary_emb(positions, q, k)
         hidden_states = self.attn(q, k, v)
