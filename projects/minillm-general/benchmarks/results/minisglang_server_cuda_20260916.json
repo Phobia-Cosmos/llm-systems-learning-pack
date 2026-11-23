@@ -1,0 +1,28 @@
+{
+  "engine": "mini-sglang-server",
+  "device": "cuda",
+  "url": "http://127.0.0.1:8013/v1/completions",
+  "samples": [
+    218.7888979970012,
+    12.58530400809832,
+    21.76805498311296,
+    12.32883200282231,
+    12.033388018608093,
+    24.63175600860268
+  ],
+  "median_ms": 12.58530400809832,
+  "mean_ms": 16.669467004248872,
+  "output": {
+    "id": "cmpl-minillm-1789521040",
+    "object": "text_completion",
+    "created": 1789521040,
+    "model": "minillm",
+    "choices": [
+      {
+        "index": 0,
+        "text": "连续向量的",
+        "finish_reason": "length"
+      }
+    ]
+  }
+}

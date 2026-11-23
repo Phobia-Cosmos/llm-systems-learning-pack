@@ -19,6 +19,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--prompt", default="用户: 什么是 decoder-only Transformer？\\n助手:")
     parser.add_argument("--max-tokens", type=int, default=90)
     parser.add_argument("--temperature", type=float, default=0.7)
+    parser.add_argument("--gpu-memory-utilization", type=float, default=0.7)
+    parser.add_argument("--max-model-len", type=int, default=128)
     return parser.parse_args()
 
 
@@ -29,8 +31,8 @@ def main() -> None:
         enforce_eager=True,
         max_num_seqs=4,
         max_num_batched_tokens=128,
-        max_model_len=128,
-        gpu_memory_utilization=0.2,
+        max_model_len=args.max_model_len,
+        gpu_memory_utilization=args.gpu_memory_utilization,
     )
     try:
         outputs = llm.generate(

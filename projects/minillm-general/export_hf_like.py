@@ -9,6 +9,7 @@ import torch
 
 from minillm import GPTConfig, MiniGPT
 from minillm.tokenizer_registry import tokenizer_from_checkpoint
+from minillm.tokenizer_variants import HFByteBPETokenizer
 
 
 def pack_separate_qkv_for_export(model: MiniGPT, config: GPTConfig) -> tuple[MiniGPT, GPTConfig]:
@@ -54,6 +55,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--checkpoint", default="artifacts/checkpoints/minillm.pt")
     parser.add_argument("--out-dir", default="artifacts/hf_exports/minillm")
     parser.add_argument("--safe-serialization", action="store_true", help="Write model.safetensors; requires safetensors.")
+    parser.add_argument("--tokenizer-path", default=None, help="Tokenizer JSON for inference-export checkpoints without an embedded tokenizer payload.")
+    parser.add_argument("--dtype", choices=("float32", "float16", "bfloat16"), default="float32", help="Inference export dtype; serving engines can use float16/bfloat16 when their kernels require it.")
     return parser.parse_args()
 
 
@@ -64,13 +67,18 @@ def main() -> None:
 
     checkpoint = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
     config = GPTConfig(**checkpoint["config"])
-    tokenizer = tokenizer_from_checkpoint(checkpoint)
+    if "tokenizer" in checkpoint:
+        tokenizer = tokenizer_from_checkpoint(checkpoint)
+    else:
+        tokenizer_path = Path(args.tokenizer_path) if args.tokenizer_path else Path(args.checkpoint).resolve().parent / checkpoint["tokenizer_file"]
+        tokenizer = HFByteBPETokenizer.from_file(tokenizer_path)
     tokenizer_type = checkpoint.get("tokenizer_type", checkpoint.get("tokenizer", {}).get("type", "char"))
 
     model = MiniGPT(config)
     model.load_state_dict(checkpoint["model"])
     model.eval()
     model, config = pack_separate_qkv_for_export(model, config)
+    model.to(getattr(torch, args.dtype))
 
     config_json = {
         "model_type": "minigpt",

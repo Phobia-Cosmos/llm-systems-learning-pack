@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "prompts": [
+    "embedding 是把离散 token id 映射成",
+    "embedding 是把离散 token id 映射成",
+    "embedding 是把离散 token id 映射成",
+    "embedding 是把离散 token id 映射成"
+  ],
+  "max_new_tokens": 8,
+  "warmup": 1,
+  "samples": 3,
+  "result": {
+    "backend": "native-minillm",
+    "batch_size": 4,
+    "timings_ms": [
+      3.7545780069194734,
+      3.607402031775564,
+      5.021145043428987
+    ],
+    "median_ms": 3.7545780069194734,
+    "completion_tokens": 32,
+    "outputs": [
+      [
+        328,
+        259,
+        282,
+        262,
+        292,
+        246,
+        340,
+        275
+      ],
+      [
+        328,
+        259,
+        282,
+        262,
+        292,
+        246,
+        340,
+        275
+      ],
+      [
+        328,
+        259,
+        282,
+        262,
+        292,
+        246,
+        340,
+        275
+      ],
+      [
+        328,
+        259,
+        282,
+        262,
+        292,
+        246,
+        340,
+        275
+      ]
+    ]
+  }
+}

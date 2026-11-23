@@ -77,6 +77,7 @@ class MiniGPTConfig(PretrainedConfig):
         activation: str | None = None,
         hidden_act: str | None = None,
         intermediate_size: int | None = None,
+        qk_norm: bool = False,
         **kwargs,
     ) -> None:
         block_size = _resolve_alias(
@@ -141,6 +142,7 @@ class MiniGPTConfig(PretrainedConfig):
         self.activation = activation
         self.hidden_act = activation
         self.intermediate_size = intermediate_size
+        self.qk_norm = qk_norm
 
 
 @dataclass(frozen=True)
@@ -236,6 +238,11 @@ class MiniGPTAttention(nn.Module):
             bias=config.bias,
         )
         self.c_proj = RowParallelLinear(config.n_embd, config.n_embd, bias=config.bias)
+        # MiniLLM's trained checkpoints use per-head Q/K RMSNorm.  Keep these
+        # parameters in the engine model so the safetensors loader can consume
+        # the same names as the native MiniLLM implementation.
+        self.q_norm = build_norm(self.head_dim, "rmsnorm", config.norm_eps, False) if config.qk_norm else None
+        self.k_norm = build_norm(self.head_dim, "rmsnorm", config.norm_eps, False) if config.qk_norm else None
 
         alibi_slopes = None
         # 问题（已回答）：什么是 ALiBi 位置编码？
@@ -260,6 +267,9 @@ class MiniGPTAttention(nn.Module):
         q = q.view(-1, self.num_heads, self.head_dim)
         k = k.view(-1, self.num_kv_heads, self.head_dim)
         v = v.view(-1, self.num_kv_heads, self.head_dim)
+        if self.q_norm is not None and self.k_norm is not None:
+            q = self.q_norm(q)
+            k = self.k_norm(k)
         if self.rotary is not None:
             q, k = self.rotary(positions, q, k)
         output = self.attn(q, k, v)

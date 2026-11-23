@@ -266,8 +266,12 @@ class MiniGPTAttention(nn.Module):
         q, k, v = qkv.split([self.q_size, self.kv_size, self.kv_size], dim=-1)
         if self.q_norm is not None and self.k_norm is not None:
             q_shape, k_shape = q.shape, k.shape
-            q = self.q_norm(q.reshape(*q_shape[:-1], self.num_heads, self.head_dim)).reshape(q_shape)
-            k = self.k_norm(k.reshape(*k_shape[:-1], self.num_kv_heads, self.head_dim)).reshape(k_shape)
+            q = self.q_norm(
+                q.reshape(*q_shape[:-1], self.num_heads, self.head_dim)
+            ).reshape(q_shape)
+            k = self.k_norm(
+                k.reshape(*k_shape[:-1], self.num_kv_heads, self.head_dim)
+            ).reshape(k_shape)
         if self.rotary_emb is not None:
             q, k = self.rotary_emb(positions, q, k)
         hidden_states = self.attn(q, k, v)
