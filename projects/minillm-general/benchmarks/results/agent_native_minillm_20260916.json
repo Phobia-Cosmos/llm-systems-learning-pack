@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "backend": "native-minillm",
+  "prompt": "请计算 2+2，并严格输出 calculator 工具调用。",
+  "model_text": "\n据前预测下一个 token 的学会格式。\n�当出原始分数",
+  "events": [],
+  "status": "no-tool-call"
+}

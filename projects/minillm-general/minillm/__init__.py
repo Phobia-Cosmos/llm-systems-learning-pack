@@ -10,6 +10,7 @@ from .position import (
 )
 from .tokenizer import CharTokenizer
 from .tokenizer_base import MiniTokenizer, TokenizerBatch
+from .contracts import GenerationBackend, GenerationRequest, GenerationResult
 
 __all__ = [
     "GPTConfig",
@@ -17,6 +18,9 @@ __all__ = [
     "StaticKVCache",
     "MiniTokenizer",
     "TokenizerBatch",
+    "GenerationBackend",
+    "GenerationRequest",
+    "GenerationResult",
     "CharTokenizer",
     "SUPPORTED_ACTIVATIONS",
     "SUPPORTED_MLP_TYPES",

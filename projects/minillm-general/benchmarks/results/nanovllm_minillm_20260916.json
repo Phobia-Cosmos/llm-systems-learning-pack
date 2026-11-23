@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "engine": "nano-vllm",
+  "model": "/home/undefined/llm-systems-learning-pack/projects/minillm-general/artifacts/hf_exports/minillm-rope",
+  "prompt": "embedding 是把离散 token id 映射成",
+  "max_tokens": 8,
+  "warmup": 1,
+  "samples": 5,
+  "init_ms": 1064.7812020033598,
+  "timings_ms": [
+    6.4450399950146675,
+    6.123725994257256,
+    8.367655012989417,
+    6.038355000782758,
+    7.038004987407476
+  ],
+  "summary_ms": {
+    "mean": 6.802556198090315,
+    "median": 6.4450399950146675,
+    "min": 6.038355000782758,
+    "max": 8.367655012989417
+  },
+  "outputs": [
+    {
+      "text": "连续向量的",
+      "token_count": 8,
+      "token_ids": [
+        328,
+        259,
+        282,
+        262,
+        292,
+        246,
+        340,
+        275
+      ]
+    },
+    {
+      "text": "连续向量的",
+      "token_count": 8,
+      "token_ids": [
+        328,
+        259,
+        282,
+        262,
+        292,
+        246,
+        340,
+        275
+      ]
+    },
+    {
+      "text": "连续向量的",
+      "token_count": 8,
+      "token_ids": [
+        328,
+        259,
+        282,
+        262,
+        292,
+        246,
+        340,
+        275
+      ]
+    },
+    {
+      "text": "连续向量的",
+      "token_count": 8,
+      "token_ids": [
+        328,
+        259,
+        282,
+        262,
+        292,
+        246,
+        340,
+        275
+      ]
+    },
+    {
+      "text": "连续向量的",
+      "token_count": 8,
+      "token_ids": [
+        328,
+        259,
+        282,
+        262,
+        292,
+        246,
+        340,
+        275
+      ]
+    }
+  ]
+}

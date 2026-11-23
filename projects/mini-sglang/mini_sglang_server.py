@@ -85,7 +85,7 @@ class MiniSGLangHandler(BaseHTTPRequestHandler):
         except Exception as exc:
             self._send_json(500, {"error": type(exc).__name__, "message": str(exc)})
 
-    def _generate(self, prompt: str, request: dict[str, Any]) -> str:
+    def _generate(self, prompt: str, request: dict[str, Any]) -> tuple[str, list[int], list[int]]:
         max_new_tokens = int(request.get("max_tokens", request.get("max_new_tokens", 80)))
         temperature = float(request.get("temperature", 0.8))
         top_k = request.get("top_k", 40)
@@ -102,12 +102,15 @@ class MiniSGLangHandler(BaseHTTPRequestHandler):
                 top_k=None if top_k is None or int(top_k) <= 0 else int(top_k),
                 greedy=greedy,
             )[0].tolist()
-        text = self.tokenizer.decode(output_ids)
-        return text[len(prompt) :]
+        # Keep the prompt and completion separate.  Slicing decoded strings is
+        # not token-safe for byte-level tokenizers, and it prevents clients
+        # from checking token parity with native/nano-vLLM.
+        completion_ids = output_ids[len(token_ids) :]
+        return self.tokenizer.decode(completion_ids), completion_ids, token_ids
 
     def _send_completion(self, request: dict[str, Any]) -> None:
         prompt = str(request.get("prompt", ""))
-        generated = self._generate(prompt, request)
+        generated, completion_ids, prompt_ids = self._generate(prompt, request)
         now = int(time.time())
         self._send_json(
             200,
@@ -116,13 +119,15 @@ class MiniSGLangHandler(BaseHTTPRequestHandler):
                 "object": "text_completion",
                 "created": now,
                 "model": "minillm",
-                "choices": [{"index": 0, "text": generated, "finish_reason": "length"}],
+                "choices": [{"index": 0, "text": generated, "finish_reason": "length", "token_ids": completion_ids}],
+                "prompt_token_ids": prompt_ids,
+                "completion_token_ids": completion_ids,
             },
         )
 
     def _send_chat_completion(self, request: dict[str, Any]) -> None:
         prompt = messages_to_prompt(request.get("messages", []))
-        generated = self._generate(prompt, request)
+        generated, completion_ids, prompt_ids = self._generate(prompt, request)
         now = int(time.time())
         self._send_json(
             200,
@@ -136,8 +141,11 @@ class MiniSGLangHandler(BaseHTTPRequestHandler):
                         "index": 0,
                         "message": {"role": "assistant", "content": generated},
                         "finish_reason": "length",
+                        "token_ids": completion_ids,
                     }
                 ],
+                "prompt_token_ids": prompt_ids,
+                "completion_token_ids": completion_ids,
             },
         )
 

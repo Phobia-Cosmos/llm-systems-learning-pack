@@ -187,6 +187,37 @@ def benchmark_cuda_operation(
     }
 
 
+def benchmark_cpu_operation(
+    operation: Callable[[], Any],
+    settings: TimerSettings,
+) -> dict[str, Any]:
+    """Benchmark a synchronous CPU operation using monotonic wall time.
+
+    The result keeps the CUDA timing envelope for downstream CSV consumers;
+    on CPU both ``gpu_ms`` and synchronized wall fields represent the same
+    host elapsed time and are explicitly labeled by the environment/device.
+    """
+    for _ in range(settings.warmup):
+        operation()
+    samples: list[float] = []
+    inner_loops = 1
+    while inner_loops < settings.max_inner_loops:
+        started = time.perf_counter()
+        for _ in range(inner_loops):
+            operation()
+        elapsed_ms = (time.perf_counter() - started) * 1000.0
+        if elapsed_ms >= settings.target_sample_ms:
+            break
+        inner_loops = min(settings.max_inner_loops, inner_loops * 2)
+    for _ in range(settings.samples):
+        started = time.perf_counter()
+        for _ in range(inner_loops):
+            operation()
+        samples.append((time.perf_counter() - started) * 1000.0 / inner_loops)
+    summary = _summary(samples)
+    return {"inner_loops": inner_loops, "samples": settings.samples, "gpu_ms": summary, "synchronized_wall_ms": summary}
+
+
 def profile_cuda_operation(operation: Callable[[], Any]) -> dict[str, Any]:
     from torch.profiler import ProfilerActivity, profile
 
@@ -1209,8 +1240,10 @@ def run_inference_baseline(
     project_root: str | Path | None = None,
 ) -> dict[str, Any]:
     device = torch.device(device)
-    if device.type != "cuda" or not torch.cuda.is_available():
-        raise RuntimeError("the timed inference baseline requires a CUDA device")
+    if device.type == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("CUDA was requested but is not available")
+    if device.type not in {"cuda", "cpu"}:
+        raise RuntimeError(f"unsupported benchmark device: {device}")
     checkpoint_path = Path(checkpoint_path).resolve()
     root = Path(project_root).resolve() if project_root is not None else checkpoint_path.parents[4]
 
@@ -1326,10 +1359,14 @@ def run_inference_baseline(
 
                 for case in cases:
                     output = case.operation()
-                    timing = benchmark_cuda_operation(case.operation, timer_settings)
+                    timing = (
+                        benchmark_cuda_operation(case.operation, timer_settings)
+                        if device.type == "cuda"
+                        else benchmark_cpu_operation(case.operation, timer_settings)
+                    )
                     profiler = (
                         profile_cuda_operation(case.operation)
-                        if case.category in {"linear", "matmul", "layout", "kv_cache"}
+                        if device.type == "cuda" and case.category in {"linear", "matmul", "layout", "kv_cache"}
                         else None
                     )
                     frequency = stage_frequency(
@@ -1378,10 +1415,14 @@ def run_inference_baseline(
     assert resolved_config is not None and prompt_ids is not None
     return {
         "schema_version": 1,
-        "benchmark": "MiniLLM/nano-vLLM PyTorch-cuBLAS inference shape baseline",
+        "benchmark": "MiniLLM/nano-vLLM PyTorch inference shape baseline",
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "method": {
-            "timer": "CUDA Events plus synchronized host wall clock",
+            "timer": (
+                "CUDA Events plus synchronized host wall clock"
+                if device.type == "cuda"
+                else "monotonic host wall clock (CPU synchronous execution)"
+            ),
             "warmup": timer_settings.warmup,
             "samples": timer_settings.samples,
             "target_sample_ms": timer_settings.target_sample_ms,
@@ -1520,15 +1561,15 @@ def _render_markdown(payload: dict[str, Any]) -> str:
     config = payload["model_config"]
     num_key_value_heads = config.get("num_key_value_heads") or config["n_head"]
     lines = [
-        "# MiniLLM / nano-vLLM PyTorch-cuBLAS inference baseline",
+        "# MiniLLM / nano-vLLM PyTorch inference baseline",
         "",
         f"Generated: `{payload['timestamp']}`",
         "",
         "## Scope and method",
         "",
-        "This is an eager PyTorch baseline on the real MiniLLM checkpoint and the tensor layouts used by MiniLLM and nano-vLLM. Linear layers use `F.linear` (cuBLAS/cuBLASLt); MiniLLM QK/PV use `matmul`, while the nano-vLLM fallback uses its real `einsum` equations; both lower to batched GEMM/cuBLAS for these shapes. FlashAttention, Triton attention, CUDA Graph, and `torch.compile` are intentionally excluded so later optimized kernels have a stable reference.",
+        "This is an eager PyTorch baseline on the real MiniLLM checkpoint and the tensor layouts used by MiniLLM and nano-vLLM. On CUDA, linear/matmul operations lower through cuBLAS/cuBLASLt; on CPU they use the corresponding PyTorch CPU kernels. MiniLLM QK/PV use `matmul`, while the nano-vLLM fallback uses its real `einsum` equations. FlashAttention, Triton attention, CUDA Graph, and `torch.compile` are intentionally excluded so later optimized kernels have a stable reference.",
         "",
-        f"Timing uses {payload['method']['warmup']} warmups and {payload['method']['samples']} CUDA Event samples. The adaptive inner loop targets {payload['method']['target_sample_ms']} ms per sample. Synchronized wall time includes Python dispatch and launch/synchronization overhead; GPU Event time covers work on the CUDA stream.",
+        f"Timing uses {payload['method']['warmup']} warmups and {payload['method']['samples']} samples. The adaptive inner loop targets {payload['method']['target_sample_ms']} ms per sample. On CUDA, GPU Event time covers work on the CUDA stream; on CPU, both timing fields are synchronous monotonic wall time.",
         "",
         "For `N` generated tokens, prefill produces token 1 and the model executes `N-1` decode passes. Component contribution is `median time for one measured stage invocation x logical calls per pass`.",
         "",
@@ -1560,7 +1601,8 @@ def _render_markdown(payload: dict[str, Any]) -> str:
             f"`{workload['decode_nano_input_shape']}` | {workload['dtype']} |"
         )
 
-    lines.extend(["", "## Full-pass latency", "", "| Workload | Runtime | Phase | GPU median (ms) | p90 (ms) | Wall median (ms) | Throughput token/s |", "| --- | --- | --- | ---: | ---: | ---: | ---: |"]) 
+    primary_label = "GPU Event" if environment.get("device", "").startswith("cuda") else "CPU wall"
+    lines.extend(["", "## Full-pass latency", "", f"| Workload | Runtime | Phase | {primary_label} median (ms) | p90 (ms) | Wall median (ms) | Throughput token/s |", "| --- | --- | --- | ---: | ---: | ---: | ---: |"])
     full_results = [result for result in payload["results"] if result["category"] == "full_model"]
     for result in full_results:
         lines.append(

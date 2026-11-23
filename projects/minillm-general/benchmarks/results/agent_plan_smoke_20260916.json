@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "backend": "scripted-plan",
+  "prompt": "请计算 2+2，并严格输出 calculator 工具调用。",
+  "model_text": "<tool_call>{\"name\":\"calculator\",\"arguments\":{\"expression\":\"2+2\"}}</tool_call>",
+  "events": [
+    {
+      "type": "tool_call",
+      "name": "calculator",
+      "arguments": {
+        "expression": "2+2"
+      },
+      "result": 4.0,
+      "latency_ms": 0.02087900065816939
+    }
+  ],
+  "status": "tool-completed"
+}

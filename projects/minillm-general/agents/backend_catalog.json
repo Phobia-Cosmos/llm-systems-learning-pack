@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "recommended_backend": "nano-vllm",
+  "recommended_model": "/home/undefined/Disk/models/school-gpu/minillm-general/minillm-160m-8k-final/hf",
+  "backends": {
+    "native": {
+      "kind": "native-minillm",
+      "status": "ready",
+      "role": "correctness_reference",
+      "checkpoint": "/home/undefined/Disk/models/school-gpu/minillm-general/minillm-160m-8k-final/minillm-160m-8k-final.pt"
+    },
+    "nano-vllm": {
+      "kind": "nano-vllm",
+      "status": "ready",
+      "role": "agent_backend_candidate",
+      "model": "/home/undefined/Disk/models/school-gpu/minillm-general/minillm-160m-8k-final/hf",
+      "features": ["scheduler", "paged_kv_cache", "batch_api", "single_request_token_parity"]
+    },
+    "vllm": {
+      "kind": "vllm",
+      "status": "ready",
+      "role": "mature_serving_baseline",
+      "model": "/home/undefined/Disk/models/school-gpu/minillm-general/minillm-160m-8k-final/hf",
+      "features": ["openai_compatible_server", "kv_cache", "batch_scheduler", "single_request_token_parity"]
+    },
+    "mini-sglang": {
+      "kind": "mini-sglang-http-wrapper",
+      "status": "ready",
+      "role": "agent_protocol_reference",
+      "checkpoint": "/home/undefined/Disk/models/school-gpu/minillm-general/minillm-160m-8k-final/minillm-160m-8k-final.pt",
+      "limitations": ["no_continuous_batching", "no_radix_attention", "no_paged_kv"]
+    },
+    "sglang": {
+      "kind": "official-sglang",
+      "status": "blocked",
+      "role": "future_adapter_target",
+      "reason": "current SGLang/Transformers registry does not recognize model_type=minigpt"
+    }
+  }
+}
